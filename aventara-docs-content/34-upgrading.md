@@ -1,13 +1,36 @@
 ---
 title: Upgrading
-description: Move from an earlier pilot to 0.1.0-pilot.3 step by step, and the general flow for upgrading Aventara packages, regenerating the discovery artifact and the frontend client.
+description: Move from an earlier pilot to 0.1.0-pilot.4 step by step, and the general flow for upgrading Aventara packages, regenerating the discovery artifact and the frontend client.
 order: 34
 section: guides
 ---
 
 # Upgrading
 
-Aventara is in pilot: the API may change before 1.0. This page covers moving to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), then from `0.1.0-pilot.0`, then the general flow, which applies to every release.
+Aventara is in pilot: the API may change before 1.0. This page covers moving to `0.1.0-pilot.4` from `0.1.0-pilot.3`, then to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), then from `0.1.0-pilot.0`, then the general flow, which applies to every release.
+
+## From 0.1.0-pilot.3 to 0.1.0-pilot.4
+
+Your code and the contract do not change; pilot.4 changes the discovery artifact's format and the scripts the scaffold writes. The steps follow from the release notes; this hop was not run as a separate upgrade.
+
+Install the packages exact, then regenerate the artifact once:
+
+```bash
+npm install --save-exact @aventara/core@0.1.0-pilot.4 @aventara/nest@0.1.0-pilot.4 @aventara/prisma7-adapter@0.1.0-pilot.4
+npm run aventara:prepare      # pnpm: pnpm run aventara:prepare
+```
+
+If you skip the second step, the build stops in `aventara.config.ts` with:
+
+```text
+error TS2741: Property 'regenerate_with_aventara_prepare' is missing in type ... but required in type 'PrismaDiscoveryArtifact<...>'
+```
+
+That is the symptom of an artifact from an older adapter; `aventara:prepare` fixes it ([Troubleshooting](/docs/troubleshooting#build-error-property-regenerate_with_aventara_prepare-is-missing)). At start-up the adapter also refuses an old artifact with a message that names `aventara:prepare`.
+
+Projects made by pilot.4's `aventara new` or `aventara init` also get `prebuild`, `prestart`, `prestart:dev` and `prestart:debug` scripts, each `npm run aventara:prepare` (`pnpm run aventara:prepare` with pnpm), so building or starting regenerates the artifact first. An existing project does not get them from an upgrade; add them to `package.json` yourself if you want the same behaviour. They run under npm and pnpm; Yarn Berry, and pnpm with `enable-pre-post-scripts=false`, skip them, so run `aventara:prepare` yourself there.
+
+The frontend client needs no regeneration for this release. Update `@aventara/client` to the same version, exact (`npm install --save-dev --save-exact @aventara/client@0.1.0-pilot.4`); its generated output differs only in the documentation comments it copies from `@aventara/core`.
 
 ## From 0.1.0-pilot.1 or pilot.2 to 0.1.0-pilot.3
 

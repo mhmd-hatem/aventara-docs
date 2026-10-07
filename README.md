@@ -40,7 +40,7 @@ For a framework release, update the source content and `lib/release.ts` together
 
 ## Content
 
-The current framework release is `0.1.0-pilot.3`. Shared site badges read `lib/release.ts`; the numbered source pages contain the release documentation.
+The current framework release is `0.1.0-pilot.4`. Shared site badges read `lib/release.ts`; the numbered source pages contain the release documentation.
 
 Edit the numbered Markdown files in `aventara-docs-content/`. Fumadocs reads those files directly; there is no generated copy to maintain. Numeric prefixes are stripped from page URLs. README and internal site notes are excluded from publishing and search. Navigation groups live in `lib/navigation.ts`.
 

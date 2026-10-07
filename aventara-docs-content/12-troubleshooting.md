@@ -9,7 +9,7 @@ section: reference
 
 ## Upgrading
 
-Moving between pilot releases (`0.1.0-pilot.0`, `0.1.0-pilot.1`, `0.1.0-pilot.2` to `0.1.0-pilot.3`) is covered on [Upgrading](/docs/upgrading), with the steps in order and what each release changes.
+Moving between pilot releases (`0.1.0-pilot.0`, `0.1.0-pilot.1`, `0.1.0-pilot.2`, `0.1.0-pilot.3` to `0.1.0-pilot.4`) is covered on [Upgrading](/docs/upgrading), with the steps in order and what each release changes.
 
 ## Warning on `avclient init`: typescript could not be resolved
 
@@ -95,6 +95,22 @@ aventara: this project declares typescript ^7.0.2, and TypeScript 7 has no class
 ```
 
 The server side needs TypeScript below 7 (the scaffold uses 6). A TypeScript 7 *frontend* is fine.
+
+## Build error: Property 'regenerate_with_aventara_prepare' is missing
+
+After upgrading the Aventara packages, `tsc` or `npm run build` stops in `aventara.config.ts` with:
+
+```text
+error TS2741: Property 'regenerate_with_aventara_prepare' is missing in type ... but required in type 'PrismaDiscoveryArtifact<...>'
+```
+
+The discovery artifact in `src/generated/aventara/` was written by an older version of the adapter. Regenerate it:
+
+```bash
+npm run aventara:prepare      # pnpm: pnpm run aventara:prepare
+```
+
+If the build does not catch it, the server refuses to start with a message that names `aventara:prepare`; the fix is the same. In a project made by `aventara new` or `aventara init` from pilot.4 on, `build` and the start scripts run `aventara:prepare` first through the `pre` hooks, so this does not recur. See [Upgrading](/docs/upgrading#from-010-pilot3-to-010-pilot4).
 
 ## Server does not start
 

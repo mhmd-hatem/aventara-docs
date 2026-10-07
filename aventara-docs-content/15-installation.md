@@ -44,21 +44,25 @@ A project made by `aventara new` has this in `package.json` (versions are exact)
 ```json
 {
   "dependencies": {
-    "@aventara/core": "0.1.0-pilot.3",
-    "@aventara/nest": "0.1.0-pilot.3",
-    "@aventara/prisma7-adapter": "0.1.0-pilot.3",
+    "@aventara/core": "0.1.0-pilot.4",
+    "@aventara/nest": "0.1.0-pilot.4",
+    "@aventara/prisma7-adapter": "0.1.0-pilot.4",
     "@prisma/adapter-better-sqlite3": "7.10.0",
     "@prisma/client": "7.10.0"
   },
   "devDependencies": { "prisma": "7.10.0" },
   "scripts": {
     "aventara:prepare": "aventara-prisma7-generate --schema prisma/schema.prisma --client src/generated/prisma --provider sqlite --driver @prisma/adapter-better-sqlite3 --out src/generated/aventara/discovery.artifact.ts",
-    "postinstall": "npm run aventara:prepare"
+    "postinstall": "npm run aventara:prepare",
+    "prebuild": "npm run aventara:prepare",
+    "prestart": "npm run aventara:prepare",
+    "prestart:dev": "npm run aventara:prepare",
+    "prestart:debug": "npm run aventara:prepare"
   }
 }
 ```
 
-With PostgreSQL the driver is `@prisma/adapter-pg`. The `postinstall` script regenerates `src/generated/aventara/discovery.artifact.ts` on a plain `npm install`. Run `npm run aventara:prepare` yourself after changing `prisma/schema.prisma`, and after adding or upgrading a package by name (`npm install <package>` did not run `postinstall` with npm 11.19).
+With PostgreSQL the driver is `@prisma/adapter-pg`. The `postinstall` script regenerates `src/generated/aventara/discovery.artifact.ts` on a plain `npm install`, and the `prebuild`, `prestart`, `prestart:dev` and `prestart:debug` scripts regenerate it before `npm run build` and the start scripts, so a schema change needs no separate step. npm and pnpm run these `pre` hooks; Yarn Berry, and pnpm with `enable-pre-post-scripts=false`, do not, so run `aventara:prepare` yourself there (pnpm projects get `pnpm run aventara:prepare` in these scripts). Run `npm run aventara:prepare` yourself after changing `prisma/schema.prisma`, and after adding or upgrading a package by name (`npm install <package>` did not run `postinstall` with npm 11.19).
 
 ### Frontend side
 
@@ -75,7 +79,7 @@ npx @aventara/cli@pilot new my-api        # npm
 pnpm dlx @aventara/cli@pilot new my-api   # pnpm
 ```
 
-Use the `@pilot` tag: it points to the newest pilot (`0.1.0-pilot.3`), which `@latest` is not guaranteed to do. The CLI runs a pinned `nest new`, adds Aventara, installs, and commits the result (`Initial Aventara Scaffold`, unless git is missing or unconfigured, the directory is already inside a repository, or you pass `--skip-git`). It picks the package manager from the lockfile, else the one that launched it, else npm, and never touches a database. `aventara --version` prints the CLI's version; `--orm` takes `prisma7`. See [Getting started](/docs/getting-started), or [Add to an existing project](/docs/existing-project).
+Use the `@pilot` tag: it points to the newest pilot (`0.1.0-pilot.4`), which `@latest` is not guaranteed to do. The CLI runs a pinned `nest new`, adds Aventara, installs, and commits the result (`Initial Aventara Scaffold`, unless git is missing or unconfigured, the directory is already inside a repository, or you pass `--skip-git`). It picks the package manager from the lockfile, else the one that launched it, else npm, and never touches a database. `aventara --version` prints the CLI's version; `--orm` takes `prisma7`. See [Getting started](/docs/getting-started), or [Add to an existing project](/docs/existing-project).
 
 ## Package manager and Node notes
 

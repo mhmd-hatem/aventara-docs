@@ -7,7 +7,7 @@ section: about
 
 # Roadmap
 
-Aventara is a **pilot** (`0.1.0-pilot.3`). It works end to end today, and the public API may still change before 1.0. This page says what we are aiming at, in the order we expect to get there. It has no dates: a direction, not a promise.
+Aventara is a **pilot** (`0.1.0-pilot.4`). It works end to end today, and the public API may still change before 1.0. This page says what we are aiming at, in the order we expect to get there. It has no dates: a direction, not a promise.
 
 ## Today
 

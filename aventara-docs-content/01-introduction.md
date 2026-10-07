@@ -50,7 +50,7 @@ Which package goes where, and which are dev or runtime dependencies, is on [Inst
 
 ## Status
 
-Aventara is in **pilot**. The current release is `0.1.0-pilot.3`, published under the `pilot` dist-tag. Install with `@pilot`, as the commands in these docs do (the `latest` tag is not guaranteed to point at the newest pilot):
+Aventara is in **pilot**. The current release is `0.1.0-pilot.4`, published under the `pilot` dist-tag. Install with `@pilot`, as the commands in these docs do (the `latest` tag is not guaranteed to point at the newest pilot):
 
 ```bash
 npx @aventara/cli@pilot new my-api

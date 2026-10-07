@@ -9,7 +9,7 @@ section: reference
 
 Two commands: **`aventara`** scaffolds the server; **`avclient`** sets up the frontend and generates the typed client. Both are run once through `npx` (or installed globally); neither is a runtime dependency of your application.
 
-The examples use the `@pilot` tag, which points to `0.1.0-pilot.3`; use it (the `latest` tag is not guaranteed to be the newest pilot).
+The examples use the `@pilot` tag, which points to `0.1.0-pilot.4`; use it (the `latest` tag is not guaranteed to be the newest pilot).
 
 ```bash
 npx @aventara/cli@pilot <command>        # or: npm i -g @aventara/cli@pilot
@@ -83,7 +83,7 @@ aventara: this project is already initialized: src/app.module.ts uses AventaraMo
 
 ### What it writes
 
-For a project with no ORM yet: `prisma/schema.prisma` (a `User` model), `prisma.config.ts`, `src/prisma.service.ts`, `src/aventara.config.ts`, one edit each to `src/app.module.ts`, `src/main.ts` and `test/app.e2e-spec.ts`, `.env` (`DATABASE_URL` and `CORS_ORIGINS`), `.gitignore` (which lists `.env`, `/src/generated/` and the SQLite files), and `package.json` (the `@aventara/*` packages at the CLI's version, Prisma and the driver at `7.10.0`, the `aventara:prepare` and `postinstall` scripts). The generated `src/generated/**` is rebuilt by `aventara:prepare` and is never edited. With Prisma already present your schema, Prisma config and service are reused and never written, and `.env` only gets the `CORS_ORIGINS` line appended.
+For a project with no ORM yet: `prisma/schema.prisma` (a `User` model), `prisma.config.ts`, `src/prisma.service.ts`, `src/aventara.config.ts`, one edit each to `src/app.module.ts`, `src/main.ts` and `test/app.e2e-spec.ts`, `.env` (`DATABASE_URL` and `CORS_ORIGINS`), `.gitignore` (which lists `.env`, `/src/generated/` and the SQLite files), and `package.json` (the `@aventara/*` packages at the CLI's version, Prisma and the driver at `7.10.0`, the `aventara:prepare` and `postinstall` scripts, and `prebuild`, `prestart`, `prestart:dev` and `prestart:debug` scripts that run `aventara:prepare` so building or starting regenerates the discovery artifact first). The generated `src/generated/**` is rebuilt by `aventara:prepare` and is never edited. With Prisma already present your schema, Prisma config and service are reused and never written, and `.env` only gets the `CORS_ORIGINS` line appended.
 
 The `src/main.ts` edit enables CORS for the origins in `CORS_ORIGINS` (default `http://localhost:5173,http://localhost:3001`; unset or empty means CORS off) and adds a commented-out platform rate limiter. If `main.ts` already configures CORS it is left alone, and if it has no `const app = await NestFactory.create(...)` line, the lines are printed instead ([Add to an existing project](/docs/existing-project#what-it-changes-in-maints-and-env)). See [Rate limiting](/docs/limits-and-safety#rate-limiting).
 

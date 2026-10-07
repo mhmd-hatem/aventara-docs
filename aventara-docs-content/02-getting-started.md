@@ -108,7 +108,7 @@ async function bootstrap() {
   // Rate limiting: @nestjs/throttler is a Nest guard and does not run on Aventara's
   // routes; a platform-level limiter does. `npm i express-rate-limit`, import
   // { rateLimit } from 'express-rate-limit', pick your limits and uncomment below.
-  // See: https://<docs-domain>/docs/limits-and-safety#rate-limiting
+  // See: https://aventara-docs.vercel.app/docs/limits-and-safety#rate-limiting
   // app.use(rateLimit({ windowMs: 60_000, limit: 100 }));
   await app.listen(process.env.PORT ?? 3000);
 }
@@ -182,7 +182,7 @@ npx prisma generate
 npm run aventara:prepare  # regenerates src/generated/aventara/discovery.artifact.ts
 ```
 
-`aventara:prepare` also runs on every `npm install`. Restart the server afterwards. Because the contract changes, you must also [regenerate the frontend client](/docs/contract-hash#the-regenerate-workflow).
+`aventara:prepare` also runs on every `npm install`, and in a project made by `aventara new` or `aventara init` before `build`, `start`, `start:dev` and `start:debug` (the `prebuild` and `prestart*` scripts), so restarting `npm run start:dev` is enough there. Yarn Berry, and pnpm with `enable-pre-post-scripts=false`, skip those hooks: run `aventara:prepare` yourself. Restart the server afterwards. Because the contract changes, you must also [regenerate the frontend client](/docs/contract-hash#the-regenerate-workflow).
 
 ## 3. Set up the frontend client
 

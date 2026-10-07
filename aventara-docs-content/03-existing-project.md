@@ -44,7 +44,7 @@ If there is no Prisma service at all, `init` writes `src/prisma.service.ts` for 
 
 Every question has a flag; where nobody can be asked (CI, scripts) pass the flags or `--yes`, otherwise the run stops before writing anything and names what is missing. See the [CLI reference](/docs/cli-reference) for the full table.
 
-Existing content that differs from what would be written (a `.env` key, a script, a file) is listed and replaced only when you confirm, or with `--yes`.
+Existing content that differs from what would be written (a `.env` key, a script, a file) is listed and replaced only when you confirm, or with `--yes`. That includes a `prebuild`, `prestart`, `prestart:dev` or `prestart:debug` script you already have: `init` adds these four, each running `aventara:prepare`, and keeps yours unless you confirm or pass `--yes`.
 
 ## What it changes in `main.ts` and `.env`
 

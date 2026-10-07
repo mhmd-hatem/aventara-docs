@@ -9,9 +9,25 @@ section: about
 
 Aventara is in pilot: the public API may change before 1.0, and below 1.0 a minor version can be a breaking change. Pin exact versions. All `@aventara/*` packages are released together at one version.
 
+## 0.1.0-pilot.4
+
+The current release, published under the `pilot` dist-tag (install with `@pilot`). Upgrading from pilot.3: see [Upgrading](/docs/upgrading#from-010-pilot3-to-010-pilot4).
+
+**Server and CLI**
+
+- **The discovery artifact regenerates when you build or start.** `aventara new` and `aventara init` add `prebuild`, `prestart`, `prestart:dev` and `prestart:debug` scripts that run `aventara:prepare`. After a change to `schema.prisma`, the next `npm run start:dev` (or `build`, `start`, `start:debug`) regenerates the Prisma client and the artifact before the server compiles; no reinstall needed. npm and pnpm run these hooks; Yarn Berry and pnpm with `enable-pre-post-scripts=false` do not, so run `aventara:prepare` yourself there. On an existing project, `aventara init` keeps a `prebuild` or `prestart*` script you already have unless you confirm or pass `--yes`.
+- **A clear error for an old artifact.** An artifact written by an older adapter now fails the TypeScript build with `Property 'regenerate_with_aventara_prepare' is missing`, and the adapter refuses it at start-up with a message that names `aventara:prepare`. The fix is `npm run aventara:prepare`. See [Troubleshooting](/docs/troubleshooting#build-error-property-regenerate_with_aventara_prepare-is-missing).
+- **The scaffold's rate-limiting note links to the docs**: [Rate limiting](/docs/limits-and-safety#rate-limiting), where it used to carry a placeholder.
+- **Plainer messages.** The generate step's error messages say "the generated client's types" in words, not with Prisma's emoji labels.
+
+**Packages**
+
+- The comments an editor shows on hover, and the READMEs, now describe what each export does, how to use it, what it returns and what it throws. This applies to `@aventara/core`, `@aventara/nest`, `@aventara/prisma7-adapter`, `@aventara/client` and `@aventara/testing`, and to the declarations a generated client copies from `@aventara/core`.
+- `@aventara/cli` ships no type declarations: it is a command, run with `npx` or installed globally, and has no API to import.
+
 ## 0.1.0-pilot.3
 
-The current release, published under the `pilot` dist-tag (install with `@pilot`). Upgrading from pilot.1 or pilot.2: see [Upgrading](/docs/upgrading#from-010-pilot1-or-pilot2-to-010-pilot3).
+Published under the `pilot` dist-tag. Upgrading from pilot.1 or pilot.2: see [Upgrading](/docs/upgrading#from-010-pilot1-or-pilot2-to-010-pilot3).
 
 **Server and CLI**
 
