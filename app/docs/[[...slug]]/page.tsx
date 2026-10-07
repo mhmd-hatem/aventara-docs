@@ -19,7 +19,15 @@ const components: MDXComponents = {
     const url =
       href && !/^(https?:|mailto:|#|\/)/.test(href) ? `/docs/${href}` : href;
     return (
-      <a href={url} {...props}>
+      <a
+        href={url}
+        {...props}
+        className={
+          url === "https://github.com/mhmd-hatem/aventara-docs/issues/new/choose"
+            ? "button button-primary"
+            : props.className
+        }
+      >
         {children}
       </a>
     );

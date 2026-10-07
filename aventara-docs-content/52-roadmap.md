@@ -54,7 +54,7 @@ The pilot exists to find out what matters. If something blocks you, that is the 
 
 Report framework bugs, documentation problems, and feature requests in the docs repository's GitHub Issues. Tell us what you are building, what blocked you, and what you expected. For bugs, include your Aventara version and a small reproduction if you can.
 
-<a className="button button-primary" href="https://github.com/mhmd-hatem/aventara-docs/issues/new/choose">Send feedback on GitHub</a>
+[Send feedback on GitHub](https://github.com/mhmd-hatem/aventara-docs/issues/new/choose)
 
 ## See also
 
