@@ -11,7 +11,6 @@ import "./experience.css";
 import "./motion.css";
 import "./scrollbars.css";
 import { Providers } from "@/components/providers";
-import { DocsShell } from "@/components/docs-shell";
 export const metadata: Metadata = {
   title: {
     default: "Aventara — Developer documentation",
@@ -36,9 +35,7 @@ export default function RootLayout({
   return (
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body>
-        <Providers>
-          <DocsShell>{children}</DocsShell>
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

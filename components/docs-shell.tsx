@@ -204,10 +204,7 @@ export function DocsShell({ children }: { children: React.ReactNode }) {
           >
             <Menu size={21} />
           </Button>
-          <Link
-            href="/docs/introduction"
-            aria-label="Aventara documentation home"
-          >
+          <Link href="/" aria-label="Aventara home">
             <Logo />
           </Link>
           <span className="header-divider" />
@@ -278,7 +275,7 @@ export function DocsShell({ children }: { children: React.ReactNode }) {
           <DialogDescription className="sr-only">
             Browse Aventara documentation pages.
           </DialogDescription>
-          <Link href="/docs/introduction" onClick={() => setMobileOpen(false)}>
+          <Link href="/" onClick={() => setMobileOpen(false)}>
             <Logo />
           </Link>
           <Sidebar onNavigate={() => setMobileOpen(false)} />

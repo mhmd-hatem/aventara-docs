@@ -13,7 +13,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. The home route opens the documentation overview.
+Open http://localhost:3000. The home route is the product homepage; `/docs/introduction` opens the documentation overview.
 
 ```sh
 npm run typecheck
@@ -50,7 +50,10 @@ All 54 pages are arranged in task-focused navigation groups. The current group o
 
 - `app/globals.css`: semantic theme tokens, responsive layout, reading styles, and reduced-motion rules.
 - `components/docs-shell.tsx`: desktop navigation, mobile drawer, and theme control.
-- `components/overview.tsx`: introduction, examples, and next steps.
+- `app/page.tsx` and `app/landing.css`: the product homepage, with its own navigation, layered model preview, connection flow, playground, and invitation to start building.
+- `components/landing-interactions.tsx`: mobile homepage menu, theme control, install command, and synchronized schema/client examples.
+- `app/docs/layout.tsx`: the documentation workspace, separate from the homepage.
+- `components/overview.tsx`: documentation introduction, examples, and next steps.
 - `components/architecture.tsx`: centered Aventara diagram on the homepage, with a replayable schema → contract → API → client flow.
 - `components/protocol-flow.tsx`: custom contract/HTTP round-trip illustration with selectable compile, generate, and request stages; `introduction-code.tsx` replaces the source text diagram at render time.
 - `app/experience.css`: modern navigation, ambient surfaces, and interactive lab layouts.
