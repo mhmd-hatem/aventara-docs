@@ -11,6 +11,7 @@ import "./experience.css";
 import "./motion.css";
 import "./scrollbars.css";
 import { Providers } from "@/components/providers";
+import { SiteAnalytics } from "@/components/site-analytics";
 export const metadata: Metadata = {
   title: {
     default: "Aventara — Developer documentation",
@@ -36,6 +37,7 @@ export default function RootLayout({
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body>
         <Providers>{children}</Providers>
+        <SiteAnalytics />
       </body>
     </html>
   );

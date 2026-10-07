@@ -38,6 +38,12 @@ For a manual deployment from a linked checkout, use `npx vercel --prod`. The `.v
 
 For a framework release, update the source content and `lib/release.ts` together, run `npm test` and `npm run build -- --webpack`, then push to `main`. Check the resulting deployment's navigation, search and interactive examples before announcing it.
 
+## Analytics
+
+Vercel Web Analytics is mounted in the root layout through `components/site-analytics.tsx`, covering the homepage and documentation. Enable Web Analytics in the Vercel project dashboard before deploying. Development uses the package's debug mode and does not send production analytics.
+
+To exclude your own browser, open `https://aventara-docs.vercel.app/?analytics=off` once. The preference persists in this browser's local storage, and the opt-out visit itself is not recorded. Repeat for each browser or device you use; clearing site data resets the preference. Open `?analytics=on` to resume tracking. If storage is blocked, exclusion lasts only for the current page session.
+
 ## Content
 
 The current framework release is `0.1.0-pilot.4`. Shared site badges read `lib/release.ts`; the numbered source pages contain the release documentation.
