@@ -1,0 +1,16 @@
+node_modules/
+.next/
+.source/
+.vercel/
+*.tsbuildinfo
+.env*
+
+# Local tooling, source design kits, and internal editorial notes.
+.agents/
+.codex/
+.aws/
+aventara-framework-logo-kit/
+caligo-palette-kit/
+docs-structure-study.md
+aventara-docs-content/README.md
+aventara-docs-content/_site-notes.md

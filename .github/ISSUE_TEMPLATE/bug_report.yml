@@ -1,0 +1,37 @@
+name: Bug report
+description: Report a framework bug or a problem with the docs.
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where is the problem?
+      options:
+        - Aventara framework
+        - Documentation content
+        - Documentation website
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Tell us what you were building, what blocked you, and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: How can we reproduce it?
+      description: Share a small example, steps, or the affected docs URL. Remove credentials and private data.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Aventara version
+      placeholder: e.g. 0.1.0-pilot.3
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Relevant Node.js, ORM, database, host, or browser versions.

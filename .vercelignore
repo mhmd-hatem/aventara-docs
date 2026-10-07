@@ -1,0 +1,20 @@
+# Upload only the app and its build inputs.
+/*
+!app
+!components
+!lib
+!public
+!aventara-docs-content
+!package.json
+!package-lock.json
+!next.config.mjs
+!next-env.d.ts
+!postcss.config.mjs
+!source.config.ts
+!tsconfig.json
+!vercel.json
+
+aventara-docs-content/README.md
+aventara-docs-content/_site-notes.md
+**/.env*
+**/*.tsbuildinfo

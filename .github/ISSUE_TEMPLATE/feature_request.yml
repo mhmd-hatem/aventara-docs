@@ -1,0 +1,17 @@
+name: Feature request
+description: Tell us what would make Aventara more useful for your project.
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What are you trying to do?
+      description: Describe your use case and what is missing or getting in your way.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help?
+      description: Describe the behavior you would like and any alternatives you have tried.
+    validations:
+      required: true
