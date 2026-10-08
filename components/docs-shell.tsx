@@ -110,7 +110,9 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div className="sidebar-context">
         <BookOpen size={16} />
         <span>Developer docs</span>
-        <span className="sidebar-pilot">PILOT</span>
+        <span className="sidebar-pilot" title="Release candidate">
+          RC
+        </span>
       </div>
       <nav
         key={pathname}

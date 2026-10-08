@@ -7,7 +7,7 @@ section: guides
 
 # Limits and safety
 
-An API that accepts a query language needs ceilings, or one request can ask for the whole database, nest forty levels deep, or send a gigabyte. Aventara sets conservative defaults, lets you tune them per layer, and checks every request against the contract **before** it reaches your ORM.
+An API that accepts a query language needs ceilings, or one request can ask for the whole database, nest forty levels deep, or send a gigabyte. Aventara sets conservative defaults, lets you tune them per layer, and checks every request against the contract before it reaches your ORM.
 
 ## The limits
 
@@ -61,7 +61,7 @@ Each limit, as a caller sees it with that configuration:
 
 Nesting depth counts relation levels: three levels (`posts` -> `author` -> `posts`) pass with `maxNestingDepth: 3`, a fourth is refused. A plan of 21 steps is refused with `A2009` before anything runs.
 
-`maxRequestBytes` counts **decoded** bytes: a compressed body (`gzip`, `deflate`, `br`) is measured after inflation, so compression does not get around it. See [HTTP protocol](/docs/http-protocol) and [NestJS host](/docs/nestjs-host#requests).
+`maxRequestBytes` counts decoded bytes: a compressed body (`gzip`, `deflate`, `br`) is measured after inflation, so compression does not get around it. See [HTTP protocol](/docs/http-protocol) and [NestJS host](/docs/nestjs-host#requests).
 
 ## What is refused by default
 
@@ -110,9 +110,9 @@ Raw database errors, SQL, connection strings and stack traces are never put in `
 
 ## Rate limiting
 
-The limits above bound **one request**. How many requests a caller may make is a different question, and Aventara does not answer it for you: add a rate limiter at the platform level, or in front of the server (a proxy, an API gateway).
+The limits above bound one request. How many requests a caller may make is a different question, and Aventara does not answer it for you: add a rate limiter at the platform level, or in front of the server (a proxy, an API gateway).
 
-**`@nestjs/throttler` does not protect Aventara's routes.** It is a Nest guard, and no Nest guard, interceptor or pipe runs on Aventara's protocol routes (they are registered on the HTTP platform directly; see [NestJS host](/docs/nestjs-host#what-runs-on-aventara-routes)). Verified: with `ThrottlerGuard` installed as a global guard and a limit of 2, a Nest controller route answered `200 200 429 429 429` and Aventara's `GET /api/_contract` answered `200` five times in a row.
+`@nestjs/throttler` does not protect Aventara's routes. It is a Nest guard, and no Nest guard, interceptor or pipe runs on Aventara's protocol routes (they are registered on the HTTP platform directly; see [NestJS host](/docs/nestjs-host#what-runs-on-aventara-routes)). Verified: with `ThrottlerGuard` installed as a global guard and a limit of 2, a Nest controller route answered `200 200 429 429 429` and Aventara's `GET /api/_contract` answered `200` five times in a row.
 
 A limiter that is HTTP-platform middleware does run. On Express (what `aventara new` scaffolds), use `express-rate-limit`:
 
@@ -152,16 +152,16 @@ On Fastify, the equivalent is `@fastify/rate-limit`, registered on the Fastify i
 
 ### CORS is not access control
 
-`CORS_ORIGINS` (or any `enableCors` setting) tells **browsers** which origins may read the API's answers. A server, a script, `curl` or a bot ignores it entirely, so it neither authenticates callers nor limits them. [Guards](/docs/authentication-and-guards) decide who may call; rate limiting decides how often.
+`CORS_ORIGINS` (or any `enableCors` setting) tells browsers which origins may read the API's answers. A server, a script, `curl` or a bot ignores it entirely, so it neither authenticates callers nor limits them. [Guards](/docs/authentication-and-guards) decide who may call; rate limiting decides how often.
 
 ## Defense in depth
 
-The limits and the validation layer are a floor, not your whole security story:
+The limits and the validation layer are only a minimum. Beyond them:
 
-- **Authenticate.** Nothing is public except what your guards allow. See [Authentication and guards](/docs/authentication-and-guards).
-- **Remove what callers should not have.** Hide fields, make fields write-only, switch off operations: [Exposing and hiding fields](/docs/exposing-and-hiding-fields), [Restricting operations](/docs/restricting-operations).
-- **Tighten the client layer.** Defaults suit a trusted frontend. For a public API, lower `maxListLimit` and `maxNestingDepth` under `client`.
-- **Rate-limit, and put a proxy in front.** Add a [rate limiter](#rate-limiting). TLS and request timeouts belong to your platform; Aventara's `maxRequestBytes` complements, but does not replace, a proxy's body limit.
+- Authenticate. Nothing is public except what your guards allow. See [Authentication and guards](/docs/authentication-and-guards).
+- Remove what callers should not have. Hide fields, make fields write-only, switch off operations: [Exposing and hiding fields](/docs/exposing-and-hiding-fields), [Restricting operations](/docs/restricting-operations).
+- Tighten the client layer. Defaults suit a trusted frontend. For a public API, lower `maxListLimit` and `maxNestingDepth` under `client`.
+- Rate-limit, and put a proxy in front. Add a [rate limiter](#rate-limiting). TLS and request timeouts belong to your platform; Aventara's `maxRequestBytes` complements, but does not replace, a proxy's body limit.
 
 ## See also
 

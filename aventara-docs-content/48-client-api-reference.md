@@ -39,7 +39,7 @@ export default defineClientConfig({
 
 The file is `framework.client.ts`. The generator loads it like `prisma.config`: `.ts`, `.mts`, `.cts`, `.js`, `.mjs` or `.cjs`, in ESM or CommonJS syntax (a `framework.client.mts` from `0.1.0-pilot.1` keeps working). With two of them present the generator refuses.
 
-**The `.env` cascade**, read from the current directory before the config is evaluated, highest precedence first: the process environment, `.env.<mode>.local`, `.env.<mode>`, `.env.local`, `.env`. `mode` is `NODE_ENV`, or `development`. `process.env` is never written.
+The `.env` cascade is read from the current directory before the config is evaluated, highest precedence first: the process environment, `.env.<mode>.local`, `.env.<mode>`, `.env.local`, `.env`. `mode` is `NODE_ENV`, or `development`. `process.env` is never written.
 
 Errors, one sentence and exit code 1 (verified):
 
@@ -113,7 +113,7 @@ Only what the client contract advertises exists, in the type and at runtime: one
 
 A Resource whose name collides with a client member (`tx`, `transaction`, `then`, `constructor`, names of `Object.prototype`) is reached as `<name>Model`, with one warning at generation; its wire name is unchanged.
 
-A call **resolves to the data** (record, list, count; `null` for a first-style miss, `A1001`). Every other outcome throws.
+A call resolves to the data (record, list, count; `null` for a first-style miss, `A1001`). Every other outcome throws.
 
 Values are application values: `bigint`, `Date`, `Uint8Array`, the client's `Decimal`, and JSON as is. Arguments are encoded and results revived for you.
 
@@ -121,7 +121,7 @@ Values are application values: `bigint`, `Date`, `Uint8Array`, the client's `Dec
 
 | Option | Type | Default | Meaning |
 |---|---|---|---|
-| `entrypoint` | `string` | the entrypoint the client was generated from | Another deployment that serves **exactly the same** client contract (tests, SSR). Re-binds nothing: the hash still decides whether it accepts you. |
+| `entrypoint` | `string` | the entrypoint the client was generated from | Another deployment that serves exactly the same client contract (tests, SSR). Re-binds nothing: the hash still decides whether it accepts you. |
 | `fetch` | `Fetch` | the platform's `fetch`, read when a call is made | A custom fetch: authentication, tests, retries. |
 
 If no `fetch` is available a call throws `No fetch is available here; pass one: new AvClient({ fetch })`. Importing the client never fails.
@@ -166,7 +166,7 @@ const post = avClient.tx.Post.create.one({ data: { title: "from tx", authorId: u
 const [u, p] = await avClient.transaction([user, post]);
 ```
 
-Refused before anything is sent: the same handle twice (`ValidationError`, `A2004`/`V1001`) and a `$ref` to a handle not in the list (`A2007`/`V1010`). More than `maxTransactionOperations` steps throws `ValidationError` `A2009`/`V1014`. See [Transactions](/docs/transactions).
+Refused before anything is sent: the same handle twice (`ValidationError`, `A2004`/`V1001`) and a `$ref` to a handle not in the list (`A2007`/`V1010`). A `$ref` can sit in a value, a relation identifier, a unique `where`, a `cursor`, a filter at any depth and nested writes ([Transactions with $ref](/docs/transactions-with-ref)); a `$ref` to a step later in the list is `A2007`/`V1016`. More than `maxTransactionOperations` steps throws `ValidationError` `A2009`/`V1014`. A builder (`tx`) never throws for an unreadable argument: `transaction([...])` rejects with a `TypeError` that names where ([Client errors](/docs/client-errors#a-typeerror-before-anything-is-sent)). See [Transactions](/docs/transactions).
 
 ## Error classes
 
@@ -222,7 +222,7 @@ List results are `readonly` arrays, so type them `readonly User[]`.
 
 ## Bound to a contract
 
-A generated client is bound to the **exact contract hash and protocol version** it was generated from (both in `generated/metadata.ts`) and sends them on every request. A deployment whose contract differs answers `A2005`, thrown as `ContractMismatchError`, including when the stale client calls an operation the server no longer advertises. Generate against the deployment the client will call, and regenerate when it changes. See [Contract hash](/docs/contract-hash).
+A generated client is bound to the exact contract hash and protocol version it was generated from (both in `generated/metadata.ts`) and sends them on every request. A deployment whose contract differs answers `A2005`, thrown as `ContractMismatchError`, including when the stale client calls an operation the server no longer advertises. Generate against the deployment the client will call, and regenerate when it changes. See [Contract hash](/docs/contract-hash).
 
 ## Verified behavior
 

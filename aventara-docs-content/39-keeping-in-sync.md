@@ -11,11 +11,13 @@ A generated client is a snapshot of your server's client contract. When the cont
 
 ## What makes a client stale
 
-The client is bound to the **hash of the whole contract** the deployment advertises, not only your schema. Regenerate after any of:
+The client is bound to the hash of the whole contract the deployment advertises, not only your schema. Regenerate after any of:
 
 - a schema change (a new model, field or enum value),
 - a change to `client` restrictions, limits or operations in your configuration,
-- transactions switched on or off for the client layer.
+- transactions switched on or off for the client layer,
+- a typed [JSON field](/docs/json-fields) declared or changed (its shape is part of the contract),
+- moving to a new Aventara release that changes what a contract states: the release notes say so ([Upgrading](/docs/upgrading)).
 
 Changes that stay on the server (a pipeline guard, the application layer's configuration, a bug fix) do not change the contract.
 
@@ -64,7 +66,7 @@ try {
 
 It happens before anything runs, so nothing is half-applied. This includes calling an operation the server no longer advertises. A response that is not an Aventara envelope at all (a host's own 404, a proxy error) is a `TransportError` instead: nothing in it says the client is stale.
 
-Two deployments of one schema can advertise different contracts (different restrictions, different limits). A client generated against one is refused by the other, so **generate against the deployment the client will call**. In practice: generate against the environment you deploy to, or make sure every environment runs the same configuration.
+Two deployments of one schema can advertise different contracts (different restrictions, different limits). A client generated against one is refused by the other, so generate against the deployment the client will call. In practice: generate against the environment you deploy to, or make sure every environment runs the same configuration.
 
 ## Generating in CI
 

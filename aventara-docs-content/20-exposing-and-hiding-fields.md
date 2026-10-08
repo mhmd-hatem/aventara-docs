@@ -7,7 +7,7 @@ section: guides
 
 # Exposing and hiding fields
 
-By default every column of your Prisma model is readable and writable. `restrictions` narrows that, per field, and per layer: the **application** layer (your server-side code) and the **client** layer (remote callers, and the generated frontend client). A field you take away from a layer does not exist there: it is refused in inputs, outputs, filters, ordering and nested selections, it is missing from the contract, and the generated client's types do not have it.
+By default every column of your Prisma model is readable and writable. `restrictions` narrows that, per field, and per layer: the application layer (your server-side code) and the client layer (remote callers, and the generated frontend client). A field you take away from a layer does not exist there: it is refused in inputs, outputs, filters, ordering and nested selections, it is missing from the contract, and the generated client's types do not have it.
 
 The examples use this schema (the `User` model of a project created with `aventara new`, extended):
 
@@ -97,7 +97,7 @@ A plain `find.many({})` simply leaves the field out. A create that includes it w
 {"data":null,"code":"A2004","cause":{"message":"Operation arguments failed framework validation.","issues":[{"code":"V1005","path":["arguments","data","settings"],"message":"Field \"settings\" is not available on Resource \"User\"."}]}}
 ```
 
-It is the same answer as for a field that never existed: a remote caller cannot tell hidden from absent. Your own server code, on the application layer, still sees it:
+It is the same answer as for a field that never existed: a remote caller cannot tell hidden from absent. When the field is hidden by `client.restrictions` (as here, for remote callers only), your own server code on the application layer still sees it. A field hidden at the root is hidden on the application layer too. Here:
 
 ```ts
 const res = await this.framework.application.User.find.many({ select: ["id", "email", "settings"] });
@@ -108,7 +108,7 @@ Through `framework.client` (the same rules as a remote caller) the same call doe
 
 ## What the client contract shows
 
-`GET /api/_contract` serves the **client** layer only. For `passwordHash` above it lists only what is allowed (it may be written, nothing else):
+`GET /api/_contract` serves the client layer only. For `passwordHash` above it lists only what is allowed (it may be written, nothing else):
 
 ```json
 "passwordHash": { "capabilities": { "create": [], "update": [] }, "kind": "scalar", "lifecycle": ["DEFAULTED"], "list": false, "nullable": false, "type": { "scalar": "string" } }
@@ -139,13 +139,13 @@ Restrictions narrow what the model offers; they cannot add a capability it does 
 
 ## Layers: root, application, client
 
-`restrictions` at the root applies to **both** layers. `application.restrictions` and `client.restrictions` override the root for one layer. For a given field property, a value set at the layer wins; otherwise the root value is used. `false` counts as set, so a layer can narrow what the root allows. See [Configuration](/docs/configuration#root-and-layer-overrides).
+`restrictions` at the root applies to both layers. `application.restrictions` and `client.restrictions` override the root for one layer. For a given field property, a value set at the layer wins; otherwise the root value is used. `false` counts as set, so a layer can narrow what the root allows. See [Configuration](/docs/configuration#root-and-layer-overrides).
 
 ## Safety rules at startup
 
 The framework refuses to start, with a `FrameworkConstructionError`, when a restriction would leave the contract inconsistent.
 
-**A hidden Resource with a visible relation to it** (`COMPILER_DANGLING_RELATION`):
+A hidden Resource with a visible relation to it (`COMPILER_DANGLING_RELATION`):
 
 ```ts
 client: { restrictions: { Category: { hidden: true } } }
@@ -164,7 +164,7 @@ client: {
 }
 ```
 
-**A hidden identifier.** If a hidden field is part of an identifier, that identifier is dropped. If no identifier is left, the operations that need one (`find.unique`, `update.unique`, `delete.unique`, `upsert.unique`) disappear from that Resource. Hiding both `id` and `email` on `User` for remote callers leaves `identifiers: []` and only `find.first`, `find.many`, `find.count`, the `create` family, `update.first`/`many`/`count` and `delete.first`/`count`.
+A hidden identifier: if a hidden field is part of an identifier, that identifier is dropped. If no identifier is left, the operations that need one (`find.unique`, `update.unique`, `delete.unique`, `upsert.unique`) disappear from that Resource. Hiding both `id` and `email` on `User` for remote callers leaves `identifiers: []` and only `find.first`, `find.many`, `find.count`, the `create` family, `update.first`/`many`/`count` and `delete.first`/`count`.
 
 ## See also
 

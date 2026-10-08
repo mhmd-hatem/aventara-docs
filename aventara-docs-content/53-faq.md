@@ -9,11 +9,11 @@ section: about
 
 ## How is this different from tRPC?
 
-tRPC shares TypeScript types between a server and a client by having you write procedures. Aventara has you write **no procedures**: the API (every Resource and operation) is derived from your Prisma schema and your configuration, compiled into a **contract**, and the client is generated from that contract. You trade hand-written endpoints for a fixed, standard set of operations with a rich query language. Choose tRPC when your API is mostly bespoke procedures; Aventara when it is mostly your data model. Business logic that does not fit `find`, `create`, `update`, `delete`, `upsert` and transactions still belongs in your own NestJS code, next to Aventara.
+tRPC shares TypeScript types between a server and a client by having you write procedures. Aventara has you write no procedures: the API (every Resource and operation) is derived from your Prisma schema and your configuration, compiled into a contract, and the client is generated from that contract. You trade hand-written endpoints for a fixed, standard set of operations with a rich query language. Choose tRPC when your API is mostly bespoke procedures; Aventara when it is mostly your data model. Business logic that does not fit `find`, `create`, `update`, `delete`, `upsert` and transactions still belongs in your own NestJS code, next to Aventara.
 
 ## How is this different from GraphQL?
 
-GraphQL has a schema, but you write resolvers, and clients send query documents the server must interpret. Aventara needs no resolvers: the operations are standard, and a client's request is plain JSON arguments (`where`, `select`, `include`, ...) validated against the contract. Two differences worth knowing: every operation is a `POST` to a predictable URL, so requests are easy to log and rate-limit; and a client generated for one contract is **refused** (`A2005`) by a server whose contract changed, rather than sending queries the server may now misread.
+GraphQL has a schema, but you write resolvers, and clients send query documents the server must interpret. Aventara needs no resolvers: the operations are standard, and a client's request is plain JSON arguments (`where`, `select`, `include`, ...) validated against the contract. Every operation is a `POST` to a predictable URL, so requests are easy to log and rate-limit. A client generated for one contract is refused (`A2005`) by a server whose contract changed, so it never sends queries the server may now misread.
 
 ## Can I use Aventara without NestJS?
 
@@ -25,7 +25,7 @@ Prisma 7 on SQLite or PostgreSQL. More adapters are planned ([Roadmap](/docs/roa
 
 ## Can I hide fields from the frontend?
 
-Yes, per layer. A field marked `hidden` in the `client` layer does not exist for remote callers: not in the contract, the generated types, inputs, outputs, filters, ordering or nested projections. A field can also be made **write-only** (settable but never readable, filterable or orderable), which suits `passwordHash`. Your own server code can still read it through `framework.application`. See [Contract layers](/docs/contract-layers) and [Configuration reference](/docs/config-reference#restrictions-reference).
+Yes, per layer. A field marked `hidden` in the `client` layer does not exist for remote callers: not in the contract, the generated types, inputs, outputs, filters, ordering or nested projections. A field can also be made write-only (settable but never readable, filterable or orderable), which suits `passwordHash`. Your own server code can still read it through `framework.application`. See [Contract layers](/docs/contract-layers) and [Configuration reference](/docs/config-reference#restrictions-reference).
 
 ## Can I turn operations off?
 
@@ -49,21 +49,21 @@ Arguments are structured JSON (nested filters, projections), which does not fit 
 
 ## Can anyone call my database through this?
 
-Only what the **client contract** advertises, only with the arguments it allows, and only past your guards. Limits bound how much a caller can ask for (list size, nesting depth, body size). It is still your responsibility to add authentication; Aventara does not authenticate for you.
+Only what the client contract advertises, only with the arguments it allows, and only past your guards. Limits bound how much a caller can ask for (list size, nesting depth, body size). It is still your responsibility to add authentication; Aventara does not authenticate for you.
 
 ## Can I use it in production?
 
-It is a pilot: the API may change before 1.0 and below 1.0 a minor version can break. Pin exact versions and read the [Changelog](/docs/changelog) before upgrading.
+It is a release candidate (`1.0.0-rc.0`): the API is meant to be the 1.0 API and changes only to fix what testing finds. Pin exact versions and read the [Changelog](/docs/changelog) before upgrading.
 
 ## The license, in plain terms
 
 Aventara is source-available under PolyForm Shield 1.0.0 with an additional permission.
 
-- **Using it for free, including in commercial products, is allowed.** Your API, your SaaS, internal tools, client work.
-- **Modifying and redistributing it is allowed**, keeping the license text and the `Required Notice` line.
-- **Not allowed:** offering a product that competes with Aventara itself (the framework, its packages and its tooling), for example repackaging it and selling it as a framework.
-- **Writing your own framework is fine**, and so is building a product with Aventara that competes with other products in the market.
-- **The name:** don't present Aventara as your own, and don't publish under `@aventara`. "Built with Aventara" is welcome.
+- Using it for free, including in commercial products, is allowed. Your API, your SaaS, internal tools, client work.
+- Modifying and redistributing it is allowed, keeping the license text and the `Required Notice` line.
+- Not allowed: offering a product that competes with Aventara itself (the framework, its packages and its tooling), for example repackaging it and selling it as a framework.
+- Writing your own framework is fine, and so is building a product with Aventara that competes with other products in the market.
+- The name: don't present Aventara as your own, and don't publish under `@aventara`. "Built with Aventara" is welcome.
 
 The texts are what binds; this is a summary, not legal advice. See [License](/docs/license).
 

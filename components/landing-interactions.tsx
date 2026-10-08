@@ -16,6 +16,7 @@ import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/code-block";
 import { DemoCode } from "@/components/lab-primitives";
+import { AVENTARA_DIST_TAG } from "@/lib/release";
 
 export function LandingNav() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -76,7 +77,7 @@ export function LandingNav() {
   );
 }
 export function InstallCommand() {
-  const command = "npx @aventara/cli@pilot new my-api";
+  const command = `npx @aventara/cli@${AVENTARA_DIST_TAG} new my-api`;
   return (
     <div className="landing-install">
       <span aria-hidden="true">$</span>

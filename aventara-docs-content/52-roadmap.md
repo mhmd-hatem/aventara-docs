@@ -7,7 +7,7 @@ section: about
 
 # Roadmap
 
-Aventara is a **pilot** (`0.1.0-pilot.4`). It works end to end today, and the public API may still change before 1.0. This page says what we are aiming at, in the order we expect to get there. It has no dates: a direction, not a promise.
+Aventara is a release candidate (`1.0.0-rc.0`). It works end to end today, and the public API is meant to be the 1.0 API: it changes from here only to fix what testing finds. This page lists what we are aiming at, in the order we expect to get there. It has no dates.
 
 ## Today
 
@@ -21,20 +21,20 @@ Aventara is a **pilot** (`0.1.0-pilot.4`). It works end to end today, and the pu
 
 ## Toward 1.0
 
-1. **More pilot releases and then release candidates.** Feedback from real projects decides what changes. Once a release candidate is out, the public API is frozen except for fixes.
-2. **A stable public API.** The configuration, the generated client surface, the protocol and the error codes are the things 1.0 commits to. Today those may still change in a minor version.
-3. **Protocol header naming.** The `Aventara-` prefix of the protocol's headers may change before 1.0; regenerating picks up a change.
-4. **Clearer failures.** Sharper validation and error mapping for the cases that are still rougher than they should be in the pilot. A required field omitted on create, a `BigInt` out of range and an orphaned required child already answer with specific codes.
+1. Release candidates, then 1.0. Feedback from real projects decides what changes. With a release candidate out, the public API is frozen except for fixes.
+2. A stable public API. The configuration, the generated client surface, the protocol and the error codes are the things 1.0 commits to, and the release candidates test them.
+3. Protocol header naming. The `Aventara-` prefix of the protocol's headers may change before 1.0; regenerating picks up a change.
+4. Clearer failures. Sharper validation and error mapping for the cases that are still rougher than they should be. A required field omitted on create, a `BigInt` out of range and an orphaned required child already answer with specific codes.
 
 ## More ORMs and adapters
 
 Each ORM major gets its own adapter package, so a new ORM version never changes the behavior of an existing one. The ORM's vocabulary stays inside its adapter; the contracts you write against stay the same.
 
-- **Prisma 8** support as a separate adapter once Prisma 8 is stable.
+- Prisma 8 support as a separate adapter once Prisma 8 is stable.
 - Further ORMs and databases, driven by demand.
 - Other Prisma 7 drivers beyond SQLite and PostgreSQL as they are measured.
 
-The `aventara` CLI offers whichever adapters exist; a new adapter appears there by existing.
+The `aventara` CLI offers whichever adapters exist; a new adapter appears there once it exists.
 
 ## More hosts
 
@@ -50,7 +50,7 @@ Published, reproducible benchmarks of Aventara against hand-written REST, GraphQ
 
 ## Say what you need
 
-The pilot exists to find out what matters. If something blocks you, that is the most useful thing you can tell us.
+The release candidate is meant to find out what matters, so tell us what blocks you.
 
 Report framework bugs, documentation problems, and feature requests in the docs repository's GitHub Issues. Tell us what you are building, what blocked you, and what you expected. For bugs, include your Aventara version and a small reproduction if you can.
 

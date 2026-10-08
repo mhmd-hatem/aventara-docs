@@ -7,7 +7,7 @@ section: frontend
 
 # Frontend client
 
-`@aventara/client` is a **development-time generator**. It reads your deployed server's client contract and writes a standalone, typed TypeScript client into your project. The generated code imports nothing from `@aventara/client` or `@aventara/core` at runtime, so `@aventara/client` stays a dev dependency.
+`@aventara/client` is a development-time generator. It reads your deployed server's client contract and writes a standalone, typed TypeScript client into your project. The generated code imports nothing from `@aventara/client` or `@aventara/core` at runtime, so `@aventara/client` stays a dev dependency.
 
 ```ts
 import avClient from "./api/AvClient";

@@ -53,7 +53,7 @@ export default function Home() {
               href={`/docs/changelog#${AVENTARA_VERSION.replaceAll(".", "")}`}
             >
               <span className="pilot-dot" /> {AVENTARA_VERSION}
-              <span className="release-divider" /> The pilot is open{" "}
+              <span className="release-divider" /> Release candidate{" "}
               <ArrowUpRight size={13} />
             </Link>
             <h1 id="landing-title">
@@ -297,7 +297,7 @@ export default function Home() {
           <div className="landing-pilot-note">
             <span className="pilot-dot" />
             <p>
-              In pilot. Built with your feedback.
+              Approaching 1.0. Built with your feedback.
               <br />
               <Link href="/docs/roadmap">See what’s next</Link>
               <span> · </span>

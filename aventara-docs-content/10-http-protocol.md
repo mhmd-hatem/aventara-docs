@@ -7,7 +7,7 @@ section: reference
 
 # HTTP protocol
 
-The generated client speaks this protocol for you. You need this page to call the API from another language, to debug, or to host the framework outside NestJS. Protocol version: **1**.
+The generated client speaks this protocol for you. You need this page to call the API from another language, to debug, or to host the framework outside NestJS. Protocol version: 1.
 
 ## Routes
 
@@ -21,7 +21,7 @@ All routes are relative to your configured [entrypoint](/docs/nestjs-host#entryp
 
 Only advertised operations are routable. The Resource segment is the exact Resource key (the Prisma model name). The `_` prefix is reserved for the protocol; any other `/api/_*` path answers with a protocol error.
 
-The body of every `POST` is a **JSON object**. An empty operation body is `{}`; an array, a scalar or no body is invalid. The route already names the Resource, family and variant, so the body holds only the operation's arguments (see [Querying](/docs/querying)).
+The body of every `POST` is a JSON object. An empty operation body is `{}`; an array, a scalar or no body is invalid. The route already names the Resource, family and variant, so the body holds only the operation's arguments (see [Querying](/docs/querying)).
 
 ## Headers
 
@@ -32,7 +32,7 @@ Every `_resources` and `_transactions` request must send:
 | `Content-Type` | `application/json` |
 | `Aventara-Protocol-Version` | `1` |
 | `Aventara-Contract-Hash` | The hash of the contract the caller was built from (`sha256:` plus 64 lowercase hex characters), from `/_contract`. |
-| `Aventara-Request-Id` | **Optional.** 1 to 128 visible ASCII characters. Used as the request's correlation id; otherwise one is generated. |
+| `Aventara-Request-Id` | Optional. 1 to 128 visible ASCII characters. Used as the request's correlation id; otherwise one is generated. |
 
 Header names are case-insensitive. A request missing either identity header answers `400 A2000`, and the message names what is missing (see below). A wrong protocol version answers `A2006`; a hash that is not the current one answers `A2005`.
 
@@ -72,7 +72,7 @@ Branch on `code`, never on `message`.
 
 ## Codes
 
-The full tables with typical causes and fixes are on [Error codes](/docs/error-codes); the summary below is for quick reference.
+The full tables with typical causes and fixes are on [Error codes](/docs/error-codes).
 
 ### A-codes and HTTP status
 
@@ -216,11 +216,11 @@ A unique-field conflict (HTTP 409):
 {"data":null,"code":"A2008","cause":{"message":"The operation conflicts with the current state of the resource."}}
 ```
 
-An unknown Resource (HTTP 404) and an unavailable operation (HTTP 404):
+An unknown Resource (HTTP 404) and an unavailable operation (HTTP 404). A path is the address in the request, and a single route's `resource`, `family` and `variant` are its URL segments: an unknown Resource is at `["resource"]`, an unavailable operation at `["family"]` (not a standard family, or none of its variants is offered) or `["variant"]` (the family is right), argument issues at `["arguments", ...]`. The second answer below is for `.../User/find/nope`:
 
 ```json
 {"data":null,"code":"A2001","cause":{"message":"Operation arguments failed framework validation.","issues":[{"code":"V1005","path":["resource"],"message":"Resource \"Nope\" is not available in the active Contract."}]}}
-{"data":null,"code":"A2002","cause":{"message":"Operation arguments failed framework validation.","issues":[{"path":["operation"],"code":"V1006","message":"Operation \"find.nope\" is not available on Resource \"User\"."}]}}
+{"data":null,"code":"A2002","cause":{"message":"Operation arguments failed framework validation.","issues":[{"path":["variant"],"code":"V1006","message":"Operation \"find.nope\" is not available on Resource \"User\"."}]}}
 ```
 
 Transport-level answers (all carry `Aventara-Request-Id`):
@@ -280,9 +280,11 @@ With only one missing it reads `The Aventara-Contract-Hash header is missing.` (
 
 The fingerprint is a short deterministic hash of the step (`fp1:` plus base64url): SHA-256 of the step's canonical JSON, first 16 bytes. It guards against a reference that points at the wrong step; it is not a security mechanism. Hand-writing plans is error-prone; use the generated client, which computes fingerprints for you. A mismatch answers `A2007` with `V1017`.
 
-Plan-level errors: an empty `operations` array answers `422 A2004` / `V1004`; a missing `operations` answers `422 A2004` / `V1000` (`Required property "operations" is missing.`); more than `maxTransactionOperations` steps answers `422 A2009` / `V1014`; a wrong fingerprint answers `422 A2007` / `V1017` with `cause.operation` set (verified).
+Plan-level errors: an empty `operations` array answers `422 A2004` / `V1004`; a missing `operations` answers `422 A2004` / `V1000` (`Required property "operations" is missing.`); more than `maxTransactionOperations` steps answers `422 A2009` / `V1014`; a wrong fingerprint answers `422 A2007` / `V1017` at `["operations", i, "fingerprint"]` with `cause.operation` set to `i`.
 
-A committed plan answers `200 A1009` with `data` an array of per-step results. A failed plan rolls back and answers the **failing step's** code and status, with `cause.operation` set.
+Every error path in a transaction answer is the literal address in the request body: an argument issue is `["operations", i, "args", ...]`; a step's own defects are `["operations", i, "resource"]`, `["operations", i, "family"]`, `["operations", i, "variant"]`, `["operations", i, "fingerprint"]`, `["operations", i, "<key>"]` for an unknown key on the step, or `["operations", i]` for a step that is not an object. For instance, a second step whose `args` is `{ "data": { "title": 5 } }` answers `422 A2004` with `cause.operation` `1` and the issue path `["operations", 1, "args", "data", "title"]`. The full table is in [Error codes](/docs/error-codes#v-codes).
+
+A committed plan answers `200 A1009` with `data` an array of per-step results. A failed plan rolls back and answers the failing step's code and status, with `cause.operation` set.
 
 ## Custom hosts with @aventara/core/protocol
 

@@ -41,6 +41,16 @@ All are exported from `AvClient.ts`. Every class except `TransportError` extends
 
 The full code table, with HTTP statuses, is in [HTTP protocol](/docs/http-protocol#codes).
 
+### A `TypeError` before anything is sent
+
+One refusal is not a `FrameworkError` at all. The client reads the arguments you pass it through a guard, and a value that cannot be read (a revoked Proxy, a getter that throws) is refused with a `TypeError` that names where, before a request is made:
+
+```text
+TypeError: An operation's arguments must be readable plain data, and the value at /where/id could not be read.
+```
+
+A `tx` builder never throws for this either: `avClient.transaction([...])` rejects with that `TypeError`. Server-side calls answer the same mistake as `A2004` / `V1001` instead ([Server-side usage](/docs/server-side-usage#what-a-server-side-call-accepts)).
+
 ## cause and issues
 
 `FrameworkError.cause` has this shape:
@@ -72,7 +82,7 @@ A validation failure, as thrown for `where: { email: { contains: 5 } }`:
 // }
 ```
 
-Use `path` to attach the message to a form field:
+When the issue comes from your own pipeline code, `message` is the text you wrote, if it was non-blank and at most 1,000 characters; otherwise it is the standard text for the code. Use `path` to attach the message to a form field:
 
 ```ts
 import { ValidationError } from "./api/AvClient";
@@ -118,7 +128,7 @@ try {
 }
 ```
 
-`AuthError` comes from your own guards ([Configuration](/docs/configuration#pipelines)); the message is whatever your guard threw. Without a guard nothing throws it.
+`AuthError` comes from your own guards ([Configuration](/docs/configuration#pipelines)); the message is whatever your guard threw. The same holds for the `message` of each issue a pipeline throws (`FrameworkError("A2004", { message, issues })`), when its path names a member of the request's arguments. Without a guard nothing throws it.
 
 ## TransportError versus FrameworkError
 
@@ -130,13 +140,13 @@ try {
 
 `TransportError` covers:
 
-- **A failed request** (server down, refused connection, CORS failure in a browser): `status` is `null`, message `The request for "User" find.many failed before any response arrived.`
-- **A response that is not an Aventara envelope**, such as a proxy's or a host's own 404 for a path it does not mount: `status` is the HTTP status, message `The response to "User" find.many (HTTP 404) is not an Aventara response envelope.`
+- A failed request (server down, refused connection, CORS failure in a browser): `status` is `null`, message `The request for "User" find.many failed before any response arrived.`
+- A response that is not an Aventara envelope, such as a proxy's or a host's own 404 for a path it does not mount: `status` is the HTTP status, message `The response to "User" find.many (HTTP 404) is not an Aventara response envelope.`
 - A value in a response that cannot be read.
 
 A `TransportError` names no remedy: nothing in it says the client is stale or the server is wrong.
 
-An **aborted** call is neither: it rejects with exactly what `fetch` rejected with, an `AbortError` `DOMException` ([Client options](/docs/client-options#aborting)).
+An aborted call is neither: it rejects with exactly what `fetch` rejected with, an `AbortError` `DOMException` ([Client options](/docs/client-options#aborting)).
 
 ## ContractMismatchError
 

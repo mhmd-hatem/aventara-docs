@@ -15,7 +15,7 @@ Transactions are available when the contract advertises `transactions: "interact
 
 ## From the frontend
 
-`avClient.tx.<Resource>.<family>.<variant>(args)` builds a step and **sends nothing**. `avClient.transaction([...])` sends the whole plan in one request and resolves one result per step, typed, in order.
+`avClient.tx.<Resource>.<family>.<variant>(args)` builds a step and sends nothing. `avClient.transaction([...])` sends the whole plan in one request and resolves one result per step, typed, in order.
 
 ```ts
 const user = avClient.tx.User.create.one({
@@ -33,13 +33,16 @@ const [createdUser, createdPost] = await avClient.transaction([user, post]);
 
 ### $ref
 
-`step.$ref("field")` refers to a field of an earlier step's **projected** result (so the step must `select` it, or return it by default). Rules:
+`step.$ref("field")` refers to a field of an earlier step's projected result (so the step must `select` it, or return it by default). Rules:
 
-- A reference may point only to an **earlier** step in the same list.
+- A reference may point only to an earlier step in the same list, and that step must produce one row (not a `many` or a `count`).
 - It names one top-level field of that step's result.
-- It is a **value in `data`** (a scalar such as a foreign key); it is not accepted in `where` or inside a nested `$connect`.
-- The type of that field must fit where you use it. The plan is checked before anything runs: a mismatch answers `A2007` with `V1011` and nothing is written. TypeScript checks that the field name was selected by the step.
-- Two mistakes are refused before anything is sent: the same step listed twice (`ValidationError`, `A2004`) and a `$ref` to a step that is not in the list (`ValidationError`, `A2007`). Only the field name in `$ref("field")` is checked by the compiler; a value of the wrong type for its destination is refused at runtime (`A2007` / `V1011`), before any statement runs.
+- It can stand almost anywhere a value does: a value in `data` (a foreign key, any scalar), a relation identifier (`$connect`, `$disconnect`, `$set`, the `where` of `$connectOrCreate`), a unique `where`, a `cursor`, any filter operator at any depth (`AND`, `OR`, `NOT` and relation filters included), and nested writes (`$create`, `$update`, `$upsert` data and the `where` of nested `$update`, `$delete`, `$upsert`). It is not accepted in an `orderBy` or in the `where` of a projection.
+- The type of that field must fit where you use it. The plan is checked before anything runs: a mismatch answers `A2007` with `V1011` and nothing is written. TypeScript checks that the field name was selected by the step and that the type fits.
+- Null: a nullable source is accepted only by an equality (`field: ref`, `equals`, `not`) on a nullable field, where a `null` matches the rows where the field is unset, as a literal `null` does. Comparison and text operators, `in`, a unique key and a `cursor` refuse a nullable source.
+- Two mistakes are refused before anything is sent: the same step listed twice (`ValidationError`, `A2004`) and a `$ref` to a step that is not in the list (`ValidationError`, `A2007`).
+
+[Transactions with $ref](/docs/transactions-with-ref) has a recipe for each position, with the real answers.
 
 A step is plain data, so any client of the same generated tree can run it.
 
@@ -65,7 +68,7 @@ When a step fails, the error carries that step's own code (for example `A2008` o
 
 ### Cascade refusal
 
-If an earlier step deletes a row whose deletion cascades in the database to rows a later step depends on, the plan is refused **before any statement runs**, with `A2004` and the validation issue `V1019`:
+If an earlier step deletes a row whose deletion cascades in the database to rows a later step depends on, the plan is refused before any statement runs, with `A2004` and the validation issue `V1019`:
 
 ```ts
 const del = avClient.tx.User.delete.unique({ where: { id: 7 }, select: ["id"] });
@@ -99,7 +102,7 @@ result.code;   // "A1009" (TRANSACTION_COMMITTED)
 result.data;   // [{ id: 3 }, { authorId: 3, body: null, id: 2, title: "srv", views: 0 }]
 ```
 
-Like other server-side calls, `framework.transaction` **returns an envelope** and does not throw for a failed plan; on failure `result.code` is the failing step's code and `result.cause.operation` is its index.
+Like other server-side calls, `framework.transaction` returns an envelope and does not throw for a failed plan; on failure `result.code` is the failing step's code and `result.cause.operation` is its index.
 
 ## Over HTTP
 
@@ -107,7 +110,7 @@ The frontend client sends the plan as one `POST <entrypoint>/_transactions`. See
 
 ## What runs inside a transaction
 
-Every step of a plan runs inside **one** database transaction, in order, so `$ref` values are available to later steps. With the Prisma adapter this is Prisma's interactive transaction. `maxWait`, `timeout` and `isolationLevel` are set on the adapter ([Configuration](/docs/configuration#adapter)). SQLite supports `Serializable` only.
+Every step of a plan runs inside one database transaction, in order, so `$ref` values are available to later steps. With the Prisma adapter this is Prisma's interactive transaction. `maxWait`, `timeout` and `isolationLevel` are set on the adapter ([Configuration](/docs/configuration#adapter)). SQLite supports `Serializable` only.
 
 ## See also
 

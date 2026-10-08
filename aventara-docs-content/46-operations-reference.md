@@ -60,9 +60,9 @@ Wire forms of scalars: `datetime` is `YYYY-MM-DDTHH:mm:ss.sssZ`, `decimal` a dec
 
 `create.many`, `create.count`, `update.many` and `update.count` are bulk writes. With the Prisma adapter, verified:
 
-- **No relation writes.** `{ author: { $connect: ... } }` in `create.many` answers `V1006`: `Relation "author" is not writable during create.` Use the foreign-key scalar (`authorId`) instead. In `update.many` / `update.count` relation directives answer `V1006` (`not writable during update`).
-- **Projection.** `select` and `include` on `create.many` / `update.many` may name scalars and to-one relations (`include: ["author"]` answers `201` / `200` with the author embedded). A to-many relation at the top level is refused in either form: `V1008` with `Relation "posts" is not available for select.` or, for `include`, `include accepts only relations with include capability.` (`Relation "posts" is not available for include.` in the object form). `find.many`, `find.first` and `find.unique` have no such limit: they accept `include` and `select` of to-one and to-many relations.
-- **Nested to-many is allowed one level inside an admitted to-one relation.** The `bulkWrite` restriction applies to the top level only; beneath an admitted to-one relation the full projection is available at any depth. `include: [{ "author": { "include": ["posts"] } }]` (or `select: ["id", { "author": { "select": ["id", { "posts": { "select": ["id", "title"] } }] } }]`) is accepted, and the nested rows are read after the write, so rows created or updated by the call appear in them. A to-many at the top level stays refused.
+- No relation writes. `{ author: { $connect: ... } }` in `create.many` answers `V1006`: `Relation "author" is not writable during create.` Use the foreign-key scalar (`authorId`) instead. In `update.many` / `update.count` relation directives answer `V1006` (`not writable during update`).
+- Projection. `select` and `include` on `create.many` / `update.many` may name scalars and to-one relations (`include: ["author"]` answers `201` / `200` with the author embedded). A to-many relation at the top level is refused in either form: `V1008` with `Relation "posts" is not available for select.` or, for `include`, `include accepts only relations with include capability.` (`Relation "posts" is not available for include.` in the object form). `find.many`, `find.first` and `find.unique` have no such limit: they accept `include` and `select` of to-one and to-many relations.
+- Nested to-many is allowed one level inside an admitted to-one relation. The `bulkWrite` restriction applies to the top level only; beneath an admitted to-one relation the full projection is available at any depth. `include: [{ "author": { "include": ["posts"] } }]` (or `select: ["id", { "author": { "select": ["id", { "posts": { "select": ["id", "title"] } }] } }]`) is accepted, and the nested rows are read after the write, so rows created or updated by the call appear in them. A to-many at the top level stays refused.
 
 ```bash
 curl -X POST $BASE/_resources/Post/create/many -d '{"data":[{"title":"h2","authorId":15}],"select":["id",{"author":{"select":["id",{"posts":{"select":["id","title"]}}]}}]}'
@@ -279,7 +279,7 @@ Returns the deleted record with `A1006`. Deleting it again: `404 A2003`.
 
 ### delete.many
 
-Not offered with the Prisma adapter, because Prisma cannot return the deleted rows. Calling it answers `404 A2002` with `V1006`: `Operation "delete.many" is not available on Resource "User".` Use `delete.count`.
+Not offered with the Prisma adapter, because Prisma cannot return the deleted rows. Calling it answers `404 A2002` with `V1006` at `["variant"]`: `Operation "delete.many" is not available on Resource "User".` Use `delete.count`.
 
 ### delete.count
 
@@ -312,8 +312,8 @@ The same code (`A1008`, 200) whether it created or updated. `where` must be an i
 | Code | HTTP | When |
 |---|---|---|
 | `A2000` | 400 | Malformed JSON, non-object body, missing identity headers. |
-| `A2001` | 404 | The Resource is not in the contract. |
-| `A2002` | 404 | The operation is not available on that Resource (including switched off by a restriction, or `delete.many`). |
+| `A2001` | 404 | The Resource is not in the contract (`V1005` at `["resource"]`; on an HTTP route, `resource`, `family` and `variant` name the URL segments). |
+| `A2002` | 404 | The operation is not available on that Resource (including switched off by a restriction, or `delete.many`). `V1006` at `["family"]` or `["variant"]` of the request. |
 | `A2004` | 422 | The arguments break a contract rule; see `cause.issues`. |
 | `A2005` | 409 | The caller's contract hash is stale. |
 | `A2006` | 400 | Unsupported protocol version. |

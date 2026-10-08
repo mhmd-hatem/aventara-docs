@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-description: Upgrading between pilots, first-run warnings, and fixes for version refusals, stale clients, stale artifacts, CORS and common setup errors.
+description: Upgrading between releases, first-run warnings, and fixes for version refusals, stale clients, stale artifacts, CORS and common setup errors.
 order: 88
 section: reference
 ---
@@ -9,7 +9,7 @@ section: reference
 
 ## Upgrading
 
-Moving between pilot releases (`0.1.0-pilot.0`, `0.1.0-pilot.1`, `0.1.0-pilot.2`, `0.1.0-pilot.3` to `0.1.0-pilot.4`) is covered on [Upgrading](/docs/upgrading), with the steps in order and what each release changes.
+Moving between releases (`0.1.0-pilot.0` through `0.1.0-pilot.4` to `1.0.0-rc.0`) is covered on [Upgrading](/docs/upgrading), with the steps in order and what each release changes.
 
 ## Warning on `avclient init`: typescript could not be resolved
 
@@ -21,7 +21,7 @@ avclient: warning: `typescript` could not be resolved, so the generated output w
 
 The client is generated normally (`checked: syntax`). A TypeScript project has `typescript` installed, and then the generator type-checks the output with the project's own copy (`checked: types`) and prints no warning.
 
-With **TypeScript 7** installed in the frontend (verified with 7.0.2), the generator cannot type-check, because TypeScript 7 has no classic compiler API. It says so, and still generates; your own `tsc` checks the client when it compiles (verified: `tsc` 7.0.2 compiled the client without errors):
+With TypeScript 7 installed in the frontend (verified with 7.0.2), the generator cannot type-check, because TypeScript 7 has no classic compiler API. It says so, and still generates; your own `tsc` checks the client when it compiles (verified: `tsc` 7.0.2 compiled the client without errors):
 
 ```text
 avclient: warning: the installed `typescript` 7.0.2 has no classic compiler API (`createProgram`), so the generated output was NOT type-checked — only its shape and syntax were. Your project's own `tsc` checks it when it compiles; a `typescript` 5.5 to 6 restores the generator's own type check.
@@ -112,6 +112,8 @@ npm run aventara:prepare      # pnpm: pnpm run aventara:prepare
 
 If the build does not catch it, the server refuses to start with a message that names `aventara:prepare`; the fix is the same. In a project made by `aventara new` or `aventara init` from pilot.4 on, `build` and the start scripts run `aventara:prepare` first through the `pre` hooks, so this does not recur. See [Upgrading](/docs/upgrading#from-010-pilot3-to-010-pilot4).
 
+The same refusal appears after upgrading to `1.0.0-rc.0`, whose discovery artifact format is 2. Regenerate the artifact (`npm run aventara:prepare`), then the client (`avclient generate`): the Contract hash of a Prisma-backed application changed, and an old client is answered `A2005` until it is regenerated ([Upgrading](/docs/upgrading#from-010-pilot4-to-100-rc0)).
+
 ## Server does not start
 
 - `DATABASE_URL is not set`: put it in `.env` (the start scripts load it) or in the environment.
@@ -127,7 +129,7 @@ If the build does not catch it, the server refuses to start with a message that 
 
 ## `A3001` ADAPTER_ERROR
 
-A database failure that Aventara could not classify as something the caller can fix. The response never contains SQL or connection details. The server log gets one line (code, operation, scope, request id, the error's class name), and a `diagnostics` sink in the configuration receives the original error ([Request IDs and diagnostics](/docs/request-ids-and-diagnostics#internal-failures-in-the-server-log)). Conflicts you can fix are reported as `A2008`, `A2013` or `A2014` instead.
+A database failure that Aventara could not classify as something the caller can fix. The response never contains SQL or connection details. The server log gets one line (code, operation, origin, request id, the error's class name), and a `diagnostics` sink in the configuration receives the original error ([Request IDs and diagnostics](/docs/request-ids-and-diagnostics#internal-failures-in-the-server-log)). Conflicts you can fix are reported as `A2008`, `A2013` or `A2014` instead.
 
 ## `A3004`: a server pipeline produced invalid arguments
 

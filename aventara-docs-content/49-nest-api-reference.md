@@ -23,7 +23,7 @@ import {
 
 ## AventaraModule
 
-A **global** module you import once in your root module. The protocol routes are registered from its `configure()`, after your `app.use(...)` / `enableCors()` and before `MiddlewareConsumer` middleware and controllers.
+A global module you import once in your root module. The protocol routes are registered from its `configure()`, after your `app.use(...)` / `enableCors()` and before `MiddlewareConsumer` middleware and controllers.
 
 ```ts
 class AventaraModule {
@@ -140,7 +140,7 @@ All reject while Nest builds the application, before it listens:
 | platform other than Express or Fastify (or none, as with `createApplicationContext`) | AventaraModule mounts the protocol on Nest's Express or Fastify platform; this application's platform is `none`. |
 | invalid configuration | the `FrameworkConstructionError` propagates unchanged; see [Startup diagnostics](/docs/config-reference#startup-diagnostics) |
 
-Nest's default `abortOnError: true` **exits the process** on a bootstrap error; pass `abortOnError: false` to `NestFactory.create` to catch it. The module owns no resource to shut down; your Prisma provider closes its own client in `onModuleDestroy` (with `app.enableShutdownHooks()` for signals).
+Nest's default `abortOnError: true` exits the process on a bootstrap error; pass `abortOnError: false` to `NestFactory.create` to catch it. The module owns no resource to shut down; your Prisma provider closes its own client in `onModuleDestroy` (with `app.enableShutdownHooks()` for signals).
 
 `Test.createTestingModule({ imports: [AppModule] }).compile()` works: providers are built before any HTTP platform exists, and the module waits for the one `createNestApplication()` supplies.
 
@@ -158,15 +158,15 @@ Authentication and authorization belong in Aventara [pipelines](/docs/config-ref
 
 ## Requests
 
-- **Bodies** are read raw, never through Nest's body parser, up to `limits.maxRequestBytes`. Your own routes keep Nest's parsed `req.body`; no `NestFactory.create` option is needed.
-- **`Content-Encoding`**: `gzip`, `deflate` and `br` are inflated and the limit counts decoded bytes. Other codings answer `415 A2011`; a body that does not decode answers `400 A2000`. These two answers carry a newly minted `Aventara-Request-Id`.
-- **Request id**: the client's `Aventara-Request-Id` when it is 1-128 visible characters; anything else (empty, spaces, over 128) is silently replaced by a generated UUID. See [Request IDs and diagnostics](/docs/request-ids-and-diagnostics). `X-Request-Id` is never copied into it; set `Aventara-Request-Id` at your proxy.
-- **Query strings** are ignored by the protocol.
+- Bodies are read raw, never through Nest's body parser, up to `limits.maxRequestBytes`. Your own routes keep Nest's parsed `req.body`; no `NestFactory.create` option is needed.
+- `Content-Encoding`: `gzip`, `deflate` and `br` are inflated and the limit counts decoded bytes. Other codings answer `415 A2011`; a body that does not decode answers `400 A2000`. These two answers carry a newly minted `Aventara-Request-Id`.
+- Request id: the client's `Aventara-Request-Id` when it is 1-128 visible characters; anything else (empty, spaces, over 128) is silently replaced by a generated UUID. See [Request IDs and diagnostics](/docs/request-ids-and-diagnostics). `X-Request-Id` is never copied into it; set `Aventara-Request-Id` at your proxy.
+- Query strings are ignored by the protocol.
 
 ## Platform differences
 
-- **Fastify** cannot mount a Resource key that needs `*` or a reserved character (`: + # $ & , / ; = ? @`) in its route path, or an entrypoint containing `*`: the application refuses to start with a message naming it. Rename it, or host on Express.
-- **Express** routing is case-insensitive by default, so `/API/_contract` also answers; Fastify's is not. That is Express's own `case sensitive routing` setting.
+- Fastify cannot mount a Resource key that needs `*` or a reserved character (`: + # $ & , / ; = ? @`) in its route path, or an entrypoint containing `*`: the application refuses to start with a message naming it. Rename it, or host on Express.
+- Express routing is case-insensitive by default, so `/API/_contract` also answers; Fastify's is not. That is Express's own `case sensitive routing` setting.
 - Express answers `500 A3000` to a protocol route requested with a percent-encoding a generated client never sends (for example `%6Eotes` for `notes`); Fastify executes it. A known divergence.
 - Express adds its `X-Powered-By` header; `app.disable("x-powered-by")` removes it.
 

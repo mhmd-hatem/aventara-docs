@@ -16,10 +16,12 @@ The project needs a `tsconfig.json`: the generated client is TypeScript, compile
 In your frontend project (not the server):
 
 ```bash
-npx @aventara/client@pilot init           # asks four questions
-npx @aventara/client@pilot init --yes     # accepts every default
-pnpm dlx @aventara/client@pilot init      # pnpm
+npx @aventara/client@rc init           # asks four questions
+npx @aventara/client@rc init --yes     # accepts every default
+pnpm dlx @aventara/client@rc init      # pnpm
 ```
+
+`init` and `generate` show each step while they work (a spinner on a terminal, one plain line per step in a pipe or in CI), then a closing line with the total time: [Progress](/docs/cli-reference#progress-avclient).
 
 | Flag | Meaning | Default |
 |---|---|---|
@@ -32,7 +34,7 @@ pnpm dlx @aventara/client@pilot init      # pnpm
 | `--skip-generate` | Do not generate now | |
 | `-y, --yes` | Accept defaults, and replace differing content without asking | |
 
-Init writes `framework.client.ts`, the variable into `.env` (only when you chose a variable), an `"avclient:generate": "avclient generate"` script, and `@aventara/client` as an **exact** dev dependency. It also adds `.env` to the frontend's `.gitignore`. Content that already exists and differs is listed and replaced only when you confirm (or pass `--yes`); where nobody can be asked, nothing is touched. `avclient --version` prints the generator's version.
+Init writes `framework.client.ts`, the variable into `.env` (only when you chose a variable), an `"avclient:generate": "avclient generate"` script, and `@aventara/client` as an exact dev dependency. It also adds `.env` to the frontend's `.gitignore`. Content that already exists and differs is listed and replaced only when you confirm (or pass `--yes`); where nobody can be asked, nothing is touched. `avclient --version` prints the generator's version.
 
 If the server does not answer, init still writes the files and tells you to run `avclient generate` once it is up:
 
@@ -40,7 +42,7 @@ If the server does not answer, init still writes the files and tells you to run 
 avclient: the project is set up, but the server did not answer (GET http://localhost:3000/api/_contract answered HTTP 404, not the ClientContract. Check that the deployment is running and that the entrypoint is its origin plus mount path); once it is running, run `avclient generate`.
 ```
 
-Note the default port is 3000. If your server listens elsewhere, pass `--entrypoint`.
+The default port is 3000; pass `--entrypoint` if your server listens elsewhere.
 
 ## framework.client.ts
 
@@ -72,7 +74,7 @@ avclient: framework.client.ts and framework.client.cjs are both in /path/to/proj
 |---|---|---|
 | Created by | default | `--no-env-var` |
 | Good for | One config, different servers per environment (`.env`, CI) | A project with a single known deployment |
-| Needs | The variable at **generate** time | Nothing |
+| Needs | The variable at generate time | Nothing |
 
 ```ts
 // literal
@@ -84,7 +86,7 @@ export default defineClientConfig({
 
 `env("NAME")` reads, highest precedence first: the process environment, `.env.<mode>.local`, `.env.<mode>`, `.env.local`, `.env` (`mode` is `NODE_ENV`, or `development`).
 
-The variable is read when you **generate**, not when your app runs: the entrypoint becomes the generated client's default. To call a different deployment at runtime (staging, tests, SSR), pass `entrypoint` to `new AvClient(...)`, see [Client options](/docs/client-options).
+The variable is read when you generate, not when your app runs: the entrypoint becomes the generated client's default. To call a different deployment at runtime (staging, tests, SSR), pass `entrypoint` to `new AvClient(...)`, see [Client options](/docs/client-options).
 
 The entrypoint must be an absolute URL. A relative one such as `/api` does not work as a client entrypoint, so a frontend that is served from the same origin as the API still uses the full URL.
 
@@ -96,11 +98,11 @@ src/api/
   generated/           the typed client, contract, runtime and types
 ```
 
-The generator owns exactly those two entries in `generateAt` and never touches anything else there. **Commit the generated files**, never edit them, and regenerate when the server's contract changes ([Keeping in sync](/docs/keeping-in-sync)). Output is deterministic: two runs over the same contract write identical bytes.
+The generator owns exactly those two entries in `generateAt` and never touches anything else there. Commit the generated files, never edit them, and regenerate when the server's contract changes ([Keeping in sync](/docs/keeping-in-sync)). Output is deterministic: two runs over the same contract write identical bytes.
 
 The client is `.ts` source, and its files import each other the way your project's `tsconfig.json` says (the rules Prisma 7's `prisma-client` generator follows): no extension under `moduleResolution` `bundler`, `.js` under `nodenext`, `.ts` when the project compiles `.ts` imports (`allowImportingTsExtensions` or Node's type stripping). The generator picks the right spelling by reading your `tsconfig.json`, so the client compiles with your own settings and needs no bundler or compiler configuration.
 
-After writing, the generator type-checks the output with **your project's own TypeScript** before it replaces the old one (`checked: types`). If `typescript` is not installed in the project, or it is TypeScript 7 (which has no classic compiler API to check with), it checks syntax and shape only and says so in one warning; the client is still generated, and your own `tsc` checks it when it compiles. Verified with TypeScript 7.0.2.
+After writing, the generator type-checks the output with your project's own TypeScript before it replaces the old one (`checked: types`). If `typescript` is not installed in the project, or it is TypeScript 7 (which has no classic compiler API to check with), it checks syntax and shape only and says so in one warning; the client is still generated, and your own `tsc` checks it when it compiles. Verified with TypeScript 7.0.2.
 
 ## Importing the client
 
@@ -124,7 +126,7 @@ Works with the stock `react-ts` template, including its strict settings (`erasab
 ```bash
 npm create vite@latest web -- --template react-ts
 cd web && npm install
-npx @aventara/client@pilot init --yes --entrypoint http://localhost:3000/api
+npx @aventara/client@rc init --yes --entrypoint http://localhost:3000/api
 ```
 
 ```tsx
@@ -173,14 +175,14 @@ export default function Home() {
 
 `next build` prerenders the shell and streams the list at request time (`◐ /`, Partial Prerender). Two mistakes to avoid, both verified against `next build`:
 
-- **`export const dynamic = "force-dynamic"`** fails the build under `cacheComponents`:
+- `export const dynamic = "force-dynamic"` fails the build under `cacheComponents`:
 
   ```text
   Error: Route segment config "dynamic" is not compatible with `nextConfig.cacheComponents`. Please remove it.
   ```
 
   Use `connection()` inside `<Suspense>` instead.
-- **Awaiting the client outside `<Suspense>`** fails the build with `Next.js encountered uncached or runtime data during prerendering`. Move the await into a component under a `<Suspense>` boundary.
+- Awaiting the client outside `<Suspense>` fails the build with `Next.js encountered uncached or runtime data during prerendering`. Move the await into a component under a `<Suspense>` boundary.
 
 Server-side calls need no CORS; calls from client components do (see below).
 
@@ -217,7 +219,7 @@ Access-Control-Allow-Origin: http://localhost:5173
 # another origin: no Access-Control-Allow-Origin header, so the browser blocks the response
 ```
 
-CORS is a browser rule, not access control. A server, a script or a bot ignores it, so it does not decide who may call; [guards](/docs/authentication-and-guards) do. Server-side calls (a Next.js server component, a Node script) are not subject to CORS at all. See also [Express and Fastify](/docs/express-and-fastify#cors) and [Deploying](/docs/deploying#cors-and-browsers).
+CORS is a browser rule and does not control access. A server, a script or a bot ignores it, so it does not decide who may call; [guards](/docs/authentication-and-guards) do. Server-side calls (a Next.js server component, a Node script) are not subject to CORS at all. See also [Express and Fastify](/docs/express-and-fastify#cors) and [Deploying](/docs/deploying#cors-and-browsers).
 
 ## Troubleshooting
 
@@ -232,7 +234,7 @@ CORS is a browser rule, not access control. A server, a script or a bot ignores 
 
 ### Known issues
 
-**The generated client's imports do not match my compiler (a monorepo or a non-standard layout).** The generator reads the nearest `tsconfig.json` above `generateAt`. In a monorepo or with a differently named config, that may not be the one your project compiles the client with, and then the imports or module format do not match your compiler (for example `Cannot find module './generated/client.js'`, or an extension your bundler will not resolve). Name the right config in `framework.client.ts`, as a file name or a path relative to the config file, then run `avclient generate` again:
+The generated client's imports do not match my compiler (a monorepo or a non-standard layout). The generator reads the nearest `tsconfig.json` above `generateAt`. In a monorepo or with a differently named config, that may not be the one your project compiles the client with, and then the imports or module format do not match your compiler (for example `Cannot find module './generated/client.js'`, or an extension your bundler will not resolve). Name the right config in `framework.client.ts`, as a file name or a path relative to the config file, then run `avclient generate` again:
 
 ```ts
 export default defineClientConfig({

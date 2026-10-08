@@ -7,9 +7,9 @@ section: get-started
 
 # Why Aventara
 
-Most TypeScript backends repeat one fact in several places: the shape of the data. It lives in the database schema, again in DTOs or resolvers, again in the frontend's types, and again in the rules for who may see what. Aventara keeps **one source of truth**, your Prisma schema plus one configuration object, and derives the HTTP API and a typed frontend client from it.
+Most TypeScript backends repeat one fact in several places: the shape of the data. It lives in the database schema, again in DTOs or resolvers, again in the frontend's types, and again in the rules for who may see what. Aventara keeps one source of truth, your Prisma schema plus one configuration object, and derives the HTTP API and a typed frontend client from it.
 
-This page shows the same small feature four ways: *list the latest posts with their author's name, hide the author's password hash, let the frontend never delete users*. The snippets for the other approaches are abbreviated sketches of typical code, not benchmarks of any one library.
+The feature used throughout: *list the latest posts with their author's name, hide the author's password hash, let the frontend never delete users*. The snippets for the other approaches are abbreviated sketches of typical code, not benchmarks of any one library.
 
 ## The same feature, four ways
 
@@ -93,7 +93,7 @@ const trpc = createTRPCClient<AppRouter>({ links: [httpBatchLink({ url: "/trpc" 
 const posts = await trpc.posts.list.query({ limit: 10 });
 ```
 
-End-to-end types with very little ceremony. The client imports the server's `AppRouter` *type*, which couples the two code bases at build time (a monorepo or a shared package), and each query shape is still a procedure you write.
+Types flow end to end with little code. The client imports the server's `AppRouter` *type*, which couples the two code bases at build time (a monorepo or a shared package), and each query shape is still a procedure you write.
 
 ### Aventara: schema and configuration
 
@@ -137,7 +137,7 @@ The Prisma schema decides which Resources, fields and relations exist, and their
 
 ### Three contract layers: the frontend sees only what you allow
 
-The same schema compiles into a **core**, an **application** and a **client** contract. Only the client contract is served over HTTP. Your trusted server code can see and write more than a remote caller can, and the difference is declared in configuration rather than scattered through handlers. See [Contract layers](/docs/contract-layers).
+The same schema compiles into a core, an application and a client contract. Only the client contract is served over HTTP. Your trusted server code can see and write more than a remote caller can, and the difference is declared in configuration rather than scattered through handlers. See [Contract layers](/docs/contract-layers).
 
 ### Hidden and write-only fields, per layer
 
@@ -153,7 +153,7 @@ The generated client types the result from your `select`, not from the model. Se
 
 ### Stale-client detection
 
-The client contract has a hash, and every request carries the hash the client was generated from. When the server's contract has moved on, the request is refused instead of being half-understood:
+The client contract has a hash, and every request carries the hash the client was generated from. When the server's contract has moved on, the request is refused:
 
 ```text
 409  A2005  Generated client contract does not match the server. Regenerate the client.
@@ -179,7 +179,7 @@ If any step fails, nothing is committed. See [Transactions](/docs/transactions).
 
 ### Safety defaults
 
-Limits are on from the first request: at most 250 rows per list, nesting depth 12, 50 boolean nodes in a filter, 20 steps per transaction, 1 MiB per request. Arguments are validated against the contract **before** the ORM sees them, and database errors are sanitized into codes, never raw SQL or stack traces. Authentication and authorization are pipelines (guards and hooks) that run for every operation. See [Configuration](/docs/configuration).
+Limits are on from the first request: at most 250 rows per list, nesting depth 12, 50 boolean nodes in a filter, 20 steps per transaction, 1 MiB per request. Arguments are validated against the contract before the ORM sees them, and database errors are sanitized into codes, never raw SQL or stack traces. Authentication and authorization are pipelines (guards and hooks) that run for every operation. See [Configuration](/docs/configuration).
 
 ### Host-agnostic protocol
 
@@ -187,11 +187,11 @@ The protocol is plain HTTP and JSON, published as data and pure functions in `@a
 
 ## Tradeoffs
 
-- **Pilot.** The current release is `0.1.0-pilot.4`. The public API may change before 1.0; pin exact versions.
-- **NestJS and Prisma 7 only, today.** The framework core is transport- and ORM-agnostic, but the adapter shipped is Prisma 7 (SQLite or PostgreSQL) and the host is NestJS 12.
-- **A fixed query language.** The operations and their meaning are set by the protocol; configuration can switch operations off but not redefine them. Bespoke business logic (a payment, a report) is ordinary NestJS code that sits beside Aventara, or a pipeline on the operations.
-- **One `POST` per operation.** Reads are `POST` requests with a JSON body, so HTTP caching of individual reads is not what the protocol optimizes for.
-- **Generated client, not hand-rolled.** A schema or restriction change means regenerating the client, which is the point of the contract hash, but it is a step in your workflow.
+- Release candidate. The current release is `1.0.0-rc.0`. The public API is meant to be the 1.0 API and changes only to fix what testing finds; pin exact versions.
+- NestJS and Prisma 7 only, today. The framework core is transport- and ORM-agnostic, but the adapter shipped is Prisma 7 (SQLite or PostgreSQL) and the host is NestJS 12.
+- A fixed query language. The operations and their meaning are set by the protocol; configuration can switch operations off but not redefine them. Bespoke business logic (a payment, a report) is ordinary NestJS code that sits beside Aventara, or a pipeline on the operations.
+- One `POST` per operation. Reads are `POST` requests with a JSON body, so HTTP caching of individual reads is not what the protocol optimizes for.
+- Generated client, not hand-rolled. A schema or restriction change means regenerating the client, which is the point of the contract hash, but it is a step in your workflow.
 
 ## See also
 

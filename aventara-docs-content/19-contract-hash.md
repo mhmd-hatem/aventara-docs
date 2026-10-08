@@ -7,11 +7,11 @@ section: concepts
 
 # Contract hash
 
-The **client contract** is the only contract a remote caller sees. It carries a **hash**, `sha256:` followed by 64 hex characters, computed over everything it advertises. The hash is the identity of the API a client was generated against, and the server uses it to refuse a client that is out of date instead of letting it send requests the server no longer understands.
+The client contract is the only contract a remote caller sees. It carries a hash, `sha256:` followed by 64 hex characters, computed over everything it advertises. The hash is the identity of the API a client was generated against, and the server uses it to refuse a client that is out of date instead of letting it send requests the server no longer understands.
 
 ## What is in the hash
 
-The hash covers the whole client contract, not just the schema:
+The hash covers the whole client contract, which is more than the schema:
 
 | Changes the hash | Does not change the hash |
 |---|---|
@@ -19,6 +19,7 @@ The hash covers the whole client contract, not just the schema:
 | A restriction in the client layer (a hidden field, a write-only field, a switched-off operation) | Anything that exists only in the application layer |
 | A client limit (`maxListLimit`, `maxNestingDepth`, ...) | A field hidden from the client, added to the schema (the client contract is unchanged) |
 | Transaction support (`interactive` or `none`) | Restarting the server with the same schema and configuration |
+| A typed [JSON field](/docs/json-fields): declaring a shape, or changing one (it is part of the contract as JSON Schema) | |
 
 The same schema and configuration always produce the same hash.
 
@@ -92,7 +93,7 @@ try {
 
 A request that omits the identity headers answers `400 A2000` and names the missing headers. A protocol version the server does not speak answers `A2006`.
 
-The point of the refusal is correctness: a client built against an older contract might send a field that is now hidden, or rely on an operation that was removed. Failing early, with a message that says what to do, is better than a half-understood request.
+The refusal protects correctness. A client built against an older contract might send a field that is now hidden, or rely on an operation that was removed, so the server fails early with a message that says what to do instead of handling a half-understood request.
 
 ## The regenerate workflow
 
@@ -109,10 +110,10 @@ npm run avclient:generate
 # avclient: generated 38 files into ./src/api (checked: syntax).
 ```
 
-- **Generate against the deployment the client will call.** A client generated against your local server and shipped against production is a different hash unless the two have the same schema and configuration.
-- **Order your deploys.** A deployment that changes the contract refuses every old client with `A2005` until those clients are regenerated and redeployed. For web frontends, ship the server and the new client together; for mobile or other long-lived clients, plan how an old build is told to update.
-- **Pipelines can change freely.** Authentication and authorization callbacks are not part of the hash, so changing them needs no regeneration.
-- **Add it to CI.** Running `avclient generate` against a staging deployment and failing on a diff catches a contract change before it ships.
+- Generate against the deployment the client will call. A client generated against your local server and shipped against production is a different hash unless the two have the same schema and configuration.
+- Order your deploys. A deployment that changes the contract refuses every old client with `A2005` until those clients are regenerated and redeployed. For web frontends, ship the server and the new client together; for mobile or other long-lived clients, plan how an old build is told to update.
+- Pipelines can change freely. Authentication and authorization callbacks are not part of the hash, so changing them needs no regeneration.
+- Add it to CI. Running `avclient generate` against a staging deployment and failing on a diff catches a contract change before it ships.
 
 ## See also
 

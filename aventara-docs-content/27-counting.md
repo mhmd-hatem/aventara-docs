@@ -7,7 +7,7 @@ section: guides
 
 # Counting
 
-There are two kinds of count. **Count variants** (`find.count`, `create.count`, `update.count`, `delete.count`) return a number instead of rows. The **`$count` reducer** counts the related rows of a to-many relation inside a normal read.
+There are two kinds of count. Count variants (`find.count`, `create.count`, `update.count`, `delete.count`) return a number instead of rows. The `$count` reducer counts the related rows of a to-many relation inside a normal read.
 
 ## Count variants
 
@@ -46,7 +46,7 @@ A count variant is a separate operation: a [restriction](/docs/restricting-opera
 
 ## The `$count` reducer
 
-`$count` is **not a field**: it is a reducer you list in a to-many relation's `select`. Its presence changes the shape of that relation's result:
+`$count` is a reducer that you list in a to-many relation's `select`; it is not a field. Its presence changes the shape of that relation's result:
 
 | Nested `select` | Result |
 |---|---|
@@ -62,7 +62,7 @@ await avClient.User.find.many({
 // [ { id: 1, posts: { count: 2 } }, { id: 2, posts: { count: 3 } }, { id: 3, posts: { count: 1 } } ]
 ```
 
-Combine rows and total in one round trip. When the relation has a `where` and pagination, `count` is the **total matching rows before `limit` and `offset`**, and `data` is the page. That is what a "showing 1 of N" list needs:
+Combine rows and total in one round trip. When the relation has a `where` and pagination, `count` is the total matching rows before `limit` and `offset`, and `data` is the page. That is what a "showing 1 of N" list needs:
 
 ```ts
 await avClient.User.find.many({

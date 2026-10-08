@@ -7,7 +7,7 @@ section: concepts
 
 # Concepts
 
-Aventara has four ideas. Learn them once and every other page follows.
+Aventara has four ideas: contracts and layers, Resources and operations, results and typing, and the contract hash.
 
 ```text
  schema.prisma + aventara.config.ts
@@ -19,19 +19,19 @@ Aventara has four ideas. Learn them once and every other page follows.
 
 ## Contracts and layers
 
-A **contract** is passive data: which Resources exist, which fields can be read, filtered, ordered or written, and which operations are available. It holds no code, so it can be serialized, hashed and versioned. Aventara compiles three from the same schema:
+A contract is passive data: which Resources exist, which fields can be read, filtered, ordered or written, and which operations are available. It holds no code, so it can be serialized, hashed and versioned. Aventara compiles three from the same schema:
 
 | Layer | Used for | Served over HTTP |
 |---|---|---|
-| **Core** | The baseline everything else starts from. | No |
-| **Application** | Your trusted server-side code (`framework.application.*`). | No |
-| **Client** | Remote callers: the HTTP protocol and the generated frontend client. | **Yes**, at `GET <entrypoint>/_contract` |
+| Core | The baseline everything else starts from. | No |
+| Application | Your trusted server-side code (`framework.application.*`). | No |
+| Client | Remote callers: the HTTP protocol and the generated frontend client. | Yes, at `GET <entrypoint>/_contract` |
 
 The root of your configuration is the default for all layers; an `application` or `client` block overrides it for one. A field hidden from the client layer is absent from the generated client's types. Details: [Contract layers](/docs/contract-layers).
 
 ## Resources and operations
 
-A **Resource** is one Prisma model, keyed by its name (`User`, `Post`). Every Resource offers operations from five families, each with variants:
+A Resource is one Prisma model, keyed by its name (`User`, `Post`). Every Resource offers operations from five families, each with variants:
 
 | Family | Variants |
 |---|---|
@@ -45,7 +45,7 @@ Their meaning is fixed by the protocol; configuration can only switch them off. 
 
 ## Results and typing
 
-Every operation answers one **envelope**, `{ data, code, cause }`. The generated client resolves to `data` and throws a typed error for every failure; a `first` miss is `null`, a `count` is a number, and results are `readonly`. The type of a result follows your `select` exactly. Details: [Results and typing](/docs/results-and-typing).
+Every operation answers one envelope, `{ data, code, cause }`. The generated client resolves to `data` and throws a typed error for every failure; a `first` miss is `null`, a `count` is a number, and results are `readonly`. The type of a result follows your `select` exactly. Details: [Results and typing](/docs/results-and-typing).
 
 ```json
 { "data": { "id": 1, "email": "ada@example.com" }, "code": "A1002", "cause": null }

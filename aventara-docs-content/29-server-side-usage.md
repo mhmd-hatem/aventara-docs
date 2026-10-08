@@ -11,8 +11,8 @@ You do not need HTTP to use your data layer from your own code. Inject the frame
 
 | Surface | Runs under | Arguments | Use it for |
 |---|---|---|---|
-| `framework.application.<Resource>.<family>.<variant>(args, options?)` | the **application** layer | application values (`Date`, `bigint`, `Decimal`, `Uint8Array`) | trusted code: jobs, services, seeding |
-| `framework.client.<Resource>.<family>.<variant>(args, options?)` | the **client** layer: the same restrictions and limits a remote caller gets | wire values (ISO strings, decimal strings) | server-side rendering and tests that must behave like a remote caller |
+| `framework.application.<Resource>.<family>.<variant>(args, options?)` | the application layer | application values (`Date`, `bigint`, `Decimal`, `Uint8Array`) | trusted code: jobs, services, seeding |
+| `framework.client.<Resource>.<family>.<variant>(args, options?)` | the client layer: the same restrictions and limits a remote caller gets | wire values (ISO strings, decimal strings) | server-side rendering and tests that must behave like a remote caller |
 
 Both run the full pipeline ([Pipelines](/docs/pipelines)): root pipelines, then the layer's own. Guards that read `transport.headers` see no headers on a server-side call, because there is no HTTP request.
 
@@ -51,7 +51,7 @@ Add the service to a module's `providers` as usual. `@Inject(AVENTARA_FRAMEWORK)
 
 ## The envelope
 
-Unlike the generated frontend client, which returns data and throws on failure, server-side calls **return the envelope** and do not throw for operation failures:
+Unlike the generated frontend client, which returns data and throws on failure, server-side calls return the envelope and do not throw for operation failures:
 
 ```ts
 const res = await this.framework.application.Post.find.unique({ where: { id: 999 }, select: ["id", "title"] });
@@ -101,6 +101,81 @@ const res = await this.framework.client.Post.update.unique({
 ```
 
 Server-side results hold native values: `bigint` and `Date` are not JSON-serializable. If you return a result from a Nest controller, convert it first. See [Enums and scalar types](/docs/enums-and-scalars).
+
+## What a server-side call accepts
+
+`framework.application`, `framework.client`, `framework.execute`, `framework.executeTransaction` and the `appTx` / `clientTx` builders read what you pass them once, when you call them, into plain data the framework owns. Validation, your guards and pipes, computed values and the adapter see only that copy.
+
+- Changing your object afterwards changes nothing. An Immer draft that is revoked after `produce`, or a store that moves on, is safe to pass: the call already has its own copy.
+- A live Proxy works (Vue `reactive`, MobX): it is read through its traps once.
+- `Date`, `Decimal` and `Uint8Array` (a Node `Buffer` too) are copied as themselves; `bigint` and the other primitives are values.
+- Only plain data otherwise. Arrays and plain objects (`{}` or `Object.create(null)`) are copied with their own enumerable string keys, like JSON: inherited, non-enumerable and symbol keys are dropped.
+
+Anything else is refused as an error in your request: `A2004` with one `V1001` at the value's path, before any guard, pipe or adapter runs. There are two refusals:
+
+| The value | Message |
+|---|---|
+| a class instance or a `Map` (any object that is not plain data) | `Value must be plain data.` |
+| a value that cannot be read: a revoked Proxy, a getter that throws | `Value could not be read.` |
+
+```ts
+class Where { id = 1; }
+await this.framework.application.User.find.unique({ where: new Where(), select: ["id"] });
+// { data: null, code: "A2004", cause: { message: "Operation arguments failed framework validation.",
+//     issues: [ { code: "V1001", path: ["arguments", "where"], message: "Value must be plain data." } ] } }
+
+const { proxy, revoke } = Proxy.revocable({ id: 1 }, {});
+revoke();
+await this.framework.application.User.find.unique({ where: proxy, select: ["id"] });
+// ... issues: [ { code: "V1001", path: ["arguments", "where"], message: "Value could not be read." } ]
+
+await this.framework.application.User.find.unique({ where: { get id(): number { throw new Error("x"); } }, select: ["id"] });
+// ... issues: [ { code: "V1001", path: ["arguments", "where", "id"], message: "Value could not be read." } ]
+```
+
+The path is `["arguments", ...]` for one operation. In a transaction it is `["operations", i, "args", ...]` and `cause.operation` is the step:
+
+```ts
+await this.framework.transaction([
+  this.framework.appTx.User.find.unique({ where: { id: 1 }, select: ["id"] }),
+  this.framework.appTx.User.find.unique({ where: proxy, select: ["id"] }),   // the revoked Proxy
+]);
+// { data: null, code: "A2004", cause: { message: "Operation arguments failed framework validation.",
+//     issues: [ { code: "V1001", path: ["operations", 1, "args", "where"], message: "Value could not be read." } ],
+//     operation: 1 } }
+```
+
+A transaction builder (`appTx`, `clientTx`) never throws: it keeps the refusal, and `framework.transaction([...])` answers it. An object carrying `$ref` in a step's `args` is copied when you call `framework.transaction` like the rest; the framework never runs a getter inside an object that carries `$ref`, so such a getter is refused unread.
+
+The request object is checked too. `framework.execute(request)` and `framework.executeTransaction(request)` check the request object itself before anything runs. A malformed one (not an object, a missing or empty `requestId`, an `origin` other than `"application"` or `"client"`, a client request without a `protocol` of `{ version, hash }`, a malformed `transport`, a `protocol` or `transport` on an application request, a missing or non-string `resource`, `family` or `variant`) is answered `422` `A2004` with one issue per wrong member at its own path (`["requestId"]`, `["protocol", "hash"]`, ...), and no guard, pipe, hook or adapter call runs. Before, most of these answered `A3000`. A well-formed request is unchanged, including `A2005`/`A2006` for a stale `protocol` and `A2001` for an unknown Resource.
+
+HTTP requests are unaffected: a body the protocol parses from raw content is already plain data and is not copied again. A body your own host parsed and passes as `{ kind: "parsed" }` is copied like any server-side input ([Custom host](/docs/custom-host)).
+
+The generated frontend client reads your arguments through one guard too: a value that cannot be read is refused before anything is sent, as a `TypeError` that names where, and a `tx` builder never throws either (`transaction([...])` rejects with that error):
+
+```text
+TypeError: An operation's arguments must be readable plain data, and the value at /where could not be read.
+```
+
+### Counting the refusals
+
+These refusals are a caller's mistake, so they do not reach `diagnostics`. To see them, set the optional root setting `misuse` beside it:
+
+```ts
+const framework = await createFramework({
+  entrypoint: "/api",
+  adapter,
+  misuse: (event) => metrics.increment("aventara.misuse", { kind: event.kind }),
+});
+```
+
+It receives one `FrameworkMisuseEvent` per refused value, never the value itself:
+
+```json
+{"kind":"non-plain-value","path":["arguments","data","name"],"origin":"application","resource":"User","family":"create","variant":"one"}
+```
+
+`kind` is `"unreadable-value"` or `"non-plain-value"`; `path` is the path the caller received; `origin`, `resource`, `family`, `variant` and the transaction step (`operation`) are present when they could be read. It cannot change a response: an error it throws or a promise it rejects is ignored. Nothing is reported to both `misuse` and `diagnostics` ([Request IDs and diagnostics](/docs/request-ids-and-diagnostics#misuse-reports)).
 
 ## ExecutionOptions
 

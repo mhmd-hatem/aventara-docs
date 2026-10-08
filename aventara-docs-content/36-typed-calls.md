@@ -52,7 +52,7 @@ With no projection you get every readable scalar field. A field restricted away 
 | `BigInt` | `bigint` |
 | `Bytes` | `Uint8Array` |
 | `Decimal` | the client's own `Decimal` (`toString`, `toJSON`) |
-| `Json` | as-is |
+| `Json` | as-is, or the type declared with `AvZ` ([JSON fields](/docs/json-fields#in-your-code-and-in-the-client)) |
 | enum | a string-literal union |
 
 Arguments are encoded and results revived for you.

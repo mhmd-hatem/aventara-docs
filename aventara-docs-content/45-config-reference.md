@@ -9,17 +9,18 @@ section: reference
 
 A lookup table for everything you can put in the object returned from `src/aventara.config.ts` (the `FrameworkConfig`), plus the options of `createPrismaAdapter`. For a walkthrough with explanations, see [Configuration](/docs/configuration). For how layers combine, see [Contract layers](/docs/contract-layers).
 
-All types below are exported from `@aventara/core` (`FrameworkConfig`, `FrameworkScopeConfig`, `FrameworkRestrictionsConfig`, `PipelineConfig`, `ContractLimits`, ...). Keep `as const` on the object you return so TypeScript can check Resource and field names against your schema.
+All types below are exported from `@aventara/core` (`FrameworkConfig`, `FrameworkScopeConfig`, `FrameworkRestrictionsConfig`, `PipelineConfig`, `ContractLimits`, ...). Keep `as const` on the object you return so TypeScript can check Resource and field names against your schema. `@aventara/core/json` is a separate entry that holds `AvZ`, the builder for typed JSON fields ([JSON fields](/docs/json-fields)). `@aventara/core/internal` exists for Aventara's own packages and is not public API; do not import from it.
 
 ## Where an option can go
 
-The object has a **root** and two **layer blocks**, `application` (your server-side code) and `client` (remote callers: HTTP and the generated frontend client).
+The object has a root and two layer blocks, `application` (your server-side code) and `client` (remote callers: HTTP and the generated frontend client).
 
 | Option | Root | `application` | `client` | Notes |
 |---|---|---|---|---|
 | `entrypoint` | yes | no | no | Required. |
 | `adapter` | yes | no | no | Required. |
 | `diagnostics` | yes | no | no | Root only; not overridable. |
+| `misuse` | yes | no | no | Root only; optional. |
 | `fields` | yes | yes | yes | |
 | `behaviors` | yes | yes | yes | |
 | `restrictions` | yes | yes | yes | |
@@ -27,7 +28,7 @@ The object has a **root** and two **layer blocks**, `application` (your server-s
 | `pipelines` | yes | yes | yes | Concatenated, not overridden. |
 | `transactions` | yes | yes | yes | |
 
-**Resolution rule.** The root is the default for every layer. For each property, if a layer block sets it explicitly, that value wins; otherwise the root value is used. `false` counts as explicitly set. **Pipelines are the exception:** root pipelines run first, then the layer's own. A property you leave out is not "unset to default"; it simply inherits.
+The root is the default for every layer. For each property, if a layer block sets it explicitly, that value wins; otherwise the root value is used. `false` counts as explicitly set. A property you leave out inherits the root value. Pipelines are the exception: root pipelines run first, then the layer's own.
 
 Any property that is not in this table is refused at startup with `CONFIG_UNKNOWN_PROPERTY`.
 
@@ -73,7 +74,16 @@ What the framework runs against. For Prisma 7 it is the result of `createPrismaA
 | Default | none |
 | Layer | root only |
 
-A sink for **unplanned failures** (responses with an `A3xxx` code), so you can log the real error that the response deliberately hides. It receives the original `error` object, which never reaches the response.
+A sink for unplanned failures (responses with an `A3xxx` code), so you can log the real error that the response deliberately hides. It receives the original `error` object, which never reaches the response. Besides the unexpected failures of your adapter, pipelines and computed fields, it receives four more kinds of report, each with the `A3000` or `A3xxx` code the caller got:
+
+| Report | `error` | Notes |
+|---|---|---|
+| An `A3xxx` `FrameworkError` you threw on purpose (from a guard, pipe, hook, interceptor, computed field or adapter, or returned by a filter) | the error you threw, with its message and issues | `deliberate: true` on the diagnostic. A failure the framework did not expect has no `deliberate` field, so a sink can tell the two apart. |
+| A result that does not match its Contract (an adapter row with a wrong value, a missing field, a result of the wrong shape) | `OutputValidationError` (`error.name`), which names the operation and lists the problems in `error.issues` | The caller gets `A3000`. |
+| A computed field's read or write behavior that returns a value its field refuses | `ComputedValueError`, with the issues | The caller gets `A3000`. |
+| A request for a route your custom host did not mount | `UnmountedRouteError` | See [Custom host](/docs/custom-host#a-route-the-host-left-out). |
+
+What the caller receives is unchanged in every case. `A2xxx` and `A4xxx` outcomes are still not reported.
 
 ```ts
 diagnostics: (d) => {
@@ -83,13 +93,54 @@ diagnostics: (d) => {
 
 ```ts
 type FrameworkDiagnostic =
-  | { kind: "operation";   error: unknown; code: OperationErrorCode; scope: "application" | "client";
-      resource: string; family: OperationFamily; variant: string; requestId: string; operation?: number }
-  | { kind: "transaction"; error: unknown; code: OperationErrorCode; scope: "application" | "client";
-      requestId: string; operation?: number };
+  | { kind: "operation";   error: unknown; code: OperationErrorCode; origin: "application" | "client";
+      resource: string; family: OperationFamily; variant: string; requestId: string; operation?: number;
+      deliberate?: true }
+  | { kind: "transaction"; error: unknown; code: OperationErrorCode; origin: "application" | "client";
+      requestId: string; operation?: number; deliberate?: never };
 ```
 
-Verified: a guard that throws a plain `Error("secret boom")` yields `{"code":"A3000","cause":{"message":"Internal framework error."}}` to the caller and `DIAG A3000 Error: secret boom` to the sink.
+`deliberate` is readable on every diagnostic without checking `kind` first. Only an operation diagnostic ever carries it; a transaction diagnostic declares it but never sets it.
+
+Verified: a guard that throws a plain `Error("secret boom")` yields `{"code":"A3000","cause":{"message":"Internal framework error."}}` to the caller and `DIAG A3000 Error: secret boom` to the sink. A pipe that throws `new FrameworkError("A3001", "billing service is down")` gives the caller `{"code":"A3001","cause":{"message":"Adapter execution failed."}}` and the sink a diagnostic with `code: "A3001"`, `deliberate: true` and your `error`, message included.
+
+A message you put in a `FrameworkError` with any code outside `A3xxx` (for example `A4002`) is sent to the caller exactly as written, so it must not carry database text, SQL, a stack, a path or a secret.
+
+### `misuse`
+
+| | |
+|---|---|
+| Type | `(event: FrameworkMisuseEvent) => void \| Promise<void>` |
+| Default | none |
+| Layer | root only |
+
+Counts the values server-side calls refused because they could not be read or were not plain data ([Server-side usage](/docs/server-side-usage#what-a-server-side-call-accepts)). It sits beside `diagnostics` and cannot change a response: an error it throws or a promise it rejects is ignored.
+
+```ts
+import type { FrameworkMisuseEvent } from "@aventara/core";
+
+misuse: (event: FrameworkMisuseEvent) => metrics.increment("aventara.misuse", { kind: event.kind }),
+```
+
+In a configuration a function returns `as const`, the parameter has no contextual type, so annotate it as shown (otherwise TypeScript reports `Parameter 'event' implicitly has an 'any' type`).
+
+```ts
+type FrameworkMisuseEvent = {
+  kind: "unreadable-value" | "non-plain-value";
+  path: readonly (string | number)[];       // the issue path the caller received
+  origin?: "application" | "client";
+  resource?: string;
+  family?: OperationFamily;
+  variant?: string;
+  operation?: number;                        // the step, in a transaction
+};
+```
+
+One event per refused value, never the value itself. The operation members are present when they could be read. Nothing is reported to both `misuse` and `diagnostics`: `diagnostics` keeps receiving only the server's own unexpected failures. A real event, for a revoked Proxy passed as `where`:
+
+```json
+{"kind":"unreadable-value","path":["arguments","where"],"origin":"application","resource":"User","family":"find","variant":"unique"}
+```
 
 ### `fields`
 
@@ -99,7 +150,7 @@ Verified: a guard that throws a plain `Error("secret boom")` yields `{"code":"A3
 | Default | none |
 | Layer | root, `application`, `client` |
 
-Adds **virtual scalar fields** to a Resource. A virtual field has no column; its value comes from a [`behaviors` read callback](#behaviors). Only scalar fields can be added (there is no way to add a relation).
+Adds virtual scalar fields to a Resource and gives a `Json` field its shape (below). A virtual field has no column; its value comes from a [`behaviors` read callback](#behaviors). Only scalar fields can be added (there is no way to add a relation).
 
 | Property | Type | Meaning |
 |---|---|---|
@@ -121,6 +172,18 @@ behaviors: {
 },
 ```
 
+To give an existing `Json` field a type, declare a `json` shape built with `AvZ` ([JSON fields](/docs/json-fields)):
+
+```ts
+import { AvZ } from "@aventara/core/json";
+
+fields: { Post: { meta: { json: AvZ.object({ title: AvZ.string() }) } } },
+```
+
+| Property | Type | Meaning |
+|---|---|---|
+| `json` | an `AvZ` shape | The TypeScript shape of a `Json` field the adapter discovered. Writes are checked against it and the field is typed in `framework.application`, `framework.client`, `appTx`/`clientTx` and the generated client. The shape cannot admit `null` or absence at its top level. Any other kind of field, or a value not built with `AvZ` (a Zod schema included), stops startup with `COMPILER_INVALID_JSON_SHAPE`. |
+
 `defineFields(model, fields)` from `@aventara/core` checks a `fields` block against your model when you want to define it outside the config object.
 
 Result, verified: `framework.application.User.find.many({ select: ["id", "displayName"], limit: 2 })` returns `[{"id":1,"displayName":"Ada <ada@example.com>"}, ...]`, and the field appears in the client contract with `lifecycle: ["COMPUTED_ON_READ","VIRTUAL"]`.
@@ -137,9 +200,9 @@ Server-side callbacks that compute a field's value. They never appear in a contr
 
 | Member | Type | When it runs |
 |---|---|---|
-| `create` | `false \| (ctx) => unknown` | On `create`, to compute the value written. Context: `scope`, `resource`, `field`, `value`, `data`, `operation`. |
+| `create` | `false \| (ctx) => unknown` | On `create`, to compute the value written. Context: `origin`, `resource`, `field`, `value`, `data`, `operation`. |
 | `update` | `false \| (ctx) => unknown` | On `update`, same context. |
-| `read` | `false \| ((ctx) => unknown) \| { dependsOn?: field[]; compute: (ctx) => unknown }` | When the field is read. Context: `scope`, `resource`, `field`, `value`, `record`, `operation`. `dependsOn` names fields the compute needs, which are fetched even if the caller did not select them. |
+| `read` | `false \| ((ctx) => unknown) \| { dependsOn?: field[]; compute: (ctx) => unknown }` | When the field is read. Context: `origin`, `resource`, `field`, `value`, `record`, `operation`. `dependsOn` names fields the compute needs, which are fetched even if the caller did not select them. |
 
 `operation` is the [pipeline context](#pipelines) of the running operation. A callback may be `async`.
 
@@ -216,7 +279,7 @@ See [Transactions](/docs/transactions).
 
 ### `application` and `client`
 
-Layer blocks with the same shape as the root's scope options: `fields`, `behaviors`, `restrictions`, `limits`, `pipelines`, `transactions`. They have no `entrypoint`, `adapter` or `diagnostics`.
+Layer blocks with the same shape as the root's scope options: `fields`, `behaviors`, `restrictions`, `limits`, `pipelines`, `transactions`. They have no `entrypoint`, `adapter`, `diagnostics` or `misuse`.
 
 ## Restrictions reference
 
@@ -309,6 +372,9 @@ Narrowing rules: `false` denies the capability; a list removes values or positio
 | A Resource that does not exist | `COMPILER_UNKNOWN_RESOURCE`: `resource "Nope" is not present in the canonical compilation baseline` |
 | A field that does not exist | `COMPILER_UNKNOWN_FIELD` |
 | A capability value the adapter does not advertise | `COMPILER_UNAVAILABLE_CAPABILITY` |
+| A `json` shape on a field that is not `Json` (here `Post.title`, a string) | `COMPILER_INVALID_JSON_SHAPE` at `root.resources.Post.fields.title.json`: `field "Post.title" is a string field; only a Json field the adapter discovered may declare a "json" shape` |
+| A `json` that is not an `AvZ` shape (a Zod schema, say) | `COMPILER_INVALID_JSON_SHAPE`: `field "Post.meta": "json" must be a shape built with AvZ from "@aventara/core/json"; a Zod schema or any other value is not accepted` |
+| A shape that admits `null` or absence at its top level | `COMPILER_INVALID_JSON_SHAPE`: `field "Post.meta": a field's shape cannot admit null or absence at its top level; whether the field may be null comes from the adapter model` |
 
 They are thrown as one `FrameworkConstructionError` with `stage` (`"configuration"`, `"discovery"` or `"contract-compilation"`) and `diagnostics` (each `{ code, path, message }`). Every layer is compiled, so the same mistake is reported once per layer (`root.`, `application.`, `client.` paths).
 
@@ -358,13 +424,13 @@ type PipelineConfig = {
 | Interceptor | `(ctx, next) => Promise<unknown>` | Wraps execution; call `next()` to run it. |
 | Filter | `(error, ctx) => FrameworkError \| undefined` | Rewrite a thrown error; `undefined` keeps it. |
 
-**Order**, verified with all five kinds registered: guards, pipes, before hooks, interceptors (around execution), after hooks. Root pipelines of a kind run before the layer's own. `application` and `client` pipelines only run for that layer's operations.
+Order, verified with all five kinds registered: guards, pipes, before hooks, interceptors (around execution), after hooks. Root pipelines of a kind run before the layer's own. `application` and `client` pipelines only run for that layer's operations.
 
-**`PipelineContext`** (what each callback receives):
+`PipelineContext` is what each callback receives:
 
 | Member | Type | Meaning |
 |---|---|---|
-| `scope` | `"application" \| "client"` | The layer the operation runs in. |
+| `origin` | `"application" \| "client"` | Where the request came from: your own server code, or a remote caller. |
 | `resource` | `string` | The Resource key. |
 | `family`, `variant` | `string` | The operation. |
 | `args` | `unknown` | The operation's arguments. |
@@ -373,9 +439,9 @@ type PipelineConfig = {
 | `transport` | `{ method: "POST"; headers: Record<string, string> } \| undefined` | Present only for remote requests. Header names are lower-cased; repeated headers are joined. |
 
 ```ts
-import { FrameworkError, type PipelineContext } from "@aventara/core";
+import { FrameworkError, type Guard } from "@aventara/core";
 
-const requireSignIn = (ctx: Pick<PipelineContext, "family" | "transport">) => {
+const requireSignIn: Guard = (ctx) => {
   if (ctx.family !== "find" && !ctx.transport?.headers["authorization"]) {
     throw new FrameworkError("A4000", "Sign in first.");
   }
@@ -388,7 +454,7 @@ Verified denial answers (`client` layer): `return false` gives `{"code":"A4001",
 
 A non-framework error thrown from a pipeline becomes `A3000` with the generic message `Internal framework error.`; the original goes to `diagnostics`. A pipe that returns arguments the server's own contract refuses becomes `A3004` with the generic message `A server pipeline produced invalid arguments.` ([Pipelines](/docs/pipelines#what-a-pipe-may-and-may-not-do)). In the Nest host, either one also writes one line to the server log ([Request IDs and diagnostics](/docs/request-ids-and-diagnostics#internal-failures-in-the-server-log)).
 
-> Annotate a pipeline's parameter structurally (as above) when the config object uses `as const`, or the parameter has no contextual type.
+> Annotate a pipeline callback with its exported type (`Guard`, `Pipe`, `BeforeHook`, `AfterHook`, `Interceptor`, `Filter`), as above, when the config object uses `as const` and a function returns it, or the parameter has no contextual type. Details and one limit of the root `pipelines`: [Pipelines](/docs/pipelines#typing-a-stage).
 
 ## createPrismaAdapter
 

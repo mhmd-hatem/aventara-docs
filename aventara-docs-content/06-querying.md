@@ -9,7 +9,7 @@ section: guides
 
 The query language is the same in the generated client, over HTTP and in server-side code. The examples use the frontend client (`avClient`) on a schema with `User` and `Post` (a user has many posts). Over HTTP the arguments are the JSON body of the request. See [HTTP protocol](/docs/http-protocol).
 
-This page is the overview and the argument reference. The task guides go deeper:
+The task guides go deeper than this page:
 
 | Topic | Guide |
 |---|---|
@@ -64,7 +64,7 @@ Filter operators depend on the field's type, and only advertised ones are accept
 
 Relation filters: a to-one relation takes a nested `where` directly (`{ author: { name: { contains: "A" } } }`) or `null`; a to-many relation takes `some`, `every` or `none`.
 
-`find.unique`, `update.unique`, `delete.unique` and `upsert.unique` take an **identifier** as `where`: `{ id: 1 }` or `{ email: "ada@example.com" }`.
+`find.unique`, `update.unique`, `delete.unique` and `upsert.unique` take an identifier as `where`: `{ id: 1 }` or `{ email: "ada@example.com" }`.
 
 ## select and include
 
@@ -115,7 +115,7 @@ orderBy: { name: { sort: "asc", nulls: "last" } }               // nullable fiel
 
 `limit` and `offset` page through results (`offset = (page - 1) * limit`). The server caps `limit` at `maxListLimit` (250 by default; `A2009` when exceeded).
 
-For cursor pagination, give `cursor` and an explicit `orderBy` that includes a **unique tie-breaker** (a complete identifier). Aventara does not add one for you:
+For cursor pagination, give `cursor` and an explicit `orderBy` that includes a unique tie-breaker (a complete identifier). Aventara does not add one for you:
 
 ```ts
 await avClient.User.find.many({ orderBy: [{ id: "asc" }], limit: 2, cursor: { id: 1 }, select: ["id"] });
@@ -197,8 +197,8 @@ Result types are `readonly`: a record returned by the client or by server-side c
 
 Inside your NestJS code you can run the same operations directly, with no HTTP. Inject the framework ([NestJS host](/docs/nestjs-host#injecting-the-framework)) and call it through one of two layers:
 
-- `framework.application.<Resource>.<family>.<variant>(args, options?)` runs as **application** code (trusted; the application layer's configuration).
-- `framework.client.<Resource>.<family>.<variant>(args, options?)` runs under the **client** layer's rules (the same restrictions and limits a remote caller gets).
+- `framework.application.<Resource>.<family>.<variant>(args, options?)` runs as application code (trusted; the application layer's configuration).
+- `framework.client.<Resource>.<family>.<variant>(args, options?)` runs under the client layer's rules (the same restrictions and limits a remote caller gets).
 
 ```ts
 const result = await framework.application.User.find.many(
@@ -211,7 +211,7 @@ result.data;   // [{ id: 1, email: "..." }, ...]
 result.cause;  // null, or { message, issues? } on failure
 ```
 
-Unlike the generated client, server-side calls **return the envelope** (`{ data, code, cause }`) and do not throw for operation failures. Check `code`.
+Unlike the generated client, server-side calls return the envelope (`{ data, code, cause }`) and do not throw for operation failures. Check `code`.
 
 `ExecutionOptions` has one member, `requestId`: the correlation id the operation runs under (it reaches pipelines and diagnostics). When omitted, one is generated. See [Server-side usage](/docs/server-side-usage).
 

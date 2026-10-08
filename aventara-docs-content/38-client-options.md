@@ -7,7 +7,7 @@ section: frontend
 
 # Client options
 
-The default export `avClient` is ready to use against the deployment the client was generated from. When you need another deployment, authentication, or per-call control, there are two levels of options: the **client** (`new AvClient({ ... })`) and the **call** (`CallOptions`).
+The default export `avClient` is ready to use against the deployment the client was generated from. When you need another deployment, authentication, or per-call control, there are two levels of options: the client (`new AvClient({ ... })`) and the call (`CallOptions`).
 
 ## new AvClient({ entrypoint, fetch })
 
@@ -59,7 +59,7 @@ The server must then allow credentialed CORS for your origin.
 
 ## CallOptions
 
-Every call takes optional `CallOptions` as its **last** argument. They are never sent in the body:
+Every call takes optional `CallOptions` as its last argument. They are never sent in the body:
 
 ```ts
 await avClient.User.find.many(

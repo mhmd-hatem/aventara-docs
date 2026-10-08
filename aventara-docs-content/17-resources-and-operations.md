@@ -7,9 +7,9 @@ section: concepts
 
 # Resources and operations
 
-A **Resource** is a thing your API serves: one per Prisma model, keyed by the model name as written (`User`, `Post`, `Category`). A Resource has **fields** (scalars with a type and the filters, ordering and writes each supports; relations, one or many, pointing at another Resource), **identifiers** (the unique selectors, such as `id` or `email`, that `unique` operations accept) and **operations**.
+A Resource is a thing your API serves: one per Prisma model, keyed by the model name as written (`User`, `Post`, `Category`). A Resource has fields (scalars with a type and the filters, ordering and writes each supports; relations, one or many, pointing at another Resource), identifiers (the unique selectors, such as `id` or `email`, that `unique` operations accept) and operations.
 
-Operations come from a fixed set of five **families**, each with **variants**. The meaning of an operation is set by the protocol; configuration can switch an operation off for a Resource or a layer, never redefine it. Only what the contract advertises exists.
+Operations come from a fixed set of five families, each with variants. The meaning of an operation is set by the protocol; configuration can switch an operation off for a Resource or a layer, never redefine it. Only what the contract advertises exists.
 
 The examples use the generated client on this schema: a `User` with `email` (unique), `name?`, `role`, `createdAt` and many `posts`; a `Post` with `title`, `views`, `published`, `meta` (JSON) and an author; and a `Category`.
 
@@ -156,7 +156,7 @@ await avClient.User.upsert.unique({
 | `delete.many` | The Prisma 7 adapter cannot return the deleted rows, and Aventara does not emulate it. Use `delete.count` to delete a filtered set. |
 | A to-many relation or `$count` at the top level of the projection of `update.many` or `create.many` | At the top level these variants project scalars and to-one relations only; a to-many nested inside an included to-one relation is allowed ([Bulk variants differ](/docs/operations-reference#bulk-variants-differ)). The request fails with `A2004` (`V1008`: `Relation "posts" is not available for select.`; `include` is refused the same way, while a to-one relation such as `author` works in either). Read to-many relations with a separate `find`. |
 
-Two behaviors worth knowing:
+Two behaviors to keep in mind:
 
 - `update.first` and `delete.first` run as a read followed by a write inside one transaction. The record written is one the read selected, or nothing is written and you get `A2014`. If correctness depends on the record still being the first match at the instant of the write, select it yourself and use `update.unique` or `delete.unique`.
 - Whether a variant is available is decided in two steps: the adapter advertises what it can perform faithfully, then your `restrictions.<Resource>.operations` switch some off. The result is in the contract:

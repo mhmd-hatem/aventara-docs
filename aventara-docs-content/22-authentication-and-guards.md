@@ -7,9 +7,9 @@ section: guides
 
 # Authentication and guards
 
-Aventara has no built-in notion of users or sessions. You decide who may call, in a **guard**: a function in a [pipeline](/docs/pipelines) that runs before every operation and either lets it through or refuses it. A guard can read the HTTP headers of a remote request, so a bearer token or a cookie is checked there.
+Aventara has no built-in notion of users or sessions. You decide who may call, in a guard: a function in a [pipeline](/docs/pipelines) that runs before every operation and either lets it through or refuses it. A guard can read the HTTP headers of a remote request, so a bearer token or a cookie is checked there.
 
-**Nest guards, interceptors and pipes never run on Aventara routes.** The protocol's routes are registered on the HTTP platform directly, so `@UseGuards`, `APP_GUARD` and Passport guards have no effect on them. Put authentication into Aventara guards. See [NestJS host](/docs/nestjs-host#what-runs-on-aventara-routes). The same holds for `@nestjs/throttler`: it is a Nest guard ([Rate limiting](/docs/limits-and-safety#rate-limiting)). And CORS is not authentication: it tells browsers which origins may read answers, while servers and bots ignore it, so only your guards decide who may call.
+Nest guards, interceptors and pipes never run on Aventara routes. The protocol's routes are registered on the HTTP platform directly, so `@UseGuards`, `APP_GUARD` and Passport guards have no effect on them. Put authentication into Aventara guards. See [NestJS host](/docs/nestjs-host#what-runs-on-aventara-routes). The same holds for `@nestjs/throttler`: it is a Nest guard ([Rate limiting](/docs/limits-and-safety#rate-limiting)). CORS is not authentication either: it tells browsers which origins may read answers, while servers and bots ignore it, so only your guards decide who may call.
 
 ## A guard that requires a token
 
@@ -17,7 +17,7 @@ This guard lets everyone read, and requires a known bearer token for everything 
 
 ```ts
 // src/aventara.config.ts
-import { createFramework, FrameworkError, type PipelineContext } from "@aventara/core";
+import { createFramework, FrameworkError, type Guard } from "@aventara/core";
 
 // Stand-in for your real session or JWT verification.
 const sessions = new Map([
@@ -25,8 +25,8 @@ const sessions = new Map([
   ["grace-token", { userId: 2, role: "USER" }],
 ]);
 
-// Annotate the parameter structurally: inside an `as const` config it has no contextual type.
-const authenticate = async (ctx: Pick<PipelineContext, "family" | "transport">) => {
+// Annotate the guard with the exported `Guard` type: inside an `as const` config it has no contextual type.
+const authenticate: Guard = async (ctx) => {
   if (ctx.family === "find") return true;                       // reads are public
 
   const token = ctx.transport?.headers["authorization"]?.replace(/^Bearer /, "");
@@ -79,7 +79,7 @@ A guard's outcome:
 | throws `FrameworkError("A4001", message)` | `A4001` FORBIDDEN, your message | 403 |
 | throws `FrameworkError("A4002", message)` | `A4002` POLICY_DENIED, your message | 403 |
 
-Your message reaches the caller, so keep it free of secrets. Any other thrown error is an unplanned failure: the caller gets a generic `A3000` ("Internal framework error.", HTTP 500) and your [diagnostics reporter](/docs/request-ids-and-diagnostics) receives the real error.
+Your message reaches the caller, so keep it free of secrets. A guard can also throw `FrameworkError("A2004", { message, issues })` with issues whose paths name request arguments (for example `["arguments", "data", "email"]`); each issue's message is sent as written, if it is non-blank and at most 1,000 characters ([Pipelines](/docs/pipelines#what-a-pipe-may-and-may-not-do)). Any other thrown error is an unplanned failure: the caller gets a generic `A3000` ("Internal framework error.", HTTP 500) and your [diagnostics reporter](/docs/request-ids-and-diagnostics) receives the real error.
 
 ## From the generated client
 
@@ -110,7 +110,7 @@ try {
 
 Every refusal (`A4000`, `A4001`, `A4002`) throws `AuthError`. The `fetch` function runs on every call, so it can read the current token each time.
 
-Guards run for **every step of a transaction** as well, with the transaction request's headers. An unauthenticated plan is refused at its first step, and the error carries `operation: 0`:
+Guards run for every step of a transaction as well, with the transaction request's headers. An unauthenticated plan is refused at its first step, and the error carries `operation: 0`:
 
 ```ts
 await avClient.transaction([avClient.tx.Category.create.one({ data: { name: "tx-anon" } })]);
@@ -123,16 +123,16 @@ A guard receives a `PipelineContext`:
 
 | Member | Meaning |
 |---|---|
-| `scope` | `"application"` or `"client"`. |
+| `origin` | `"application"` (your own server code) or `"client"` (a remote request). |
 | `resource`, `family`, `variant` | Which operation: `User`, `delete`, `unique`. |
 | `args` | The operation's arguments. |
 | `requestId` | The request's correlation id ([Request IDs](/docs/request-ids-and-diagnostics)). |
 | `contract` | The active contract, as passive data. |
 | `transport` | Remote requests only: `{ method: "POST", headers }`. Header names are lower-cased; repeated headers are joined with `", "`. Server-side calls have no `transport`. |
 
-## The typing workaround
+## Typing a guard
 
-In an `as const` configuration, a guard written inline has no contextual type, and TypeScript reports `Parameter 'ctx' implicitly has an 'any' type`. Give the parameter a **structural** type with `Pick` of `PipelineContext`, as above, or annotate the function with the exported `Guard` type:
+Annotate a guard with the exported `Guard` type. It needs no model type, and it type-checks in an `as const` configuration, in `client.pipelines` and `application.pipelines`, and next to guards written for your own model in the same list:
 
 ```ts
 import type { Guard } from "@aventara/core";
@@ -140,14 +140,14 @@ import type { Guard } from "@aventara/core";
 const onlyReads: Guard = (ctx) => ctx.family === "find";
 ```
 
-The same applies to pipes, hooks, interceptors, filters and the `diagnostics` sink.
+A guard written inline in a configuration that a function returns `as const` has no contextual type, and TypeScript reports `Parameter 'ctx' implicitly has an 'any' type`; annotate it as above. The same applies to pipes, hooks, interceptors, filters and the `diagnostics` sink. [Pipelines](/docs/pipelines#typing-a-stage) has the details.
 
 ## Tips
 
-- **Reject early, verify properly.** Check the token's signature and expiry in the guard. Do not trust a header because it is present.
-- **Authorization needs data, not only a token.** A guard may call your own services (the session store, a user service). It is the right place to look up the current user.
-- **Row-level rules.** A guard sees the operation's arguments, not the rows. To limit a user to their own records, add a pipe that rewrites `where` ([Pipelines](/docs/pipelines)).
-- **Passport.** A Passport strategy run as Nest middleware sets `req.user`, which a pipeline cannot see. Verify the token in the Aventara guard.
+- Reject early, verify properly: check the token's signature and expiry in the guard. Do not trust a header because it is present.
+- Authorization needs data as well as a token: a guard may call your own services (the session store, a user service). It is the right place to look up the current user.
+- Row-level rules: a guard sees the operation's arguments, not the rows. To limit a user to their own records, add a pipe that rewrites `where` ([Pipelines](/docs/pipelines)).
+- Passport: a Passport strategy run as Nest middleware sets `req.user`, which a pipeline cannot see. Verify the token in the Aventara guard.
 
 ## See also
 

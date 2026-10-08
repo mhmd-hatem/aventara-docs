@@ -7,7 +7,7 @@ section: guides
 
 # Enums and scalar types
 
-JSON has strings, numbers, booleans, `null`, arrays and objects. A Prisma model also has dates, 64-bit integers, exact decimals and byte arrays. Aventara carries each of them as a defined JSON form on the wire and **revives** them into real values on the other side, so your code works with `Date`, `bigint`, `Decimal` and `Uint8Array`, and never with a half-parsed string.
+JSON has strings, numbers, booleans, `null`, arrays and objects. A Prisma model also has dates, 64-bit integers, exact decimals and byte arrays. Aventara carries each of them as a defined JSON form on the wire and revives them into real values on the other side, so your code works with `Date`, `bigint`, `Decimal` and `Uint8Array`, and never with a half-parsed string.
 
 The examples use this schema:
 
@@ -38,7 +38,7 @@ model Post {
 
 ## Enums
 
-A Prisma enum is part of the contract (`"enums": { "Role": { "values": ["USER", "ADMIN"] } }`) and a field of that enum accepts exactly its members. The generated client emits each enum as **a type and a constant of the same name** in `generated/enums.ts`, re-exported from `AvClient.ts`:
+A Prisma enum is part of the contract (`"enums": { "Role": { "values": ["USER", "ADMIN"] } }`) and a field of that enum accepts exactly its members. The generated client emits each enum as a type and a constant of the same name in `generated/enums.ts`, re-exported from `AvClient.ts`:
 
 ```ts
 export type Role = "USER" | "ADMIN";
@@ -78,10 +78,10 @@ Enum fields support `equals`, `not`, `in` and `notIn` in `where`. Adding a membe
 | `BigInt` | `bigint` | string of decimal digits: `"9007199254740993"` |
 | `Decimal` | `Decimal` (the client's own, see below) | string: `"12.5"` |
 | `Bytes` | `Uint8Array` | string, RFC 4648 base64: `"AQID"` |
-| `Json` | any JSON value | the same JSON |
+| `Json` | any JSON value, or the type you declare with `AvZ` ([JSON fields](/docs/json-fields)) | the same JSON |
 | any optional (`?`) | the type or `null` | the type or `null` |
 
-The wire form of a field is in the contract (`type: { scalar: "datetime" }`), and the generated client decodes and encodes by it. Calls resolve to revived values, **including inside nested relations**:
+The wire form of a field is in the contract (`type: { scalar: "datetime" }`), and the generated client decodes and encodes by it. Calls resolve to revived values, including inside nested relations:
 
 ```ts
 import avClient, { Role, Decimal } from "./api/AvClient";
@@ -111,7 +111,7 @@ p.publishedAt;                 // 2026-05-01T12:00:00.000Z
 
 ## DateTime
 
-On the wire a date is **always** `YYYY-MM-DDTHH:mm:ss.sssZ`. Responses use it, and requests must too. Anything else is refused, including offsets and a missing millisecond part:
+On the wire a date is always `YYYY-MM-DDTHH:mm:ss.sssZ`. Responses use it, and requests must too. Anything else is refused, including offsets and a missing millisecond part:
 
 ```json
 // "publishedAt": "2026-05-01T12:00:00+02:00"   or   "2026-05-01"   or   "2026-05-01T12:00:00Z"
@@ -149,7 +149,7 @@ JSON.stringify({ price });   // {"price":"12.50"}
 new Decimal("abc");          // TypeError: Decimal value must be a valid decimal string.
 ```
 
-It **does no arithmetic**: it holds the digits. To calculate, hand the string to the decimal library you prefer (`decimal.js`, `big.js`), or use the update directives (`{ $increment: 1 }`) and let the database do it.
+It does no arithmetic: it holds the digits. To calculate, hand the string to the decimal library you prefer (`decimal.js`, `big.js`), or use the update directives (`{ $increment: 1 }`) and let the database do it.
 
 The server normalizes what it stores and returns: `"12.50"` is read back as `"12.5"`, `"0.30"` as `"0.3"`, `"1e3"` as `"1000"`. A value that is not a decimal string is refused (`V1001` / `V1003`).
 
@@ -175,7 +175,7 @@ A `Json` field carries any JSON value untouched: objects, arrays, strings, numbe
 {"data":{"id":5,"settings":{"a":[1,2,{"b":null}]}},"code":"A1002","cause":null}
 ```
 
-Filter operators for `Json` depend on the database; read `fields.settings.capabilities.filter` in the contract (on SQLite: `equals`, `not`, `stringContains`, `stringStartsWith`, `stringEndsWith`, `arrayStartsWith`, `arrayEndsWith`, `mode`). Json values do not get types from the schema: narrow them in your code, or validate them in a [pipe](/docs/pipelines).
+Filter operators for `Json` depend on the database; read `fields.settings.capabilities.filter` in the contract (on SQLite: `equals`, `not`, `stringContains`, `stringStartsWith`, `stringEndsWith`, `arrayStartsWith`, `arrayEndsWith`, `mode`). A Prisma schema cannot say what is inside a `Json` column, so by default a `Json` field is any JSON. To give it a type that is checked on every write and known to `framework.application`, `framework.client` and the generated client, declare a shape with `AvZ`: [JSON fields](/docs/json-fields).
 
 ## On the server
 
@@ -184,7 +184,7 @@ Inside your NestJS code the forms differ by layer ([Server-side usage](/docs/ser
 | Call | Input | Result |
 |---|---|---|
 | `framework.application.*` | application values: `Date`, `bigint`, `Decimal` (exported from `@aventara/core`), `Uint8Array` | the same application values |
-| `framework.client.*` | **wire** values: ISO strings, decimal strings, base64 | application values |
+| `framework.client.*` | wire values: ISO strings, decimal strings, base64 | application values |
 
 `bigint` and `Date` are not JSON-serializable by themselves, so a server-side result cannot be returned as a JSON response unchanged: a controller that returns `res.data` with a `bigint` in it fails (Nest answers `500`). Convert first (`value.toString()`, `date.toISOString()`), or go through the HTTP protocol, which encodes for you.
 

@@ -101,8 +101,8 @@ export function TableOfContents({
       </a>
       <div className="toc-note">
         <span className="pilot-dot" />
-        <strong>Building in the open</strong>
-        <p>You’re reading the pilot docs. APIs may evolve before 1.0.</p>
+        <strong>Release candidate</strong>
+        <p>The public API is set for 1.0. Your testing helps find the fixes.</p>
       </div>
     </aside>
   );

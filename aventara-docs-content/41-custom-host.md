@@ -7,7 +7,7 @@ section: hosting
 
 # Custom host
 
-NestJS is one host. `@aventara/core/protocol` is the same HTTP protocol as passive data and pure functions: it mounts nothing and imports no HTTP library, so any server can host a framework by translating requests into the protocol's request shape and responses back out. This is what the Nest host does.
+NestJS is one host. `@aventara/core/protocol` is the same HTTP protocol as passive data and pure functions: it mounts nothing and imports no HTTP library, so any server can host a framework by translating requests into the protocol's request shape and responses back out. The Nest host works this way.
 
 You build the framework with `createFramework(config)` (the same `aventaraConfig` you use with Nest) and bind it once.
 
@@ -31,7 +31,7 @@ const protocol = AvProtocol.bind(framework);
 | `protocol.failure(code, requestId?)` | A transport-level failure (`A2000`, `A2010`, `A2011`) as a complete response, for hosts that read the body themselves. |
 | `AvProtocol.headers`, `AvProtocol.httpStatus` | The header names and the code to status table, as data. |
 
-A **request** is:
+A request is:
 
 ```ts
 {
@@ -43,7 +43,7 @@ A **request** is:
 }
 ```
 
-A **response** is `{ status: number; headers: Record<string, string>; body: string }`, the body a JSON string (empty for `304`).
+A response is `{ status: number; headers: Record<string, string>; body: string }`, the body a JSON string (empty for `304`).
 
 Use `kind: "raw"` unless you have a reason not to: the protocol then enforces `maxRequestBytes`, the content type, `Content-Encoding` and JSON syntax with its own codes.
 
@@ -206,12 +206,28 @@ Same behaviours as the Express host, verified with the generated client and `cur
 
 ## Rules for a host
 
-- **Mount from `surface()`**, not from a hand-written list: only advertised operations are routable.
-- **Never parse the body yourself** unless you must; pass it raw.
-- **Authentication** is still an Aventara [pipeline](/docs/configuration#pipelines): pass all request headers through (`headers`), and a guard reads `transport.headers`. A custom host has no Nest guards to bypass.
-- **Your own routes** may live beside the entrypoint, but not under its `_` namespace.
-- **CORS, compression, TLS and logging** are your server's job.
+- Mount from `surface()`, not from a hand-written list: only advertised operations are routable. Mount every entry ([below](#a-route-the-host-left-out)).
+- Never parse the body yourself unless you must; pass it raw.
+- Authentication is still an Aventara [pipeline](/docs/configuration#pipelines): pass all request headers through (`headers`), and a guard reads `transport.headers`. A custom host has no Nest guards to bypass.
+- Your own routes may live beside the entrypoint, but not under its `_` namespace.
+- CORS, compression, TLS and logging are your server's job.
 - The request id is the client's `Aventara-Request-Id` or one the protocol mints; the response always carries it.
+
+## A route the host left out
+
+If your host mounts only some of `protocol.surface()`, a request for a route it left out reaches `protocol.answerAbsent`, and the caller gets `500 A3000` ("Internal framework error."). So that this is not a silent failure, your `diagnostics` function receives one `A3000` diagnostic naming the route: an `"operation"` diagnostic with the Resource, family and variant (a `"transaction"` one for `/_transactions`), whose `error` is named `UnmountedRouteError` and says which `surface()` entry to mount:
+
+```text
+{ kind: "operation", code: "A3000", origin: "client", resource: "Post", family: "find", variant: "many",
+  error: UnmountedRouteError: The ClientContract advertises Post.find.many, but the host mounted no route for
+         POST /_resources/Post/find/many, so protocol.answerAbsent answered it 500 A3000. Mount every protocol.surface() entry. }
+```
+
+A route your ClientContract does not offer (a restricted operation, a transaction when transactions are off) is still answered `404` without a report. `@aventara/nest` mounts every route, so Nest applications never see this ([Request IDs and diagnostics](/docs/request-ids-and-diagnostics#what-else-reaches-it)).
+
+## Hold your host to the corpus
+
+`@aventara/testing` ships the protocol corpus and a runner that checks a host against it, row by row: [Testing and conformance](/docs/testing-and-conformance).
 
 ## See also
 
@@ -219,4 +235,5 @@ Same behaviours as the Express host, verified with the generated client and `cur
 - [NestJS host](/docs/nestjs-host)
 - [Configuration](/docs/configuration)
 - [Client setup](/docs/client-setup), to generate a client against your host
+- [Testing and conformance](/docs/testing-and-conformance)
 - Guides: [Authentication and guards](/docs/authentication-and-guards), [Request IDs and diagnostics](/docs/request-ids-and-diagnostics), [Limits and safety](/docs/limits-and-safety)

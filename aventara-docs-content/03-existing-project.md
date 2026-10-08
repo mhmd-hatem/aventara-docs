@@ -7,10 +7,10 @@ section: get-started
 
 # Add Aventara to an existing project
 
-Run `aventara init` inside an existing **NestJS 12** project:
+Run `aventara init` inside an existing NestJS 12 project:
 
 ```bash
-npx @aventara/cli@pilot init
+npx @aventara/cli@rc init
 ```
 
 It refuses, in one sentence and before writing anything, when there is no `package.json`, the project is on another Nest major, TypeScript 7 is installed (the server side needs TypeScript below 7, and `init` says so; a TypeScript 7 *frontend* is fine), only a yarn lockfile exists, or the project is already initialized. ESM and CommonJS projects are both supported.
@@ -21,7 +21,7 @@ If the project has no Prisma setup, `init` asks for the ORM and database (or tak
 
 ## Prisma is already there
 
-If Prisma is already set up, `init` **reuses and never writes** your schema, Prisma config, `.env` and Prisma service. It requires the installed Prisma to be one an Aventara adapter supports:
+If Prisma is already set up, `init` reuses and never writes your schema, Prisma config, `.env` and Prisma service. It requires the installed Prisma to be one an Aventara adapter supports:
 
 - Prisma 7, `^7.10.0`
 - SQLite or PostgreSQL
@@ -33,7 +33,7 @@ Otherwise it stops with one sentence and writes nothing.
 `init` looks for the class that extends `PrismaClient` (your Prisma service) and for the Nest module that provides and exports it. If it finds more than one, or none, it asks, or you pass them:
 
 ```bash
-npx @aventara/cli@pilot init \
+npx @aventara/cli@rc init \
   --prisma-service src/prisma/prisma.service.ts#PrismaService \
   --prisma-module src/prisma/prisma.module.ts#PrismaModule
 ```
@@ -67,12 +67,14 @@ aventara: warning: src/main.ts was not edited: it has no `const app = await Nest
 
 ## After init
 
+`aventara init` shows its steps while it works, like `aventara new` ([Progress](/docs/cli-reference#progress-aventara)), and prints the next steps last. `--verbose` shows the install's output as it runs.
+
 ```bash
 npx prisma db push      # init never touches a database
 npm run start:dev       # GET http://localhost:3000/api/_contract
 ```
 
-Then set up the frontend with `npx @aventara/client@pilot init`.
+Then set up the frontend with `npx @aventara/client@rc init`.
 
 ## Wiring by hand
 

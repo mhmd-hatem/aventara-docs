@@ -7,7 +7,7 @@ section: reference
 
 # Protocol API reference
 
-`@aventara/core/protocol` is Aventara's HTTP protocol as **passive data and pure functions**. It mounts nothing and imports no HTTP library; a host adapts its server to it. `@aventara/nest` is such a host. Use this entry point to write another one (Hono, Koa, a serverless handler), or to test the protocol in process. For the wire format itself see [HTTP protocol](/docs/http-protocol).
+`@aventara/core/protocol` is Aventara's HTTP protocol as passive data and pure functions. It mounts nothing and imports no HTTP library; a host adapts its server to it. `@aventara/nest` is such a host. Use this entry point to write another one (Hono, Koa, a serverless handler), or to test the protocol in process. For the wire format itself see [HTTP protocol](/docs/http-protocol).
 
 ```ts
 import { AvProtocol } from "@aventara/core/protocol";
@@ -20,7 +20,7 @@ The main `@aventara/core` entry exports no protocol names. `AvProtocol` is a nam
 
 ### AvProtocolRequest
 
-What a host hands the protocol. `path` is **relative to the entrypoint** (`/_contract`, `/_resources/User/find/many`).
+What a host hands the protocol. `path` is relative to the entrypoint (`/_contract`, `/_resources/User/find/many`).
 
 ```ts
 type AvProtocolRequest = {
@@ -73,7 +73,7 @@ type AvProtocolBinding = {
 | Member | Use it to | Notes |
 |---|---|---|
 | `surface()` | List the routes to mount. | Each entry is `{ kind: "operation", method: "POST", path: "/_resources/<Resource>/<family>/<variant>", resource, family, variant }`, then `{ kind: "contract", method: "GET", path: "/_contract" }`, then `{ kind: "transactions", method: "POST", path: "/_transactions" }` only when the client contract is `interactive`. Only advertised operations appear, so a hidden Resource has no route. Paths are relative to the entrypoint. Frozen. |
-| `handleOperation(request)` | Decode, execute and encode one operation request. | Resolves to a response; **never rejects**. |
+| `handleOperation(request)` | Decode, execute and encode one operation request. | Resolves to a response; never rejects. |
 | `handleTransaction(request)` | The same for `/_transactions`. | |
 | `encodeContract(request)` | Answer `GET /_contract`. | Synchronous. Handles `If-None-Match`: a matching ETag answers `304` with no body. |
 | `answerAbsent(request)` | Answer any other path under the protocol's `_` namespace (`400 A2000` for an unknown `/_*` path, `405` with `Allow` for a wrong method on a protocol route). | Returns `undefined` for a path outside the namespace; that one is yours to answer. |
@@ -153,7 +153,7 @@ Total over all 33 codes. Meanings: [Error codes](/docs/error-codes).
 
 ## AvProtocol.scalarFormats
 
-The wire grammar of every scalar whose JSON form is a string, as anchored regular-expression **source strings** (so they survive JSON and can be emitted into a client). Frozen.
+The wire grammar of every scalar whose JSON form is a string, as anchored regular-expression source strings (so they survive JSON and can be emitted into a client). Frozen.
 
 | Scalar | Pattern source | Wire example |
 |---|---|---|

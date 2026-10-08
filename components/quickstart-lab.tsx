@@ -17,6 +17,7 @@ import { CopyButton } from "@/components/code-block";
 import { DemoCode } from "@/components/lab-primitives";
 import { SchemaPreview } from "@/components/schema-preview";
 import { userSchema } from "@/lib/demo-schemas";
+import { AVENTARA_DIST_TAG } from "@/lib/release";
 const steps = [
   {
     title: "Create your API",
@@ -50,9 +51,9 @@ export function QuickstartLab() {
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const valid = /^[a-z][a-z0-9-]{0,39}$/.test(project);
   const commands = [
-    `${manager === "npm" ? "npx" : "pnpm dlx"} @aventara/cli@pilot new ${project} --yes`,
+    `${manager === "npm" ? "npx" : "pnpm dlx"} @aventara/cli@${AVENTARA_DIST_TAG} new ${project} --yes`,
     `cd ${project}\n${manager === "npm" ? "npx" : "pnpm exec"} prisma db push\n${manager} run start:dev`,
-    `${manager === "npm" ? "npx" : "pnpm dlx"} @aventara/client@pilot init`,
+    `${manager === "npm" ? "npx" : "pnpm dlx"} @aventara/client@${AVENTARA_DIST_TAG} init`,
     'const ada = await avClient.User.create.one({\n  data: { email: "ada@example.com", name: "Ada" },\n  select: ["id", "email"],\n});',
   ];
   const outputs = [

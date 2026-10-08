@@ -20,7 +20,7 @@ Arguments are validated against the contract before anything reaches the databas
 
 ## where
 
-A plain value is **equality**. Keys at one level are ANDed.
+A plain value is equality. Keys at one level are ANDed.
 
 ```ts
 await avClient.User.find.many({ where: { email: "ada@example.com" }, select: ["id", "email"] });
@@ -61,11 +61,25 @@ await avClient.Post.find.many({ where: { views: { contains: "x" } } });
 //   message: 'Filter operator "contains" is not available on field "views".' }
 ```
 
+### `null` in a filter
+
+Only equality takes a `null`: `equals: null` and `not: null` (and the plain `field: null` shorthand) match the rows where a nullable field is unset or set. Every other operator has no `null` meaning, so a literal `null` there (`gt`, `lt`, `contains`, `in`, `has`, `mode`, `isEmpty`, `path`, a JSON `string*` operator and the rest) is refused before the database is asked, with `A2004` and `V1001` at that operator, and it is a type error in the typed calls. On a field that is not nullable, `equals: null` is refused the same way:
+
+```ts
+await avClient.Post.find.many({ where: { views: { gt: null } } });
+// ValidationError A2004 (422): { path: ["arguments","where","views","gt"], code: "V1001", message: "Value must be non-null." }
+await avClient.Post.find.many({ where: { title: { contains: null } } });   // the same, at ["arguments","where","title","contains"]
+await avClient.Post.find.many({ where: { id: { in: null } } });            // the same, at ["arguments","where","id","in"]
+await avClient.Post.find.many({ where: { categoryId: { not: null } }, select: ["id"] });   // fine: categoryId is nullable
+```
+
+(A `Json` field's `array*` operators take a JSON `null` as a value to look for.) Without that up-front refusal, the same request would reach the database and answer `500 A3001`.
+
 String matching (`contains`, `startsWith`, `endsWith`) uses the database's own comparison. On SQLite it is case-insensitive for ASCII (`contains: "NOTES"` finds "Notes on engines"); on PostgreSQL it is case-sensitive. Test the behavior on the database you deploy to.
 
 ### Dates, decimals and big integers
 
-Filter with the application values; the client encodes them. **A plain `Date` is equality**, the same shorthand as any other scalar:
+Filter with the application values; the client encodes them. A plain `Date` is equality, the same shorthand as any other scalar:
 
 ```ts
 await avClient.Post.find.many({ where: { publishedAt: new Date("2026-01-15T10:00:00.000Z") }, select: ["id", "publishedAt"] });
@@ -108,7 +122,7 @@ A `where` tree has a limit on its nodes (`maxBooleanNodes`, 50 by default): over
 
 ### Filtering through relations
 
-A **to-one** relation takes a nested `where` directly, or `null` for "has none". A **to-many** relation takes `some`, `every` or `none`.
+A to-one relation takes a nested `where` directly, or `null` for "has none". A to-many relation takes `some`, `every` or `none`.
 
 ```ts
 await avClient.Post.find.many({ where: { author: { name: { contains: "Grace" } } }, select: ["id", "title"] });
@@ -126,7 +140,7 @@ await avClient.User.find.many({ where: { posts: { every: { views: { gt: 5 } } } 
 
 ### Identifiers
 
-`find.unique`, `update.unique`, `delete.unique` and `upsert.unique` take an **identifier** as `where`: the primary key (`{ id: 1 }`) or a unique column (`{ email: "ada@example.com" }`), not a filter. A miss throws `NotFoundError` (`A2003`).
+`find.unique`, `update.unique`, `delete.unique` and `upsert.unique` take an identifier as `where`: the primary key (`{ id: 1 }`) or a unique column (`{ email: "ada@example.com" }`), not a filter. A miss throws `NotFoundError` (`A2003`).
 
 ## orderBy
 
@@ -144,7 +158,7 @@ await avClient.User.find.many({ orderBy: { name: { sort: "asc", nulls: "last" } 
 
 ### Ordering by a relation
 
-By a field of a to-one relation, or by the **count** of a to-many relation:
+By a field of a to-one relation, or by the count of a to-many relation:
 
 ```ts
 await avClient.Post.find.many({ orderBy: [{ author: { email: "desc" } }, { id: "asc" }], select: ["id", "title"] });
@@ -182,7 +196,7 @@ Always give an `orderBy` when you page: without one the database may return rows
 
 ### Cursor paging
 
-`cursor` starts at a row identified by its unique key, **including** that row. Combine it with an `orderBy` that ends in a **unique tie-breaker** (a complete identifier such as `id`). Aventara does not add one for you, and refuses a cursor without an explicit order:
+`cursor` starts at a row identified by its unique key, including that row. Combine it with an `orderBy` that ends in a unique tie-breaker (a complete identifier such as `id`). Aventara does not add one for you, and refuses a cursor without an explicit order:
 
 ```ts
 await avClient.Post.find.many({ orderBy: [{ id: "asc" }], limit: 2, cursor: { id: 3 }, select: ["id"] });
@@ -200,7 +214,7 @@ await avClient.Post.find.many({ orderBy: [{ id: "asc" }], limit: 2, cursor: { id
 // [ { id: 4 }, { id: 5 } ]
 ```
 
-Nested to-many relations page too (`limit`, `offset` inside the relation's selection), applied **per parent row**. See [Relations and nested writes](/docs/relations-and-nested-writes).
+Nested to-many relations page too (`limit`, `offset` inside the relation's selection), applied per parent row. See [Relations and nested writes](/docs/relations-and-nested-writes).
 
 ## First, unique and many
 

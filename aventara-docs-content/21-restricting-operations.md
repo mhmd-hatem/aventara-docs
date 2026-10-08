@@ -7,7 +7,7 @@ section: guides
 
 # Restricting operations
 
-Every Resource gets the operations the adapter can perform: `find`, `create`, `update`, `delete` and `upsert`, each with its variants. `restrictions.<Resource>.operations` switches individual variants **off**. It cannot redefine them: the semantics of a standard operation are the framework's, not per-resource configuration.
+Every Resource gets the operations the adapter can perform: `find`, `create`, `update`, `delete` and `upsert`, each with its variants. `restrictions.<Resource>.operations` switches individual variants off. It cannot redefine them, because the semantics of a standard operation belong to the framework.
 
 ## Remote callers cannot delete
 
@@ -35,7 +35,7 @@ curl -i -X POST http://localhost:3000/api/_resources/User/delete/unique ... -d '
 ```
 
 ```json
-{"data":null,"code":"A2002","cause":{"message":"Operation arguments failed framework validation.","issues":[{"path":["operation"],"code":"V1006","message":"Operation \"delete.unique\" is not available on Resource \"User\"."}]}}
+{"data":null,"code":"A2002","cause":{"message":"Operation arguments failed framework validation.","issues":[{"path":["variant"],"code":"V1006","message":"Operation \"delete.unique\" is not available on Resource \"User\"."}]}}
 ```
 
 with HTTP status `404`: the route is not mounted. The regenerated frontend client has no `avClient.User.delete`, and a call to it does not compile.
@@ -114,7 +114,7 @@ A hidden Resource is not in the contract and not routable (`A2001`, "Resource "C
 
 ## After changing operations
 
-The contract served to remote callers changed, so its hash changed: **regenerate the frontend client** (`npm run avclient:generate`). A client generated before the change is refused on **every** call with `A2005` (`ContractMismatchError`, "Generated client contract does not match the server. Regenerate the client.") until you regenerate it.
+The contract served to remote callers changed, so its hash changed: regenerate the frontend client (`npm run avclient:generate`). A client generated before the change is refused on every call with `A2005` (`ContractMismatchError`, "Generated client contract does not match the server. Regenerate the client.") until you regenerate it.
 
 ## Operations are not authorization
 

@@ -46,11 +46,11 @@ To exclude your own browser, open `https://aventara-docs.vercel.app/?analytics=o
 
 ## Content
 
-The current framework release is `0.1.0-pilot.4`. Shared site badges read `lib/release.ts`; the numbered source pages contain the release documentation.
+The current framework release is `1.0.0-rc.0`. Shared site badges and interactive install commands read the version and `rc` dist-tag from `lib/release.ts`; the numbered source pages contain the release documentation.
 
 Edit the numbered Markdown files in `aventara-docs-content/`. Fumadocs reads those files directly; there is no generated copy to maintain. Numeric prefixes are stripped from page URLs. README and internal site notes are excluded from publishing and search. Navigation groups live in `lib/navigation.ts`.
 
-All 54 pages are arranged in task-focused navigation groups. The current group opens automatically; other groups can be expanded. The same page list drives breadcrumbs, previous/next links, and primary-navigation highlighting. `tests/navigation.test.mjs` checks that every numbered source page appears exactly once.
+All 56 pages are arranged in task-focused navigation groups. The current group opens automatically; other groups can be expanded. The same page list drives breadcrumbs, previous/next links, and primary-navigation highlighting. `tests/navigation.test.mjs` checks that every numbered source page appears exactly once.
 
 ## Design
 

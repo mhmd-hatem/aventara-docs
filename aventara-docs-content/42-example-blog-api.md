@@ -7,12 +7,12 @@ section: examples
 
 # Example: blog API
 
-A small blog from schema to frontend calls. Everything here was run against the `0.1.0-pilot.3` packages; the outputs shown are real. The frontend calls import the client as `./api/AvClient`, the Vite and Next.js spelling; a `nodenext` ESM project writes `./api/AvClient.js` ([Importing the client](/docs/client-setup#importing-the-client)).
+A small blog from schema to frontend calls. Everything here was run against released packages; the outputs shown are real. The frontend calls import the client as `./api/AvClient`, the Vite and Next.js spelling; a `nodenext` ESM project writes `./api/AvClient.js` ([Importing the client](/docs/client-setup#importing-the-client)).
 
 ## 1. Create the server
 
 ```bash
-npx @aventara/cli@pilot new blog-api --yes --skip-git
+npx @aventara/cli@rc new blog-api --yes --skip-git
 cd blog-api
 ```
 
@@ -70,13 +70,13 @@ npm run aventara:prepare
 `src/aventara.config.ts`:
 
 ```ts
-import { FrameworkError, type PipelineContext } from "@aventara/core";
+import { FrameworkError, type Guard } from "@aventara/core";
 import { createPrismaAdapter } from "@aventara/prisma7-adapter";
 import { discovery } from "./generated/aventara/discovery.artifact.js";
 import type { PrismaService } from "./prisma.service.js";
 
 // Remote callers must send an Authorization header to write.
-const requireSignIn = (ctx: Pick<PipelineContext, "family" | "transport">) => {
+const requireSignIn: Guard = (ctx) => {
   if (ctx.family !== "find" && !ctx.transport?.headers["authorization"]) {
     throw new FrameworkError("A4000", "Sign in first.");
   }
@@ -112,7 +112,7 @@ export async function aventaraConfig(prisma: PrismaService) {
 }
 ```
 
-What each part does, all for **remote callers** (the `client` layer), leaving server-side code untouched:
+What each part does, all for remote callers (the `client` layer), leaving server-side code untouched:
 
 | Setting | Effect |
 |---|---|
@@ -141,7 +141,7 @@ A browser frontend on another origin needs CORS. The scaffold's `src/main.ts` al
 In the frontend project:
 
 ```bash
-npx @aventara/client@pilot init --yes --entrypoint http://localhost:3000/api
+npx @aventara/client@rc init --yes --entrypoint http://localhost:3000/api
 ```
 
 ## 6. Frontend calls

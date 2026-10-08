@@ -9,8 +9,8 @@ section: guides
 
 Two configuration blocks work together:
 
-- **`fields`** adds a scalar field that your database does not have (a *virtual* field), or describes how a field behaves.
-- **`behaviors`** attaches your code to a field: a function that computes its value when a record is read, created or updated.
+- `fields` adds a scalar field that your database does not have (a *virtual* field), or describes how a field behaves.
+- `behaviors` attaches your code to a field: a function that computes its value when a record is read, created or updated.
 
 The result is part of the contract like any other field (callers see and type `displayName` as a string), while the code stays on the server.
 
@@ -96,7 +96,7 @@ export async function aventaraConfig(prisma: PrismaService) {
 
 `defineFields(adapter.model, { ... })` checks the `fields` block against what Prisma discovered and returns it unchanged. Binding the model by value is what lets TypeScript offer your field names (including the added ones) to `behaviors`, `restrictions` and `dependsOn`: a typo there is a compile error.
 
-An **added** field must spell out `type`, `nullable` and `list`. `lifecycle: ["VIRTUAL"]` says it has no database column. The `type` is `{ scalar: "string" }` or another scalar, or `{ enum: "Role" }`.
+An added field must spell out `type`, `nullable` and `list`. `lifecycle: ["VIRTUAL"]` says it has no database column. The `type` is `{ scalar: "string" }` or another scalar, or `{ enum: "Role" }`.
 
 ## Recipe 1: a field computed on read
 
@@ -152,20 +152,20 @@ A computed value is authoritative: sending your own `slug` on create is overridd
 {"data":{"id":2,"title":"A","slug":"a"},"code":"A1002","cause":null}
 ```
 
-A create or update callback returns the value for **its own field** only; returning `undefined` leaves the current value alone. It receives:
+A create or update callback returns the value for its own field only; returning `undefined` leaves the current value alone. It receives:
 
 | Member | Meaning |
 |---|---|
 | `data` | The incoming data for this operation, after pipes. |
 | `value` | The field's current value in this operation (what the caller sent, if anything). |
-| `field`, `resource`, `scope` | Which field, Resource and layer (`"application"` or `"client"`). |
+| `field`, `resource`, `origin` | Which field and Resource, and where the request came from (`"application"` or `"client"`). |
 | `operation` | The pipeline context of the operation (including `requestId` and `transport`). |
 
 Read callbacks get `record` (the row as read) instead of `data`. A callback may return a promise.
 
 ## Recipe 3: write-only input that fills another field
 
-The `password` field above is accepted on create and update and is **not** stored or returned (`select: false`, and the framework strips virtual fields before the database call). Its value reaches the `passwordHash` behaviors through `data`:
+The `password` field above is accepted on create and update and is not stored or returned (`select: false`, and the framework strips virtual fields before the database call). Its value reaches the `passwordHash` behaviors through `data`:
 
 ```json
 // User/create/one {"data":{"email":"ada@example.com","password":"s3cret"}}
@@ -199,8 +199,9 @@ Switching a stage off does not make the field read-only: a remote caller can sti
 
 ## What to know
 
-- A **selectable** virtual field needs a `read` behavior: without one, startup fails with `COMPILER_MISSING_READ_BEHAVIOR`. A write-only virtual field must say `select: false`.
+- A selectable virtual field needs a `read` behavior: without one, startup fails with `COMPILER_MISSING_READ_BEHAVIOR`. A write-only virtual field must say `select: false`.
 - A computed field is not a pipeline stage. A [pipe](/docs/pipelines) transforms the whole arguments; a behavior owns one field.
+- A `read` behavior that returns a value of the wrong type fails after the write. On `create` the caller is answered `500` `A3000`, but the row is already committed, and every later list that selects the field answers `500` too until the behavior is fixed. The failure is reported to the `diagnostics` function as a `ComputedValueError` ([Request IDs and diagnostics](/docs/request-ids-and-diagnostics)). Test a read behavior against real rows before you ship it.
 - Behaviors run on the server for both layers and never appear in the contract. Only the resulting lifecycle (`COMPUTED_ON_READ`, `COMPUTED_ON_CREATE`, `COMPUTED_ON_UPDATE`) is visible.
 
 ## See also

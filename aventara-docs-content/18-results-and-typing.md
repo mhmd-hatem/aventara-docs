@@ -137,7 +137,11 @@ try {
 
 ## On the server, results are envelopes
 
-Server-side calls through `framework.application.*` and `framework.client.*` are typed the same way, but they return the envelope instead of throwing: `{ data, code, cause }`. `data` has the typed result, and `code` tells you whether it is valid.
+Server-side calls through `framework.application.*` and `framework.client.*` return the envelope instead of throwing: `{ data, code, cause }`. `data` has the typed result, and `code` tells you whether it is valid.
+
+The types of `framework.application` and `framework.client` follow your restrictions layer by layer, exactly as the generated client's do. A hidden field is not in the types. A field whose `select`, `filter`, `order`, `create` or `update` capability you turned off is refused in that position and left out of the result types. A disabled operation is not on the object, and a unique operation disappears when its only identifier is hidden. `framework.client` reads the root restrictions with `client.restrictions` over them; `framework.application` reads the root restrictions with `application.restrictions` over them, so a field hidden at the root is hidden on `framework.application` too. `framework.appTx` and `framework.clientTx` follow the same rules.
+
+> Known issue: filter operator narrowing is not reflected in any types. A filter operator the field does not offer compiles, and the runtime refuses it with `V1006`.
 
 ```ts
 const res = await framework.application.User.find.count({});

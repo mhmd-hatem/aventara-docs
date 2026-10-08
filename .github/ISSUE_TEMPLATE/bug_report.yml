@@ -29,7 +29,7 @@ body:
     id: version
     attributes:
       label: Aventara version
-      placeholder: e.g. 0.1.0-pilot.4
+      placeholder: e.g. 1.0.0-rc.0
   - type: textarea
     id: environment
     attributes:

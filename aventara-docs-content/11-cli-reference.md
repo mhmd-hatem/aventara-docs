@@ -7,13 +7,13 @@ section: reference
 
 # CLI reference
 
-Two commands: **`aventara`** scaffolds the server; **`avclient`** sets up the frontend and generates the typed client. Both are run once through `npx` (or installed globally); neither is a runtime dependency of your application.
+Two commands: `aventara` scaffolds the server; `avclient` sets up the frontend and generates the typed client. Both are run once through `npx` (or installed globally); neither is a runtime dependency of your application.
 
-The examples use the `@pilot` tag, which points to `0.1.0-pilot.4`; use it (the `latest` tag is not guaranteed to be the newest pilot).
+The examples use the `@rc` tag, which points to the newest release candidate (`1.0.0-rc.0`).
 
 ```bash
-npx @aventara/cli@pilot <command>        # or: npm i -g @aventara/cli@pilot
-npx @aventara/client@pilot <command>     # in the frontend; after init, `npx avclient <command>`
+npx @aventara/cli@rc <command>        # or: npm i -g @aventara/cli@rc
+npx @aventara/client@rc <command>     # in the frontend; after init, `npx avclient <command>`
 ```
 
 ## aventara
@@ -36,7 +36,9 @@ The commit is the last step, with the message `Initial Aventara Scaffold`:
 aventara: committed the scaffold: "Initial Aventara Scaffold".
 ```
 
-It is skipped, with one line saying why and what to do, when `git` is not installed, when git has no `user.name` and `user.email`, when the new project is inside a git repository already, or with `--skip-git` (passed to `nest new`, which then creates no repository). `.env` is not committed: the scaffold's `.gitignore` lists it. Verified skips:
+The run then prints its closing line and, last of all, the next steps ([What it prints next](#what-it-prints-next)), so they are what is on screen when it ends.
+
+It is skipped, with one line saying why and what to do, when `git` is not installed, when git has no `user.name` and `user.email`, when the new project is inside a git repository already, or with `--skip-git` (passed to `nest new`, which then creates no repository). `.env` is not committed: the scaffold's `.gitignore` lists it. The messages:
 
 ```text
 aventara: no initial commit: /path/to/repo is inside a git repository already; commit the project there.
@@ -59,7 +61,8 @@ Runs inside an existing NestJS 12 project. See [Add to an existing project](/doc
 | `--prisma-module <path#Export>` | `init` | The Nest module that provides and exports it. | the one found |
 | `--skip-install` | both | Write the files and print the install command instead of running it. | |
 | `--skip-git` | `new` | Create no repository and make no initial commit (passed to `nest new`). | |
-| `-y`, `--yes` | both | Accept every unanswered default **and** replace existing content that differs. | |
+| `-y`, `--yes` | both | Accept every unanswered default and replace existing content that differs. | |
+| `--verbose` | both | Show the output of `nest new` and of the install as it runs, instead of only when one fails. | |
 
 On a terminal, unanswered questions are asked. Anywhere else (CI, a script), pass the flags or `--yes`, or the run stops in one sentence naming what is missing, before writing anything. A question with only one possible answer is shown, not asked.
 
@@ -67,7 +70,7 @@ Existing content that differs from what would be written (a `.env` key, a script
 
 ### Refusals
 
-Each is one sentence on stderr, exit code 1, and nothing is written. Verified messages:
+Each is one sentence on stderr, exit code 1, and nothing is written. The messages:
 
 ```text
 aventara: unknown command "bogus": the commands are new and init; run `aventara --help` for usage.
@@ -87,16 +90,38 @@ For a project with no ORM yet: `prisma/schema.prisma` (a `User` model), `prisma.
 
 The `src/main.ts` edit enables CORS for the origins in `CORS_ORIGINS` (default `http://localhost:5173,http://localhost:3001`; unset or empty means CORS off) and adds a commented-out platform rate limiter. If `main.ts` already configures CORS it is left alone, and if it has no `const app = await NestFactory.create(...)` line, the lines are printed instead ([Add to an existing project](/docs/existing-project#what-it-changes-in-maints-and-env)). See [Rate limiting](/docs/limits-and-safety#rate-limiting).
 
-### What it prints next
+### Progress (aventara)
+
+While it works, `aventara new` and `aventara init` show each step on stderr, so a long install never looks hung. A real run of `aventara new`, with stderr and stdout kept apart:
 
 ```text
-1. cd my-api
-2. npx prisma db push           (pnpm: pnpm exec prisma db push)
-3. npm run start:dev            GET http://localhost:3000/api/_contract
-4. npx @aventara/client@pilot init    in your frontend
+[1/4] Creating the NestJS project (npx -y @nestjs/cli@12.0.8 new blog)… done (11.4s)
+[2/4] Writing Aventara's files… done (0.0s)
+[3/4] Installing dependencies (npm install)… done (1m 42s)
+[4/4] Committing the scaffold… done (0.0s)
+aventara: created blog in 1m 53s.
 ```
 
-The runner (`npx` or `pnpm dlx`) matches your package manager. With PostgreSQL, set `DATABASE_URL` in `.env` first. `init` writes Prisma's placeholder and never asks for a secret.
+- On a terminal, the current step shows a spinner and the seconds so far, then `✓` or `✗` and its time.
+- In a pipe, in CI (`CI` is set) or with `NO_COLOR`, each step is one plain line, `… done (12.4s)`, with no control sequences, as above.
+- The output of `nest new` and of the install is shown only when one of them fails, or as it runs with `--verbose`.
+- A closing line gives the total time. Results and the next steps go to stdout.
+
+### What it prints next
+
+The next steps are the last thing printed, after the commit line and the closing line, on a terminal and in a pipe alike:
+
+```text
+Next:
+  1. Enter the project: cd blog
+  2. Create the database tables: npx prisma db push
+  3. Start the server: npm run start:dev
+  4. In your frontend: npx @aventara/client@rc init
+```
+
+With `--skip-install` there is one more step, `Install, which also runs aventara:prepare: npm install`, after entering the project. Under pnpm the commands read `pnpm exec prisma db push` and `pnpm dlx @aventara/client@rc init`.
+
+The runner (`npx` or `pnpm dlx`) matches your package manager. The server answers `GET http://localhost:3000/api/_contract` once it runs. With PostgreSQL, set `DATABASE_URL` in `.env` first. `init` writes Prisma's placeholder and never asks for a secret.
 
 ## avclient
 
@@ -131,13 +156,30 @@ It first checks that the project has a `tsconfig.json`: a plain JavaScript proje
 
 `avclient` reads the `.env` cascade from the current directory before evaluating `framework.client.ts`, highest precedence first: the process environment, `.env.<mode>.local`, `.env.<mode>`, `.env.local`, `.env`. `mode` is `NODE_ENV`, or `development`.
 
+### Progress (avclient)
+
+`avclient init` and `avclient generate` show their steps the same way (on stderr, with a spinner on a terminal and one plain line per step in a pipe, in CI or with `NO_COLOR`), then a closing line with the total time. `avclient` has no `--verbose` flag. A real `avclient init` run:
+
+```text
+[1/6] Writing the client setup… done (0.0s)
+[2/6] Installing dependencies (npm install)… done (0.8s)
+[3/6] Loading the client config… done (0.1s)
+[4/6] Fetching the ClientContract (http://localhost:3000/api/_contract)… done (0.0s)
+[5/6] Emitting the client… done (0.0s)
+[6/6] Checking and writing the client into src/api… done (0.6s)
+avclient: done in 1.6s.
+avclient: generated 39 files into /path/to/project/src/api (checked: types).
+```
+
+When nothing changed, `avclient generate` ends with `avclient: up to date: … already holds this deployment's client; nothing was written.`
+
 ### avclient generate
 
 `avclient generate` takes only `--yes`; everything else it needs is in `framework.client.ts` ([Frontend client](/docs/frontend-client)). `--yes` overwrites or removes content in `AvClient.ts` or `generated/` that the generator did not produce, without asking. Without it such content is listed and you are asked; with no terminal (CI) the run is refused and nothing is touched.
 
 ### Refusals and errors
 
-Verified:
+The messages:
 
 ```text
 avclient: no tsconfig.json was found in /path/to/project/src/api or any directory above it. ... JavaScript projects are not supported yet. ... Nothing was written.

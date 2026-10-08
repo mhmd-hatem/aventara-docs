@@ -27,7 +27,7 @@ section: about
 
 **Contract hash.** `sha256:` plus 64 hex characters, computed from the client contract. Clients send it on every request; a mismatch is `A2005`. See [Contract hash](/docs/contract-hash).
 
-**Cursor.** A pagination argument naming the row at which to start; that row is **included** in the result (add `offset: 1` to start after it). Requires an explicit `orderBy` ending in a unique field.
+**Cursor.** A pagination argument naming the row at which to start; that row is included in the result (add `offset: 1` to start after it). Requires an explicit `orderBy` ending in a unique field.
 
 **Directive.** A `$`-prefixed key that acts on a value instead of assigning it: scalar directives (`$increment`, `$decrement`, `$multiply`, `$divide`, `$push`, `$unset`) and relation directives (`$create`, `$connect`, `$connectOrCreate`, `$disconnect`, `$set`, `$update`, `$delete`, `$upsert`). Directives apply to writes, never reads.
 
@@ -51,13 +51,17 @@ section: about
 
 **Host.** Whatever serves a framework over a transport. `@aventara/nest` hosts it in NestJS 12 on Express or Fastify; `@aventara/core/protocol` lets you write another.
 
-**Layer.** One of the views compiled from your schema and configuration: **core** (the baseline), **application** (your server code) and **client** (remote callers). Root configuration is the default for all; an `application` or `client` block overrides it for one layer.
+**Layer.** One of the views compiled from your schema and configuration: core (the baseline), application (your server code) and client (remote callers). Root configuration is the default for all; an `application` or `client` block overrides it for one layer.
 
 **Operation.** One standard action on a Resource, named by family and variant: `User.find.many`.
 
 **Pipeline.** Server-side callbacks (guards, pipes, hooks, interceptors, filters) that run around operations. Never part of a contract.
 
 **Protocol version.** The number `1`, sent as `Aventara-Protocol-Version`.
+
+**Reference Field.** A scalar field that holds a relation's reference on the referencing Resource, such as `authorId` for `author`. Setting it and its own relation in one record is refused (`V1012`). See [Relations and nested writes](/docs/relations-and-nested-writes#writing-relations).
+
+**Reference Write Limit.** A data source's statement that one record writes its relations either all as relations or all through their reference fields. Prisma states it, and the Contract carries it as `referenceWrites: "uniform"`; a record that mixes the two is refused (`V1012`).
 
 **Request id.** The correlation id of a request: the client's `Aventara-Request-Id` or one the framework generates; always on the response.
 

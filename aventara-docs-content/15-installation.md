@@ -29,13 +29,15 @@ The bins refuse to run on an unsupported Node, in one sentence that names the ra
 | Package | Install it | Where | What it is |
 |---|---|---|---|
 | `@aventara/cli` | Do not. Run it with `npx` (or `pnpm dlx`), or install it globally | Your machine | The `aventara` command: `aventara new <name>` creates a NestJS 12 project with Aventara; `aventara init` adds Aventara to an existing one. It is not a dependency of your project. |
-| `@aventara/core` | Added for you | Server, **dependency** | The framework: configuration, contract compilation, validation, execution, transactions. Its `@aventara/core/protocol` entry exposes the HTTP protocol as plain data and functions. Transport- and ORM-agnostic. |
-| `@aventara/prisma7-adapter` | Added for you | Server, **dependency** | The Prisma 7 adapter for SQLite and PostgreSQL, plus the `aventara-prisma7-generate` bin that runs on install (`aventara:prepare`). |
-| `@aventara/nest` | Added for you | Server, **dependency** | Hosts a framework in NestJS 12 on Express or Fastify: `AventaraModule`, `@InjectFramework()`. |
-| `@aventara/client` | `avclient init` adds it | Frontend, **dev dependency**, exact version | The `avclient` generator. Not needed at runtime: the generated client imports nothing from it. |
-| `@aventara/testing` | Optional | Server, dev dependency | Conformance fixtures and a fake in-memory adapter, for testing code that runs a framework without a database, or an adapter or host against the protocol. |
+| `@aventara/core` | Added for you | Server, dependency | The framework: configuration, contract compilation, validation, execution, transactions. Its `@aventara/core/protocol` entry exposes the HTTP protocol as plain data and functions. Transport- and ORM-agnostic. |
+| `@aventara/prisma7-adapter` | Added for you | Server, dependency | The Prisma 7 adapter for SQLite and PostgreSQL, plus the `aventara-prisma7-generate` bin that runs on install (`aventara:prepare`). |
+| `@aventara/nest` | Added for you | Server, dependency | Hosts a framework in NestJS 12 on Express or Fastify: `AventaraModule`, `@InjectFramework()`. |
+| `@aventara/client` | `avclient init` adds it | Frontend, dev dependency, exact version | The `avclient` generator. Not needed at runtime: the generated client imports nothing from it. |
+| `@aventara/testing` | Optional | Server, dev dependency | Conformance fixtures and a fake in-memory adapter, for testing code that runs a framework without a database, or an adapter, a host or a client against the protocol ([Testing and conformance](/docs/testing-and-conformance)). |
 
-The server's runtime dependencies are `@aventara/core`, `@aventara/nest` and `@aventara/prisma7-adapter`, all at the same exact version, together with Prisma (`@prisma/client`, a driver adapter, and `prisma` as a dev dependency). Your frontend ships only its own code and the generated client.
+The server's runtime dependencies are `@aventara/core`, `@aventara/nest` and `@aventara/prisma7-adapter`, all at the same exact version, together with Prisma (`@prisma/client`, a driver adapter, and `prisma` as a dev dependency). Your frontend ships only its own code and the generated client. `@aventara/core` itself depends on `zod`, which only its `@aventara/core/json` entry (typed JSON fields, [JSON fields](/docs/json-fields)) ever loads.
+
+Each package ships its `CHANGELOG.md` beside its README, so the release notes for the version you installed are in `node_modules/@aventara/<package>/`.
 
 ### Server side
 
@@ -44,9 +46,9 @@ A project made by `aventara new` has this in `package.json` (versions are exact)
 ```json
 {
   "dependencies": {
-    "@aventara/core": "0.1.0-pilot.4",
-    "@aventara/nest": "0.1.0-pilot.4",
-    "@aventara/prisma7-adapter": "0.1.0-pilot.4",
+    "@aventara/core": "1.0.0-rc.0",
+    "@aventara/nest": "1.0.0-rc.0",
+    "@aventara/prisma7-adapter": "1.0.0-rc.0",
     "@prisma/adapter-better-sqlite3": "7.10.0",
     "@prisma/client": "7.10.0"
   },
@@ -67,7 +69,7 @@ With PostgreSQL the driver is `@prisma/adapter-pg`. The `postinstall` script reg
 ### Frontend side
 
 ```bash
-npx @aventara/client@pilot init
+npx @aventara/client@rc init
 ```
 
 adds `@aventara/client` as an exact dev dependency, an `avclient:generate` script, `framework.client.ts`, an `.env` entry and `.env` in the frontend's `.gitignore`, then generates the client. The frontend needs a `tsconfig.json` (plain JavaScript projects are not supported yet). `typescript` is an optional peer: with it installed, the generated output is type-checked with your own copy after generation. Without it, the check is syntax and shape only, and a warning says so.
@@ -75,19 +77,19 @@ adds `@aventara/client` as an exact dev dependency, an `avclient:generate` scrip
 ## Creating a project
 
 ```bash
-npx @aventara/cli@pilot new my-api        # npm
-pnpm dlx @aventara/cli@pilot new my-api   # pnpm
+npx @aventara/cli@rc new my-api        # npm
+pnpm dlx @aventara/cli@rc new my-api   # pnpm
 ```
 
-Use the `@pilot` tag: it points to the newest pilot (`0.1.0-pilot.4`), which `@latest` is not guaranteed to do. The CLI runs a pinned `nest new`, adds Aventara, installs, and commits the result (`Initial Aventara Scaffold`, unless git is missing or unconfigured, the directory is already inside a repository, or you pass `--skip-git`). It picks the package manager from the lockfile, else the one that launched it, else npm, and never touches a database. `aventara --version` prints the CLI's version; `--orm` takes `prisma7`. See [Getting started](/docs/getting-started), or [Add to an existing project](/docs/existing-project).
+Use the `@rc` tag: it points to the newest release candidate (`1.0.0-rc.0`). The CLI runs a pinned `nest new`, adds Aventara, installs, and commits the result (`Initial Aventara Scaffold`, unless git is missing or unconfigured, the directory is already inside a repository, or you pass `--skip-git`). It picks the package manager from the lockfile, else the one that launched it, else npm, and never touches a database. `aventara --version` prints the CLI's version; `--orm` takes `prisma7`. See [Getting started](/docs/getting-started), or [Add to an existing project](/docs/existing-project).
 
 ## Package manager and Node notes
 
-- **npm and pnpm.** Both are supported. Under pnpm, the CLI also writes `pnpm-workspace.yaml` with the build-script allowances Prisma and the SQLite driver need, and next steps print `pnpm exec prisma db push` and `pnpm dlx` forms. Yarn is not supported.
-- **Node 22 needs npm 11 or newer.** The npm 10 bundled with older Node 22 cannot install Nest 12's own scaffold. Check with `npm -v` and upgrade with `npm install -g npm@11`.
-- **Node 24.** `>=24.2.0` is supported. A CommonJS project's Jest e2e setup needs Node 24.9 or newer; that is a Nest and Jest limit, not an Aventara one.
-- **TypeScript.** The server side needs TypeScript below 7 (the `aventara new` scaffold uses 6). The frontend generator works with `>=5.5.0`, TypeScript 7 included.
-- **Pin exact versions.** Aventara is in pilot and the public API may change before 1.0; the generated projects already pin exactly. Keep `@aventara/client` at the same version as the server.
+- npm and pnpm are both supported. Under pnpm, the CLI also writes `pnpm-workspace.yaml` with the build-script allowances Prisma and the SQLite driver need, and next steps print `pnpm exec prisma db push` and `pnpm dlx` forms. Yarn is not supported.
+- Node 22 needs npm 11 or newer. The npm 10 bundled with older Node 22 cannot install Nest 12's own scaffold. Check with `npm -v` and upgrade with `npm install -g npm@11`.
+- Node 24: `>=24.2.0` is supported. A CommonJS project's Jest e2e setup needs Node 24.9 or newer, a limit that comes from Nest and Jest.
+- TypeScript: the server side needs TypeScript below 7 (the `aventara new` scaffold uses 6). The frontend generator works with `>=5.5.0`, TypeScript 7 included.
+- Pin exact versions. Aventara is a release candidate and can still change to fix what testing finds, so the generated projects already pin exactly. Keep `@aventara/client` at the same version as the server.
 
 ## See also
 

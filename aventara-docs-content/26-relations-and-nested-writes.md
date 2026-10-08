@@ -7,11 +7,11 @@ section: guides
 
 # Relations and nested writes
 
-A Prisma relation (`User.posts`, `Post.author`, `Post.category`) is a field of its Resource. You **read** it by naming it in `select` or `include`, and **write** it with directives such as `$create` and `$connect`. The examples use `User` (has many `Post`), `Post` (belongs to a `User`, optionally to a `Category`) and `Category`.
+A Prisma relation (`User.posts`, `Post.author`, `Post.category`) is a field of its Resource. You read it by naming it in `select` or `include`, and write it with directives such as `$create` and `$connect`. The examples use `User` (has many `Post`), `Post` (belongs to a `User`, optionally to a `Category`) and `Category`.
 
 ## Reading relations
 
-With neither `select` nor `include`, a call returns every readable scalar field and **no relations**.
+With neither `select` nor `include`, a call returns every readable scalar field and no relations.
 
 ### include
 
@@ -79,7 +79,10 @@ A restriction can hide a relation, forbid including it, or narrow its pagination
 
 ## Writing relations
 
-Inside `data` of a `create` or `update`, a relation field takes **directives**. You may also set the foreign key directly (`authorId: 1`), which is simpler when you have it.
+Inside `data` of a `create` or `update`, a relation field takes directives. You may also set the foreign key directly (`authorId: 1`), which is simpler when you have it. Two limits apply:
+
+- Not together with the same relation: setting `authorId` and `author: { $connect: … }` in one record names the reference twice and is refused before the database is asked: `422` `A2004` with a `V1012` issue at the relation, `Set "authorId" or "author", not both.` It holds for required and optional relations, for `create`, `update` and `upsert`, for nested writes at any depth and for each step of a transaction. Either one alone is fine.
+- Not beside another relation's write (Prisma): a record that writes one relation through its field and another relation directly, such as `authorId` beside `category: { $connect: … }`, is refused with `V1012`: `Use relation fields only, or reference fields only, in one record: "authorId" is a reference field and "category" is a relation.` Write all the record's relations as relations, or all through their fields. A field beside a relation that holds no reference on that side (`mentorId` beside `posts: { $create: … }` on an author) is accepted.
 
 | Directive | Meaning | On create | On update |
 |---|---|---|---|
@@ -182,9 +185,27 @@ await avClient.User.upsert.unique({
 | `$connect` to a record that does not exist | `ValidationError`, `A2004` ("The operation's arguments referenced a record that does not exist.") |
 | A foreign key that does not exist (`authorId: 999`) | `ConflictError`, `A2008` |
 | `$update` / `$delete` on a to-many without `where` | `ValidationError`, `A2004` / `V1012` |
+| A reference field and its own relation in one record (`authorId` with `author: { $connect: … }`) | `ValidationError`, `A2004` / `V1012`: `Set "authorId" or "author", not both.` |
+| One relation written through its reference field and another written directly, on Prisma (`authorId` with `category: { $connect: … }`) | `ValidationError`, `A2004` / `V1012`: `Use relation fields only, or reference fields only, in one record: …` |
 | A directive the contract does not offer on that relation | `ValidationError`, `A2004` / `V1006` |
+| A relation filter in the `where` of a to-many nested `$update` or `$delete` (at any depth, under `AND`, `OR` or `NOT` too) | `ValidationError`, `A2004` / `V1006` (below) |
 
-On a required relation, a directive that would leave a child with no parent (for example `$set` that drops a `Post` from its `User`) is refused by the database and answers `ConflictError`, `409` `A2008` ("The operation conflicts with the current state of the resource."). Nothing is written. Verified with `User.update.unique` and `posts: { $disconnect: [{ id: 1 }] }` or `posts: { $set: [] }` where `Post.authorId` is required.
+On a required relation, a directive that would leave a child with no parent (for example `$set` that drops a `Post` from its `User`) is refused by the database and answers `ConflictError`, `409` `A2008` ("The operation conflicts with the current state of the resource."). Nothing is written. This applies to `User.update.unique` with `posts: { $disconnect: [{ id: 1 }] }` or `posts: { $set: [] }` where `Post.authorId` is required.
+
+### The `where` of a nested `$update` or `$delete`
+
+Through a to-many relation, a nested `$update` or `$delete` filters plain fields only on Prisma 7. A relation filter in its `where` is refused before the database is asked, with `A2004` and `V1006`, and it is a type error in the typed calls:
+
+```ts
+await avClient.User.update.unique({
+  where: { id: 1 },
+  data: { posts: { $update: { where: { category: { name: "News" } }, data: { views: 1 } } } },
+});
+// ValidationError A2004 (422): { path: ["arguments","data","posts","$update","where","category"], code: "V1006",
+//   message: 'Relation filter "category" is not available here: a nested $update or $delete filter on this relation takes scalar fields only.' }
+```
+
+The refusal covers any depth and the `AND`, `OR` and `NOT` wrappers: `{ AND: [{ NOT: { comments: { some: { text: "x" } } } }] }` is refused at `["arguments","data","posts","$update","where","AND",0,"NOT","comments"]`. Filter the nested rows by their own fields (`{ title: "Nested" }`, `{ id: 3 }`), or find the ids first and name them. A to-one relation's nested `$update` keeps relation filters. The limit belongs to the adapter and is stated in the contract, so a client generated before it was declared must be regenerated.
 
 ## Scalar directives
 

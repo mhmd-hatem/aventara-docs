@@ -37,6 +37,7 @@ export const navigation: NavigationGroup[] = [
       ["restricting-operations", "Restricting operations", "shield"],
       ["computed-fields", "Computed fields", "code"],
       ["enums-and-scalars", "Enums & scalar types", "code"],
+      ["json-fields", "JSON fields", "code"],
     ],
   },
   {
@@ -89,6 +90,7 @@ export const navigation: NavigationGroup[] = [
       ["nestjs-host", "NestJS host", "server"],
       ["express-and-fastify", "Express & Fastify", "server"],
       ["custom-host", "Custom host", "globe"],
+      ["testing-and-conformance", "Testing & conformance", "shield"],
     ],
   },
   {

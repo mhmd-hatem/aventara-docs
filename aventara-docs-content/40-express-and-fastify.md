@@ -31,14 +31,14 @@ Nothing in `AventaraModule` or your configuration changes. Any other platform fa
 
 ## What is the same
 
-Both platforms log the same startup line, serve `GET /api/_contract` and `POST /api/_resources/...`, and produce the same envelopes and statuses. Nest guards, interceptors and pipes **never** run on Aventara routes on either; authentication belongs in Aventara [pipelines](/docs/configuration#pipelines).
+Both platforms log the same startup line, serve `GET /api/_contract` and `POST /api/_resources/...`, and produce the same envelopes and statuses. Nest guards, interceptors and pipes never run on Aventara routes on either; authentication belongs in Aventara [pipelines](/docs/configuration#pipelines).
 
 ## What differs
 
 | | Express | Fastify |
 |---|---|---|
 | `app.use(...)` middleware, helmet | runs on Aventara routes | runs |
-| `MiddlewareConsumer` middleware | **never** runs on Aventara routes | **runs** on them unless excluded |
+| `MiddlewareConsumer` middleware | never runs on Aventara routes | runs on them unless excluded |
 | Your own controller at `<entrypoint>/_contract` (any `_` path) | never reached | the application does not start |
 | Resource keys or entrypoints needing `*` or `: + # $ & , / ; = ? @` in a route path | accepted | refused at startup, naming it |
 | Routing case | case-insensitive (`/API/_contract` answers) | case-sensitive |
@@ -73,7 +73,7 @@ Middleware you want on Aventara routes on both platforms goes through `app.use(.
 
 ## Global prefix
 
-`app.setGlobalPrefix("v1")` moves your controllers, **not** the protocol. With the prefix set and entrypoint `/api`:
+`app.setGlobalPrefix("v1")` moves your controllers and leaves the protocol where it is. With the prefix set and entrypoint `/api`:
 
 ```text
 GET /api/_contract      200

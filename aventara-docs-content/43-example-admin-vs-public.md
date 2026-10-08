@@ -11,8 +11,8 @@ Aventara compiles two contracts from one schema and one configuration:
 
 | Layer | Used by | Reached through |
 |---|---|---|
-| **application** | Your own server code (trusted) | `framework.application.*` in a Nest service |
-| **client** | Remote callers (untrusted) | HTTP, `avclient`'s generated client |
+| application | Your own server code (trusted) | `framework.application.*` in a Nest service |
+| client | Remote callers (untrusted) | HTTP, `avclient`'s generated client |
 
 Both run the same operations. What differs is what the configuration allows. This example continues [the blog API](/docs/example-blog-api), where restrictions are set under `client` only, so the application layer keeps full access.
 
@@ -102,10 +102,9 @@ curl -s -X POST localhost:3000/admin/purge
 {"code":"A1007","deleted":2}
 ```
 
-Two things to notice:
+Server-side calls return the envelope (`{ data, code, cause }`) and do not throw for operation failures, so check `code` as above.
 
-- Server-side calls **return the envelope** (`{ data, code, cause }`) and do not throw for operation failures. Check `code`, as above.
-- `AdminController` is **your** controller, outside `/api`. Nothing makes it safe by itself: protect it with a Nest guard like any other route. (Nest guards do not run on the protocol routes, but they do run on yours.)
+`AdminController` is your own controller, outside `/api`, and nothing protects it by default. Add a Nest guard as you would for any other route. Nest guards do not run on the protocol routes, but they do run on yours.
 
 ## Frontend: the client layer
 
@@ -125,7 +124,7 @@ avClient.Post.find.many({ limit: 100 });   // rejected: limit exceeds maxListLim
 
 ## The same call through both layers
 
-`framework.client` runs the client layer's rules **in process**: the same restrictions, limits and pipelines a remote caller gets. It is how you test, or reuse, exactly what the frontend sees:
+`framework.client` runs the client layer's rules in process, with the same restrictions, limits and pipelines a remote caller gets. Use it to test or reuse exactly what the frontend sees:
 
 ```ts
 const res = await this.framework.client.User.find.many({ select: ["id", "passwordHash"] });
@@ -147,9 +146,9 @@ Root pipelines apply to both layers; `client.pipelines` only to the client layer
 
 ## When to use which
 
-- **Trusted server code** (jobs, admin endpoints, webhooks, seed scripts): `framework.application`.
-- **Anything a browser or mobile app can reach**: the client layer, through the generated client or the HTTP protocol. Make it as narrow as the product needs.
-- **Server-side rendering on behalf of a user**: prefer the client layer so a bug cannot leak what the user may not see.
+- Trusted server code (jobs, admin endpoints, webhooks, seed scripts): `framework.application`.
+- Anything a browser or mobile app can reach: the client layer, through the generated client or the HTTP protocol. Make it as narrow as the product needs.
+- Server-side rendering on behalf of a user: prefer the client layer so a bug cannot leak what the user may not see.
 
 ## See also
 

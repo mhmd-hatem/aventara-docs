@@ -43,7 +43,7 @@ The server caps `limit` at `maxListLimit` (250 by default; `A2009` when exceeded
 
 ### Load more (cursor)
 
-`cursor` needs an explicit `orderBy` that ends in a unique field. The cursor row is **included** in the result, so ask for one extra row and use it as the next cursor:
+`cursor` needs an explicit `orderBy` that ends in a unique field. The cursor row is included in the result, so ask for one extra row and use it as the next cursor:
 
 ```ts
 export function useInfinitePosts(pageSize = 10) {
@@ -71,7 +71,7 @@ export function useInfinitePosts(pageSize = 10) {
 }
 ```
 
-Over four posts with a page size of two this loads `[1, 2]` then `[3, 4]` and stops. A cursor page is stable while rows are added; an offset page can skip or repeat rows. See [Querying](/docs/querying#pagination).
+Over four posts with a page size of two, this loads `[1, 2]` then `[3, 4]` and stops. A cursor page stays stable while rows are added, whereas an offset page can skip or repeat rows. See [Querying](/docs/querying#pagination).
 
 ## 2. Search box
 

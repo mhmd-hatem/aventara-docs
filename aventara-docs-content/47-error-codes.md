@@ -7,7 +7,7 @@ section: reference
 
 # Error codes
 
-Every operation answers one envelope, `{ data, code, cause }`. `code` is an **A-code**: the outcome. When a request breaks a rule, `cause.issues[]` holds one or more **V-codes** that say what is wrong and where. The HTTP status is a function of the A-code alone. **Branch on `code`, never on `message`.**
+Every operation answers one envelope, `{ data, code, cause }`. `code` is an A-code: the outcome. When a request breaks a rule, `cause.issues[]` holds one or more V-codes that say what is wrong and where. The HTTP status is a function of the A-code alone. Branch on `code`, never on `message`.
 
 ```json
 {"data":null,"code":"A2004","cause":{"message":"Operation arguments failed framework validation.","issues":[{"code":"V1005","path":["arguments","where","nope"],"message":"Field \"nope\" is not available on Resource \"User\"."}]}}
@@ -53,7 +53,7 @@ The generated client resolves for `A1xxx` and throws for every other code. All t
 |---|---|---|---|---|
 | `A2000` | INVALID_REQUEST | 400 | Malformed JSON, body that is not a JSON object, an unknown `/_*` path, a body that does not decode in its `Content-Encoding`, or missing identity headers. | Send a JSON object. Send both `Aventara-Protocol-Version` and `Aventara-Contract-Hash`; the message names which is missing. |
 | `A2001` | UNKNOWN_RESOURCE | 404 | The Resource is not in the layer's contract: misspelt, hidden, or a model added to the schema after `aventara:prepare` last ran. | Check the exact key (the Prisma model name). After a schema change run `npx prisma generate && npm run aventara:prepare`, rebuild and restart. |
-| `A2002` | UNKNOWN_OPERATION | 404 | The operation is not available on that Resource: a typo, switched off by a restriction, or `delete.many`. | Use an operation the contract advertises; regenerate the client if it is stale. |
+| `A2002` | UNKNOWN_OPERATION | 404 | The operation is not available on that Resource: a typo, switched off by a restriction, or `delete.many`. The issue is `V1006` at `["family"]` or `["variant"]`. | Use an operation the contract advertises; regenerate the client if it is stale. |
 | `A2003` | NOT_FOUND | 404 | A `unique` operation matched nothing. | Handle it (`NotFoundError`), or use a `first` operation, which answers `A1001`. |
 | `A2004` | VALIDATION_FAILED | 422 | The arguments break a contract rule. `cause.issues` lists each by V-code and `path`. | Fix the argument the issue points at. |
 | `A2005` | CONTRACT_MISMATCH | 409 | The caller's contract hash is not the current one: the schema, configuration, limits or operations changed, or the client targets another deployment. | Regenerate: `npm run avclient:generate`. |
@@ -91,25 +91,55 @@ Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework i
 
 Validation issues appear in `cause.issues[]` as `{ code, path, message }`. `path` locates the problem in the request, for example `["arguments","where","nope"]` or `["operations",1,"args","data","authorId","$ref","path"]`. They accompany `A2004`, `A2007`, `A2009` (and `A2001` / `A2002`, where the issue names the resource or operation).
 
+A path is the literal address of the problem in the request you sent, so you can walk the request JSON along it.
+
+Single call. The request is `{ resource, family, variant, arguments }`. An argument issue is at `["arguments", ...]`. An unknown Resource is `A2001` / `V1005` at `["resource"]`. An operation that is not available is `A2002` / `V1006` at `["family"]` (not a standard family, or the Resource offers none of its variants) or at `["variant"]` (the family is right, the variant is not), never at `["operation"]`. On an HTTP single route, `resource`, `family` and `variant` name the URL segments (`/_resources/:resource/:family/:variant`) and the body is `arguments`.
+
+Transaction. The request is `{ "operations": [ { resource, family, variant, args, fingerprint }, ... ] }`. Every path starts at its top, and `cause.operation` is the step's zero-based index `i`:
+
+| About | Path |
+|---|---|
+| A step's arguments (whoever raised the issue, a developer-thrown one from a pipeline stage included) | `["operations", i, "args", ...]` |
+| The step's Resource | `["operations", i, "resource"]` |
+| The step's family or variant, whichever is wrong | `["operations", i, "family"]`, `["operations", i, "variant"]` |
+| The step's fingerprint | `["operations", i, "fingerprint"]` |
+| An unknown key on the step | `["operations", i, "<key>"]` |
+| A step that is not an object | `["operations", i]` |
+
+Example: the second step sends a number as a title.
+
+```json
+{ "operations": [
+  { "resource": "Post", "family": "create", "variant": "one", "args": { "data": { "title": "Hello", "authorId": 1 } }, "fingerprint": "fp1:..." },
+  { "resource": "Post", "family": "create", "variant": "one", "args": { "data": { "title": 5, "authorId": 1 } }, "fingerprint": "fp1:..." }
+] }
+```
+
+```json
+{"data":null,"code":"A2004","cause":{"message":"Operation arguments failed framework validation.","operation":1,"issues":[{"code":"V1001","path":["operations",1,"args","data","title"],"message":"Value must be a string."}]}}
+```
+
+`operations`, entry `1`, `args`, `data`, `title`: the path walks the request. For a missing value (`V1000`) the last segment is the key that is absent, so the path ends at a key the request does not contain.
+
 | Code | Meaning | Typical cause | Example message (real) |
 |---|---|---|---|
-| `V1000` | Required value missing. | A required property is absent, such as `operations` on a transaction body; a `create` that omits a required field with no default (the issue's `path` names the field). | `Required property "operations" is missing.` / `Field "email" is required to create User.` |
-| `V1001` | Invalid type. | A string where a number is expected, a negative `limit`, a non-integer id. | `Value must be a string.` / `limit must be a non-negative integer.` |
-| `V1002` | Invalid enum value. | A value that is not a member of the enum. | `Value is not a member of enum "Role".` |
+| `V1000` | Required value missing. | A required property is absent, such as `operations` on a transaction body; a `create` that omits a required field with no default (the issue's `path` names the field); a required key missing from a [typed JSON field](/docs/json-fields). | `Required property "operations" is missing.` / `Field "email" is required to create User.` |
+| `V1001` | Invalid type. | A string where a number is expected, a negative `limit`, a non-integer id; a `null` given to a filter operator that has no `null` meaning (`gt: null`, `contains: null`, `in: null`); a value in a server-side call that cannot be read or is not plain data. | `Value must be a string.` / `limit must be a non-negative integer.` / `Value must be non-null.` / `Value must be plain data.` / `Value could not be read.` |
+| `V1002` | Invalid enum value. | A value that is not a member of the enum, or outside the `AvZ.enum` or `AvZ.literal` of a typed JSON field. | `Value is not a member of enum "Role".` / `Value must be one of "draft", "published".` |
 | `V1003` | Invalid format. | A bad datetime, decimal, base64 or UUID string. | `Value must use canonical ISO-8601 UTC encoding.` / `Value must use decimal string encoding.` |
-| `V1004` | Value out of range. | A transaction plan with no operations; a number outside its accepted range; a `BigInt` outside the signed 64-bit range. | `Value outside accepted range.` / `BigInt value is outside signed 64-bit range.` |
-| `V1005` | Unknown or inaccessible field. | A field that does not exist or is hidden in the layer; an unknown Resource (under `A2001`). | `Field "nope" is not available on Resource "User".` |
-| `V1006` | Unsupported filter, order or mutation directive, or operation not available. | An operator the field does not offer, a directive not allowed, a relation not writable in that position, an unavailable operation (under `A2002`). | `Filter operator "regex" is not available on field "name".` |
+| `V1004` | Value out of range. | A transaction plan with no operations; a number outside its accepted range; a `BigInt` outside the signed 64-bit range; an `AvZ.int()` outside the safe integer range. | `Value outside accepted range.` / `BigInt value is outside signed 64-bit range.` |
+| `V1005` | Unknown or inaccessible field. | A field that does not exist or is hidden in the layer; an unknown Resource (under `A2001`); a key a typed JSON field's shape does not declare. | `Field "nope" is not available on Resource "User".` |
+| `V1006` | Unsupported filter, order or mutation directive, or operation not available. | An operator the field does not offer, a directive not allowed, a relation not writable in that position, an unavailable operation (under `A2002`). | `Filter operator "regex" is not available on field "name".` / `Relation filter "category" is not available here: a nested $update or $delete filter on this relation takes scalar fields only.` |
 | `V1007` | Invalid unique identifier shape. | `where` on a `unique` operation is not exactly one identifier. | `Unique selector must exactly match one active identifier on Resource "User".` |
 | `V1008` | Invalid select, include or reducer projection. | Both `select` and `include`; a write-only field selected; a relation not selectable in this position. | `select and include are mutually exclusive.` / `Field "passwordHash" is not selectable.` |
 | `V1009` | Invalid or non-deterministic cursor. | `cursor` without an explicit `orderBy`, or keys that do not match the ordering. | `Cursor keys must exactly match the active ordered scalar fields.` |
-| `V1010` | Invalid transaction reference path. | A `$ref` path the earlier step does not return. | `Transaction reference path is not present in the source projection.` |
-| `V1011` | Transaction reference type mismatch. | A referenced value of the wrong type for its target field. | |
-| `V1012` | Invalid relation action or cardinality. | A nested write directive that does not fit the relation (for example a list where one record is expected). | |
+| `V1010` | Invalid transaction reference. | A `$ref` path the earlier step does not return; a `$ref` to a step that is not in the transaction; a `$ref` to a step with no single row (a `many` or a `count` step). | `Transaction reference path is not present in the source projection.` / `Transaction reference names an operation that is not in this transaction.` / `Transaction reference source has no addressable single-row projection.` |
+| `V1011` | Transaction reference type mismatch. | A referenced value of the wrong type for its target position, including a nullable source where only a non-null one is accepted (a comparison or text operator, `in`, a unique key, a `cursor`). | `Transaction reference source type is not assignable to its destination.` |
+| `V1012` | Invalid relation action or cardinality. | A nested write directive that does not fit the relation (for example a list where one record is expected); a reference field set together with its own relation (`Set "authorId" or "author", not both.`); on Prisma, a record that writes one relation through its reference field and another relation directly (`Use relation fields only, or reference fields only, in one record: …`). | |
 | `V1013` | Maximum nesting depth exceeded. | Nested projections, filters or writes deeper than `maxNestingDepth`. | `Request nesting exceeds maxNestingDepth (12).` |
 | `V1014` | Configured limit exceeded. | `limit` above `maxListLimit`; more steps than `maxTransactionOperations`. | `limit exceeds maxListLimit (250).` / `Transaction operation count exceeds maxTransactionOperations (20).` |
 | `V1015` | Boolean or filter node limit exceeded. | A `where` tree with more than `maxBooleanNodes` nodes. | `Boolean/filter node count exceeds maxBooleanNodes (50).` |
-| `V1016` | Invalid transaction reference index. | A `$ref` to a step that does not exist or comes later. | |
+| `V1016` | Invalid transaction reference index. | A `$ref` to a step that comes later than the referencing step, or an index no step has. | `Transaction reference operation index is invalid.` |
 | `V1017` | Transaction fingerprint mismatch. | A hand-written plan whose fingerprint does not match its step. | `Operation fingerprint does not match its arguments.` |
 | `V1018` | Transaction reference resolved to no value. | The referenced step returned nothing at that path (for example a `first` step that matched no row). | |
 | `V1019` | A transaction step depends on a row removed by an earlier step's cascade. | A later step uses a row that an earlier delete removed through a database cascade. | |

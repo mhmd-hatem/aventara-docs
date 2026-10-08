@@ -7,15 +7,15 @@ section: concepts
 
 # Contract layers
 
-A **contract** is plain data that says which Resources exist, which of their fields can be read, filtered, ordered or written, and which operations are available. Aventara compiles three of them from the same Prisma schema and your configuration, so one API can show a trusted server job more than it shows a browser.
+A contract is plain data that says which Resources exist, which of their fields can be read, filtered, ordered or written, and which operations are available. Aventara compiles three of them from the same Prisma schema and your configuration, so one API can show a trusted server job more than it shows a browser.
 
 ## The three layers
 
 | Layer | Who uses it | Over HTTP |
 |---|---|---|
-| **Core** | The baseline: the schema as the adapter can faithfully perform it, with your root configuration applied. The other two layers start from it. | No |
-| **Application** | Your own server-side code: `framework.application.*`. Trusted code. | No |
-| **Client** | Remote callers: the HTTP protocol and the generated frontend client. | **Yes**, at `GET <entrypoint>/_contract` |
+| Core | The baseline: the schema as the adapter can faithfully perform it, with your root configuration applied. The other two layers start from it. | No |
+| Application | Your own server-side code: `framework.application.*`. Trusted code. | No |
+| Client | Remote callers: the HTTP protocol and the generated frontend client. | Yes, at `GET <entrypoint>/_contract` |
 
 Only the client contract is ever served. The other two never leave the process. Guards, hooks, pipes and other callbacks are never part of any contract; they run on the server.
 
@@ -23,7 +23,7 @@ The compiled contracts are on the framework instance: `framework.contracts.core`
 
 ## Root defaults and layer overrides
 
-The root of your configuration is the default for every layer. An `application` or `client` block overrides it for that one layer. For each property, **an explicitly present layer value wins; otherwise the root value is used** (`false` counts as present). Pipelines are the exception: root pipelines run first, then the layer's own.
+The root of your configuration is the default for every layer. An `application` or `client` block overrides it for that one layer. For each property, an explicitly present layer value wins; otherwise the root value is used (`false` counts as present). Pipelines are the exception: root pipelines run first, then the layer's own.
 
 ```ts
 // src/aventara.config.ts
@@ -102,7 +102,7 @@ If a hidden field is part of an identifier, that identifier is dropped; if none 
 
 ## Why this matters for the frontend
 
-The client generator reads only the client contract. A restriction therefore removes things from the generated client's types, not just from what the server answers. Hiding a field in the **application** layer does not change the client; hiding it in the client layer, or at the root, does. Adding a restriction under `client` changes the client contract and its [hash](/docs/contract-hash), so regenerate the client afterwards.
+The client generator reads only the client contract. A restriction therefore removes things from the generated client's types as well as from what the server answers. Hiding a field in the application layer does not change the client; hiding it in the client layer, or at the root, does. Adding a restriction under `client` changes the client contract and its [hash](/docs/contract-hash), so regenerate the client afterwards.
 
 ## See also
 
