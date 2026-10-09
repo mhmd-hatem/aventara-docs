@@ -2,6 +2,12 @@
 
 A custom documentation site built with Next.js App Router, Fumadocs Core and MDX, Tailwind CSS, and editable shadcn-style Radix components. Uses the Compass Weave logo kit with Moonlit Frost and Aurora Ink themes.
 
+## Coming-soon mode
+
+The public site currently shows only the sales homepage while the framework is rebuilt. `/docs` and all nested paths temporarily redirect to `/`; `/api/search` returns 404 and publishes no index. The homepage has no documentation, release, install, or playground links.
+
+The documentation source is preserved. To restore it, move the renderer in `components/docs-page.tsx` back to `app/docs/[[...slug]]/page.tsx`, restore the docs layout and search handler from Git, and remove the temporary redirect in `next.config.mjs`. Review release claims and homepage calls to action before reopening.
+
 ## Develop
 
 Source: [mhmd-hatem/aventara-docs](https://github.com/mhmd-hatem/aventara-docs). Report framework bugs, docs problems, and feature requests through [GitHub Issues](https://github.com/mhmd-hatem/aventara-docs/issues/new/choose).

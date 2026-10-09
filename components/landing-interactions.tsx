@@ -14,9 +14,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
-import { CopyButton } from "@/components/code-block";
 import { DemoCode } from "@/components/lab-primitives";
-import { AVENTARA_DIST_TAG } from "@/lib/release";
 
 export function LandingNav() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -39,11 +37,8 @@ export function LandingNav() {
         }}
       >
         <a href="#how-it-works">The framework</a>
-        <a href="#playground">Playground</a>
-        <Link href="/docs/introduction">
-          Documentation <ArrowUpRight size={12} />
-        </Link>
-        <Link href="/docs/changelog">Changelog</Link>
+        <a href="#possibilities">Possibilities</a>
+        <a href="#coming-soon">Coming soon</a>
       </nav>
       <div className="landing-header-actions">
         <Button
@@ -56,9 +51,9 @@ export function LandingNav() {
           <Moon className="light-theme-icon" size={18} />
         </Button>
         <Button asChild variant="secondary">
-          <Link href="/docs/getting-started">
-            Get started <ArrowUpRight size={14} />
-          </Link>
+          <a href="#how-it-works">
+            Explore <ArrowUpRight size={14} />
+          </a>
         </Button>
         <Button
           className="landing-menu-toggle"
@@ -74,16 +69,6 @@ export function LandingNav() {
         </Button>
       </div>
     </header>
-  );
-}
-export function InstallCommand() {
-  const command = `npx @aventara/cli@${AVENTARA_DIST_TAG} new my-api`;
-  return (
-    <div className="landing-install">
-      <span aria-hidden="true">$</span>
-      <code>{command}</code>
-      <CopyButton value={command} />
-    </div>
   );
 }
 const examples = {
@@ -177,7 +162,7 @@ export function SchemaShowcase() {
         </div>
       </div>
       <span className="showcase-footnote">
-        An illustrative preview. Your schema sets the possibilities.
+        A concept preview. The next chapter is taking shape.
       </span>
     </div>
   );

@@ -10,22 +10,16 @@ import {
   Layers3,
   ShieldCheck,
 } from "lucide-react";
-import {
-  LandingNav,
-  SchemaShowcase,
-  InstallCommand,
-} from "@/components/landing-interactions";
+import { LandingNav, SchemaShowcase } from "@/components/landing-interactions";
 import { Architecture } from "@/components/architecture";
-import { QueryPlayground } from "@/components/query-playground";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
-import { AVENTARA_VERSION } from "@/lib/release";
 import "./landing.css";
 
 export const metadata: Metadata = {
-  title: { absolute: "Aventara — Build the interesting part." },
+  title: { absolute: "Aventara — Coming soon" },
   description:
-    "Turn your Prisma schema into a typed API and a connected frontend. One contract across your stack, with Aventara.",
+    "A connected stack. Room to create. Aventara is being rebuilt, with a new release and documentation coming soon.",
 };
 
 export default function Home() {
@@ -48,14 +42,11 @@ export default function Home() {
             </svg>
           </div>
           <div className="landing-hero-copy">
-            <Link
-              className="landing-release"
-              href={`/docs/changelog#${AVENTARA_VERSION.replaceAll(".", "")}`}
-            >
-              <span className="pilot-dot" /> {AVENTARA_VERSION}
-              <span className="release-divider" /> Release candidate{" "}
+            <a className="landing-release" href="#coming-soon">
+              <span className="pilot-dot" /> Coming soon
+              <span className="release-divider" /> A new chapter for Aventara
               <ArrowUpRight size={13} />
-            </Link>
+            </a>
             <h1 id="landing-title">
               Build the idea.
               <br />
@@ -71,15 +62,18 @@ export default function Home() {
             </p>
             <div className="landing-actions">
               <Button asChild>
-                <Link href="/docs/getting-started">
-                  Start building <ArrowRight size={17} />
-                </Link>
+                <a href="#how-it-works">
+                  Explore the vision <ArrowRight size={17} />
+                </a>
               </Button>
-              <a className="landing-text-link" href="#playground">
-                Try it first <span>↓</span>
+              <a className="landing-text-link" href="#coming-soon">
+                What’s next <span>↓</span>
               </a>
             </div>
-            <InstallCommand />
+            <p className="landing-rebuild-note">
+              Aventara is being rebuilt. The next release and its docs are
+              coming soon.
+            </p>
             <span className="landing-hero-note">
               Made for TypeScript. Built around your schema.
             </span>
@@ -92,7 +86,7 @@ export default function Home() {
             </a>
           </div>
         </section>
-        <section className="landing-stack" aria-label="Supported stack">
+        <section className="landing-stack" aria-label="The foundation">
           <p>
             A familiar stack.
             <br />
@@ -102,10 +96,10 @@ export default function Home() {
             <Braces /> TypeScript
           </span>
           <span>
-            <Database /> Prisma 7
+            <Database /> Prisma
           </span>
           <span>
-            <Layers3 /> NestJS 12
+            <Layers3 /> NestJS
           </span>
           <span className="stack-databases">
             PostgreSQL <i /> SQLite
@@ -161,17 +155,15 @@ export default function Home() {
                   </p>
                 </section>
               </div>
-              <Link className="landing-text-link" href="/docs/concepts">
-                Meet the framework <ArrowUpRight size={16} />
-              </Link>
+              <a className="landing-text-link" href="#possibilities">
+                Made for your ideas <ArrowRight size={16} />
+              </a>
             </div>
           </div>
         </section>
-        <div className="landing-playground landing-section">
-          <QueryPlayground />
-        </div>
         <section
           className="landing-details landing-section"
+          id="possibilities"
           aria-labelledby="details-title"
         >
           <div className="landing-section-heading">
@@ -217,12 +209,6 @@ export default function Home() {
                   <span className="field-hidden">hidden from client</span>
                 </div>
               </div>
-              <Link
-                className="landing-text-link"
-                href="/docs/exposing-and-hiding-fields"
-              >
-                Shape your API <ArrowUpRight size={16} />
-              </Link>
             </article>
             <article className="landing-feature landing-feature-client">
               <span className="landing-feature-icon">
@@ -248,9 +234,6 @@ export default function Home() {
                   <span>Your stack</span>
                 </div>
               </div>
-              <Link className="landing-text-link" href="/docs/frontend-client">
-                Meet your client <ArrowUpRight size={16} />
-              </Link>
             </article>
           </div>
           <div className="landing-fineprint">
@@ -263,49 +246,35 @@ export default function Home() {
             <span>
               <ShieldCheck size={16} /> Guards & pipelines
             </span>
-            <Link href="/docs/why-aventara">
-              Why Aventara? <ArrowRight size={15} />
-            </Link>
+            <a href="#coming-soon">
+              The next chapter <ArrowRight size={15} />
+            </a>
           </div>
         </section>
         <section
           className="landing-invitation"
+          id="coming-soon"
           aria-labelledby="invitation-title"
         >
           <div className="landing-invitation-mark" aria-hidden="true">
             <Logo icon />
           </div>
-          <span className="landing-kicker">YOUR NEXT PROJECT STARTS HERE</span>
+          <span className="landing-kicker">A NEW CHAPTER IS TAKING SHAPE</span>
           <h2 id="invitation-title">
-            Build the
+            Worth building.
             <br />
-            <span>interesting part.</span>
+            <span>Worth the wait.</span>
           </h2>
-          <p>Start with a schema. See where it takes you.</p>
-          <div className="landing-actions">
-            <Button asChild>
-              <Link href="/docs/getting-started">
-                Create your first API <ArrowRight size={17} />
-              </Link>
-            </Button>
-            <Button variant="secondary" asChild>
-              <Link href="/docs/introduction">
-                Read the docs <ArrowUpRight size={16} />
-              </Link>
-            </Button>
+          <p>
+            We’re reworking Aventara from the foundation up. The framework and
+            its documentation will return together.
+          </p>
+          <div className="landing-coming-status">
+            <span className="pilot-dot" /> Coming soon
           </div>
-          <div className="landing-pilot-note">
-            <span className="pilot-dot" />
-            <p>
-              Approaching 1.0. Built with your feedback.
-              <br />
-              <Link href="/docs/roadmap">See what’s next</Link>
-              <span> · </span>
-              <a href="https://github.com/mhmd-hatem/aventara-docs/issues/new/choose">
-                Tell us what you need
-              </a>
-            </p>
-          </div>
+          <a className="landing-text-link" href="#main-content">
+            Back to the vision <ArrowUpRight size={16} />
+          </a>
         </section>
       </main>
       <footer className="landing-footer">
@@ -316,12 +285,11 @@ export default function Home() {
           <p>A connected stack. Room to create.</p>
         </div>
         <nav aria-label="Footer">
-          <Link href="/docs/introduction">Documentation</Link>
-          <Link href="/docs/changelog">Changelog</Link>
-          <a href="https://github.com/mhmd-hatem/aventara-docs">GitHub</a>
-          <Link href="/docs/license">License</Link>
+          <a href="#how-it-works">The vision</a>
+          <a href="#possibilities">Possibilities</a>
+          <a href="#coming-soon">Coming soon</a>
         </nav>
-        <span>AVENTARA / {AVENTARA_VERSION}</span>
+        <span>AVENTARA / IN DEVELOPMENT</span>
       </footer>
     </div>
   );

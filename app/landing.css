@@ -1287,3 +1287,32 @@
     transition: none !important;
   }
 }
+
+.landing-hero-copy > .landing-rebuild-note {
+  max-width: 390px;
+  margin: 24px 0 12px;
+  padding-left: 16px;
+  border-left: 2px solid var(--primary);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.landing-coming-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 30px auto 22px;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+.landing-invitation > p {
+  max-width: 520px;
+  margin-inline: auto;
+}
+#coming-soon,
+#possibilities,
+#how-it-works {
+  scroll-margin-top: 100px;
+}

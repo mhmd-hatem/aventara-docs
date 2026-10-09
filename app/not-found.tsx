@@ -6,10 +6,13 @@ export default function NotFound() {
     <main className="not-found" id="main-content">
       <span className="eyebrow">404 / OFF THE MAP</span>
       <h1>This page isn’t in the contract.</h1>
-      <p>The link may have moved. Head back to the docs to find your way.</p>
+      <p>
+        Aventara is being rebuilt. Explore the vision while the next chapter
+        takes shape.
+      </p>
       <Button asChild>
-        <Link href="/docs/introduction">
-          <ArrowLeft size={16} /> Back to documentation
+        <Link href="/">
+          <ArrowLeft size={16} /> Back to Aventara
         </Link>
       </Button>
     </main>

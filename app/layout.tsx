@@ -14,7 +14,7 @@ import { Providers } from "@/components/providers";
 import { SiteAnalytics } from "@/components/site-analytics";
 export const metadata: Metadata = {
   title: {
-    default: "Aventara — Developer documentation",
+    default: "Aventara — Coming soon",
     template: "%s · Aventara",
   },
   description:

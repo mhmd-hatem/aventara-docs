@@ -1,3 +1,9 @@
-import { source } from "@/lib/source";
-import { createFromSource } from "fumadocs-core/search/server";
-export const { GET } = createFromSource(source);
+export function GET() {
+  return Response.json(
+    { error: "Documentation search is unavailable during the rebuild." },
+    {
+      status: 404,
+      headers: { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" },
+    },
+  );
+}

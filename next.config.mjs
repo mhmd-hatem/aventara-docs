@@ -1,3 +1,9 @@
 import { createMDX } from "fumadocs-mdx/next";
 const withMDX = createMDX();
-export default withMDX({ reactStrictMode: true, devIndicators: false });
+export default withMDX({
+  reactStrictMode: true,
+  devIndicators: false,
+  async redirects() {
+    return [{ source: "/docs/:path*", destination: "/", permanent: false }];
+  },
+});
