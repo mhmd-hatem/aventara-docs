@@ -58,6 +58,8 @@ The current framework release is `1.0.0-rc.2`. Shared site badges and interactiv
 
 Edit the numbered Markdown files in `aventara-docs-content/`. Fumadocs reads those files directly; there is no generated copy to maintain. Numeric prefixes are stripped from page URLs. README and internal site notes are excluded from publishing and search. Navigation groups live in `lib/navigation.ts`.
 
+`/llms.txt` provides a grouped documentation index, and `/llms-full.txt` contains every published page as Markdown, preserving code examples and omitting page frontmatter. Both are generated at build time from the same content and navigation as the site. Internal notes are excluded, and preview authentication and crawler exclusions apply to these endpoints too.
+
 All 61 pages are registered: 60 in task-focused sidebar groups, plus Working with AI agents in the primary AI navigation. The current sidebar group opens automatically; other groups can be expanded. The same page list drives breadcrumbs, previous/next links, and primary-navigation highlighting. `tests/navigation.test.mjs` checks that every numbered source page appears exactly once. The retired `/docs/restricting-operations` URL redirects to `/docs/exposure#operations`.
 
 ## Design
