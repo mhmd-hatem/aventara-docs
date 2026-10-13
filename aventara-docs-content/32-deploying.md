@@ -26,7 +26,7 @@ Locally they live in `.env`. In production, set them in the platform's environme
 
 `--env-file-if-exists` loads `.env` when it is present and does nothing when it is not, so the same script works on a laptop and on a platform with no file. A real environment variable wins over `.env`: with `DATABASE_URL=file:./override.db npm run start:prod`, the server used `override.db`, not the `.env` value.
 
-Do not commit `.env`. The scaffold's `.gitignore` lists only `/src/generated/` and `/dev.db*`, so add `.env` to it (or `.env*` with an exception for an `.env.example`).
+Do not commit `.env`. The scaffold's `.gitignore` already lists it, with `/src/generated/` and the SQLite files.
 
 ## Build and run
 
@@ -80,7 +80,7 @@ adapter: await createPrismaAdapter({ client: prisma, discovery, provider: "postg
 ```
 
 ```json
-"aventara:prepare": "aventara-prisma7-generate --schema prisma/schema.prisma --client src/generated/prisma --provider postgresql --driver @prisma/adapter-pg --out src/generated/aventara/discovery.artifact.ts"
+"aventara:prepare": "aventara-prisma7-generate --schema prisma/schema.prisma --client src/generated/prisma --provider postgresql --driver @prisma/adapter-pg --out src/generated/aventara/discovery.artifact.ts --config src/aventara.config.ts"
 ```
 
 and `.env` gets Prisma's placeholder, which you replace:
@@ -93,9 +93,7 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?schema=public"
 
 Transaction options (`timeout`, `maxWait`, `isolationLevel`) go on the adapter ([Configuration](/docs/configuration#adapter)). SQLite supports `Serializable` only; on PostgreSQL pick the level your invariants need.
 
-> Note: not verified in this release against a live PostgreSQL database in this guide. The PostgreSQL scaffold was generated, built, and started (serving its contract with no database reachable); queries against a real server were not exercised here.
-
-String filters (`contains`, `startsWith`, `endsWith`) are case-insensitive on SQLite and case-sensitive on PostgreSQL. Test on the database you deploy to.
+String filters (`contains`, `startsWith`, `endsWith`) follow the database by default: case-insensitive for ASCII on SQLite, case-sensitive on PostgreSQL. On PostgreSQL, pass `mode: "sensitive"` or `mode: "insensitive"` to make the behavior explicit; SQLite offers only `"default"` ([Filtering](/docs/filtering-sorting-paging#case-mode)).
 
 ## Creating and changing the schema
 
@@ -184,7 +182,7 @@ CORS is not access control. It tells browsers which origins may read the answers
 
 ## Behind a proxy
 
-- The protocol path is the entrypoint (`/api`), regardless of Nest's global prefix. Route `/api/*` to the server.
+- The protocol path is `api` (`/api`), regardless of Nest's global prefix. Route `/api/*` to the server.
 - Pass `Aventara-*` and `Authorization` headers through. If your proxy assigns a request id, have it set `Aventara-Request-Id` (not `X-Request-Id`).
 - A proxy's own body limit and the framework's `maxRequestBytes` both apply: the stricter one wins.
 

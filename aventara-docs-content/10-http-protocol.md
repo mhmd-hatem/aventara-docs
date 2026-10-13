@@ -11,7 +11,7 @@ The generated client speaks this protocol for you. You need this page to call th
 
 ## Routes
 
-All routes are relative to your configured [entrypoint](/docs/nestjs-host#entrypoint) (`/api` below).
+All routes are relative to your configured [`api` mount path](/docs/nestjs-host#mount-path) (`/api` below).
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -91,13 +91,13 @@ The full tables with typical causes and fixes are on [Error codes](/docs/error-c
 | `A2000` | INVALID_REQUEST | 400 | Malformed JSON, envelope or path; missing identity headers. |
 | `A2001` | UNKNOWN_RESOURCE | 404 | The Resource is not in the contract. |
 | `A2002` | UNKNOWN_OPERATION | 404 | The operation is not available on that Resource. |
-| `A2003` | NOT_FOUND | 404 | A `unique` operation matched nothing. |
+| `A2003` | NOT_FOUND | 404 | A `unique` operation matched nothing, or a `$connect` names a record that does not exist. |
 | `A2004` | VALIDATION_FAILED | 422 | The arguments break a contract rule; see `cause.issues`. |
 | `A2005` | CONTRACT_MISMATCH | 409 | The caller's contract hash is not the current one. Regenerate the client. |
 | `A2006` | PROTOCOL_MISMATCH | 400 | Unsupported protocol version. |
 | `A2007` | INVALID_REFERENCE | 422 | A transaction `$ref` is invalid. |
 | `A2008` | CONFLICT | 409 | A uniqueness or reference constraint. Retrying unchanged fails the same way. |
-| `A2009` | LIMIT_EXCEEDED | 422 | A contract limit (nesting, list size, boolean nodes, plan size). |
+| `A2009` | LIMIT_EXCEEDED | 422 | A contract limit (nesting, list size, boolean nodes, plan size, Json depth). |
 | `A2010` | PAYLOAD_TOO_LARGE | 413 | The decoded body exceeds `maxRequestBytes`. |
 | `A2011` | UNSUPPORTED_MEDIA_TYPE | 415 | Not `application/json`, or an unsupported `Content-Encoding`. |
 | `A2012` | METHOD_NOT_ALLOWED | 405 | Wrong method; `Allow` header included. |
@@ -116,17 +116,17 @@ Raw database errors, SQL, connection strings and stack traces are never put in `
 
 ### V-codes (validation issues)
 
-These appear in `cause.issues[].code`, under an `A2004`, `A2007` or `A2009` envelope.
+These appear in `cause.issues[].code`, under an `A2004`, `A2007` or `A2009` envelope (and `A2001` / `A2002` for an unknown Resource or operation). An issue is `{ code, path, message }`, plus `check` and `params` when a [field validator](/docs/field-validators) failed.
 
 | Code | Meaning |
 |---|---|
 | `V1000` | Required value missing. |
 | `V1001` | Invalid type. |
 | `V1002` | Invalid enum value. |
-| `V1003` | Invalid format (UUID, date-time, base64, ...). |
-| `V1004` | Value out of range. |
+| `V1003` | Invalid format (UUID, date-time, base64, ...), or a failed pattern or format validator. |
+| `V1004` | Value out of range, or a failed range, length or size validator. |
 | `V1005` | Unknown or inaccessible field. |
-| `V1006` | Unsupported filter, order or mutation directive; or an operation not available. |
+| `V1006` | Unsupported filter, order or mutation directive, or a `mode` the field does not offer; or an operation not available. |
 | `V1007` | Invalid unique identifier shape. |
 | `V1008` | Invalid select, include or reducer projection (including a field that cannot be selected). |
 | `V1009` | Invalid or non-deterministic cursor. |
@@ -140,6 +140,8 @@ These appear in `cause.issues[].code`, under an `A2004`, `A2007` or `A2009` enve
 | `V1017` | Transaction fingerprint mismatch. |
 | `V1018` | Transaction reference resolved to no value. |
 | `V1019` | A transaction step depends on a row removed by an earlier step's cascade. |
+| `V1020` | A transaction mixes application and client steps (server-side plans only). |
+| `V1021` | A Json value nests deeper than `maxJsonDepth`. |
 
 ### Scalars on the wire
 
@@ -219,8 +221,8 @@ A unique-field conflict (HTTP 409):
 An unknown Resource (HTTP 404) and an unavailable operation (HTTP 404). A path is the address in the request, and a single route's `resource`, `family` and `variant` are its URL segments: an unknown Resource is at `["resource"]`, an unavailable operation at `["family"]` (not a standard family, or none of its variants is offered) or `["variant"]` (the family is right), argument issues at `["arguments", ...]`. The second answer below is for `.../User/find/nope`:
 
 ```json
-{"data":null,"code":"A2001","cause":{"message":"Operation arguments failed framework validation.","issues":[{"code":"V1005","path":["resource"],"message":"Resource \"Nope\" is not available in the active Contract."}]}}
-{"data":null,"code":"A2002","cause":{"message":"Operation arguments failed framework validation.","issues":[{"path":["variant"],"code":"V1006","message":"Operation \"find.nope\" is not available on Resource \"User\"."}]}}
+{"data":null,"code":"A2001","cause":{"message":"The requested Resource is not available.","issues":[{"code":"V1005","path":["resource"],"message":"Resource \"Nope\" is not available in the active Contract."}]}}
+{"data":null,"code":"A2002","cause":{"message":"The requested operation is not available on this Resource.","issues":[{"path":["variant"],"code":"V1006","message":"Operation \"find.nope\" is not available on Resource \"User\"."}]}}
 ```
 
 Transport-level answers (all carry `Aventara-Request-Id`):
@@ -278,7 +280,7 @@ With only one missing it reads `The Aventara-Contract-Hash header is missing.` (
 }
 ```
 
-The fingerprint is a short deterministic hash of the step (`fp1:` plus base64url): SHA-256 of the step's canonical JSON, first 16 bytes. It guards against a reference that points at the wrong step; it is not a security mechanism. Hand-writing plans is error-prone; use the generated client, which computes fingerprints for you. A mismatch answers `A2007` with `V1017`.
+The fingerprint is a short deterministic hash of the step (`fp1:` plus base64url): SHA-256 of the step's canonical JSON, first 16 bytes. It guards against a reference that points at the wrong step; it is not a security mechanism. Hand-writing plans is error-prone; use the generated client, which computes fingerprints for you. A mismatch answers `A2007` with `V1017`; a `$ref` with no `fingerprint` at all answers `A2004` with `V1000`.
 
 Plan-level errors: an empty `operations` array answers `422 A2004` / `V1004`; a missing `operations` answers `422 A2004` / `V1000` (`Required property "operations" is missing.`); more than `maxTransactionOperations` steps answers `422 A2009` / `V1014`; a wrong fingerprint answers `422 A2007` / `V1017` at `["operations", i, "fingerprint"]` with `cause.operation` set to `i`.
 
@@ -298,7 +300,7 @@ const protocol = AvProtocol.bind(framework);   // bind once, at startup
 
 | Member | What it does |
 |---|---|
-| `protocol.surface()` | The list of routes to mount: each `{ kind: "operation" \| "contract" \| "transactions", method, path }`, with `path` relative to the entrypoint. Only advertised operations appear; `transactions` only when interactive. |
+| `protocol.surface()` | The list of routes to mount: each `{ kind: "operation" \| "contract" \| "transactions", method, path }`, with `path` relative to the `api` mount path. Only advertised operations appear; `transactions` only when interactive. |
 | `protocol.handleOperation(request)` | Decode, execute and encode one operation request. Resolves to `{ status, headers, body }`. Never rejects. |
 | `protocol.handleTransaction(request)` | The same for `/_transactions`. |
 | `protocol.encodeContract(request)` | The `GET /_contract` answer: ETag, `no-cache`, and `304` handling. |
@@ -306,11 +308,11 @@ const protocol = AvProtocol.bind(framework);   // bind once, at startup
 | `protocol.failure(...)` | A transport-level code (`A2000`, `A2010`, `A2011`, `A2012`) as a complete response, for hosts that parse the body themselves. |
 | `protocol.decodeOperation(request)`, `protocol.decodeTransaction(request)` | Decode without executing. |
 | `protocol.encodeOperation(response, requestId)`, `protocol.encodeTransaction(response, requestId)` | Encode a response you obtained yourself. |
-| `AvProtocol.headers`, `AvProtocol.httpStatus`, `AvProtocol.scalarFormats`, `AvProtocol.isOperationResponse`, `AvProtocol.normalizeEntrypoint` | The header names, the code to status table, the wire grammars of string-encoded scalars, the envelope check and the entrypoint rule, as data and pure functions. |
+| `AvProtocol.headers`, `AvProtocol.httpStatus`, `AvProtocol.scalarFormats`, `AvProtocol.isOperationResponse`, `AvProtocol.normalizeEntrypoint` | The header names, the code to status table, the wire grammars of string-encoded scalars, the envelope check and the mount-path rule, as data and pure functions. |
 
 Every member, with types and examples: [Protocol API reference](/docs/protocol-api-reference).
 
-A request is `{ method, path, headers, body }`, where `path` is relative to the entrypoint and `body` is `{ kind: "raw", content }` (the protocol enforces size, content type and JSON) or `{ kind: "parsed", value }` (your parser already did). The response is `{ status, headers, body }` with `body` a JSON string.
+A request is `{ method, path, headers, body }`, where `path` is relative to the `api` mount path and `body` is `{ kind: "raw", content }` (the protocol enforces size, content type and JSON) or `{ kind: "parsed", value }` (your parser already did). The response is `{ status, headers, body }` with `body` a JSON string.
 
 ### Express example
 
@@ -319,14 +321,14 @@ import express, { type Request, type Response } from "express";
 import { createFramework } from "@aventara/core";
 import { AvProtocol } from "@aventara/core/protocol";
 
-const framework = await createFramework(config);        // your FrameworkConfig
+const framework = await createFramework(config);        // your AvConfig
 const protocol = AvProtocol.bind(framework);
-const base = framework.entrypoint;                        // e.g. "/api"
+const base = framework.api;                        // e.g. "/api"
 
 const toRequest = (req: Request) =>
   ({
     method: req.method,
-    path: req.path.slice(base.length),                    // relative to the entrypoint
+    path: req.path.slice(base.length),                    // relative to the `api` mount path
     headers: req.headers,
     body: { kind: "raw", content: Buffer.isBuffer(req.body) ? req.body : "" },
   }) as const;
@@ -349,7 +351,7 @@ for (const route of protocol.surface()) {
   }
 }
 
-// Everything else under <entrypoint>/_* gets the protocol's own answers.
+// Everything else under <api>/_* gets the protocol's own answers.
 app.use(base, (req, res, next) => {
   const answer = protocol.answerAbsent({ ...toRequest(req), path: req.path });  // already relative here
   if (answer === undefined) return next();
@@ -359,6 +361,6 @@ app.use(base, (req, res, next) => {
 app.listen(3100);
 ```
 
-This runs: `GET /api/_contract`, operations, and the protocol's own `405` (with `Allow`) for a wrong method on a protocol route. Authentication is still an Aventara [pipeline](/docs/configuration#pipelines): pass what it needs through `headers`, and a guard reads `transport.headers`.
+This runs: `GET /api/_contract`, operations, and the protocol's own `405` (with `Allow`) for a wrong method on a protocol route. Authentication is still an Aventara [pipeline](/docs/configuration#pipelines): pass what it needs through `headers`, and a guard reads `ctx.$transport.headers`.
 
 See also: [Limits and safety](/docs/limits-and-safety), [Authentication and guards](/docs/authentication-and-guards), [Transactions with $ref](/docs/transactions-with-ref).

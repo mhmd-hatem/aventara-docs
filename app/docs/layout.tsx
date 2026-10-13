@@ -3,5 +3,6 @@ export default function DocumentationLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return <DocsShell>{children}</DocsShell>;
 }
+import { DocsShell } from "@/components/docs-shell";

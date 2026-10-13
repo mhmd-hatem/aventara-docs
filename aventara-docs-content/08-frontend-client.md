@@ -15,7 +15,7 @@ import avClient from "./api/AvClient";
 const users = await avClient.User.find.many({ where: { email: { contains: "example.com" } } });
 ```
 
-Calls resolve to the data (a record, a list, a count; a first-style miss is `null`) and everything else throws a typed error. Only what your server advertises exists on the client, in the type and at runtime.
+Calls resolve to the data (a record, a list, a count; a first-style miss is `null`) and everything else throws a typed error. Only what your server advertises exists on the client, in the type and at runtime, and a `where` offers each field only the operators it allows. When the contract carries [field validators](/docs/field-validators), the client checks them before it sends a call, and throws the same `AvValidationError` the server would answer.
 
 ## In this section
 
@@ -24,7 +24,7 @@ Calls resolve to the data (a record, a list, a count; a first-style miss is `nul
 | [Client setup](/docs/client-setup) | `avclient init`, `framework.client.ts`, how to import the client, Vite, Next.js, Node and CORS |
 | [Typed calls](/docs/typed-calls) | `avClient.User.find.many`, named types, readonly results, typing helpers |
 | [Client errors](/docs/client-errors) | The error classes and how to handle them |
-| [Client options](/docs/client-options) | `new AvClient({ entrypoint, fetch })`, `CallOptions`, authentication, aborting |
+| [Client options](/docs/client-options) | `new AvClient({ entrypoint, fetch })`, `AvCallOptions`, authentication, aborting |
 | [Keeping in sync](/docs/keeping-in-sync) | Regenerating, "up to date", CI checks, what a stale client does |
 
 For the query language itself see [Querying](/docs/querying); for atomic multi-step writes see [Transactions](/docs/transactions).

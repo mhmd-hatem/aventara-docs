@@ -37,11 +37,11 @@ An object value uses operators. Which operators exist depends on the field's typ
 | Field type | Operators |
 |---|---|
 | `Int`, `BigInt`, `Decimal`, `DateTime` | `equals`, `not`, `in`, `notIn`, `lt`, `lte`, `gt`, `gte` |
-| `String` | the above plus `contains`, `startsWith`, `endsWith` |
+| `String` | the above plus `contains`, `startsWith`, `endsWith`, `mode` |
 | enum | `equals`, `not`, `in`, `notIn` |
-| `Json` | `equals`, `not`, `stringContains`, `stringStartsWith`, `stringEndsWith`, `arrayStartsWith`, `arrayEndsWith`, `mode` |
+| `Json` | `equals`, `not`, `stringContains`, `stringStartsWith`, `stringEndsWith`, `arrayStartsWith`, `arrayEndsWith`, `mode`, and `path` where the adapter offers it |
 
-The contract's `fields.<name>.capabilities.filter` lists the exact set for each field. A [restriction](/docs/exposing-and-hiding-fields) can shrink it.
+The contract's `fields.<name>.capabilities.filter` lists the exact set for each field. [Exposure](/docs/exposing-and-hiding-fields) can shrink it, and the types follow: in the generated client and in server-side calls, an operator the field does not offer is a compile error.
 
 ```ts
 await avClient.Post.find.many({ where: { views: { gte: 3, lte: 10 } }, select: ["id", "title", "views"] });
@@ -53,13 +53,45 @@ await avClient.Post.find.many({ where: { id: { in: [1, 2] } }, select: ["id"] })
 await avClient.Post.find.many({ where: { views: { not: 0 } }, select: ["id", "views"] });   // five rows: Draft is out
 ```
 
+### `not` with operators
+
+`not` takes a value (`not: 0`, `not: null`: equality negated) or an object of operators, which it negates as a whole:
+
+```ts
+await avClient.Post.find.many({ where: { views: { not: { gt: 2, lte: 5 } } } });          // views outside (2, 5]
+await avClient.Post.find.many({ where: { title: { not: { contains: "draft", mode: "insensitive" } } } });
+await avClient.Post.find.many({ where: { meta: { not: { equals: { label: "Draft" } } } } });   // a Json object under not needs equals
+```
+
+A row where the object cannot be decided (a `NULL` column, a missing Json `path`, a Json value of another kind) matches neither the object nor its `not`, the way SQL's `NOT` works. So `not: { contains: "x" }` leaves out rows whose title is `NULL`; add `{ title: null }` in an `OR` if you want them.
+
+Each filter object stands alone: a `mode` or `path` applies only to the operators beside it in the same object. Inside a `not`, write them inside the `not`. A `mode` or `path` with no operator beside it, or next to only a `not`, is refused with `A2004` and `V1001` at that key and is a type error:
+
+```ts
+await avClient.Post.find.many({ where: { title: { mode: "insensitive", not: { contains: "x" } } } });
+// AvValidationError A2004: { path: ["arguments","where","title","mode"], code: "V1001",
+//   message: 'mode on field "title" qualifies no operator: write it next to the operator it applies to (inside "not" to apply to a negated one).' }
+await avClient.Post.find.many({ where: { title: { not: { contains: "x", mode: "insensitive" } } } });   // the rewrite
+```
+
 An operator the field does not have:
 
 ```ts
 await avClient.Post.find.many({ where: { views: { contains: "x" } } });
-// ValidationError A2004: { path: ["arguments","where","views","contains"], code: "V1006",
+// type error; at runtime: AvValidationError A2004: { path: ["arguments","where","views","contains"], code: "V1006",
 //   message: 'Filter operator "contains" is not available on field "views".' }
 ```
+
+### `undefined` in a filter
+
+A filter never leaves a value out. `undefined` anywhere in a `where` (at any depth, in `AND`/`OR`/`NOT`, a relation filter or an operator such as `equals`), in a unique selector or in a `cursor` is refused with `A2004` and `V1001` at that path, and so is a `where`, `cursor`, `limit` or `offset` key whose value is `undefined` (`V1007` for the `where` of a `.unique` variant, `V1009` for a `cursor`). The generated client refuses it before sending, so the request never reaches the server; server-side calls refuse it the same way. Without this, `where: { id: user?.id }` with no user would match every row. Leave the `where` key out when you mean every row.
+
+```ts
+await avClient.Post.update.many({ where: { id: undefined }, data: { views: 0 } });
+// AvValidationError A2004, nothing sent: { path: ["arguments","where","id"], code: "V1001" }
+```
+
+In write `data`, `undefined` means the opposite: the field is not sent ([Pipeline context](/docs/pipeline-context#typed-arguments)).
 
 ### `null` in a filter
 
@@ -67,15 +99,35 @@ Only equality takes a `null`: `equals: null` and `not: null` (and the plain `fie
 
 ```ts
 await avClient.Post.find.many({ where: { views: { gt: null } } });
-// ValidationError A2004 (422): { path: ["arguments","where","views","gt"], code: "V1001", message: "Value must be non-null." }
+// AvValidationError A2004 (422): { path: ["arguments","where","views","gt"], code: "V1001", message: "Value must be non-null." }
 await avClient.Post.find.many({ where: { title: { contains: null } } });   // the same, at ["arguments","where","title","contains"]
 await avClient.Post.find.many({ where: { id: { in: null } } });            // the same, at ["arguments","where","id","in"]
 await avClient.Post.find.many({ where: { categoryId: { not: null } }, select: ["id"] });   // fine: categoryId is nullable
 ```
 
-(A `Json` field's `array*` operators take a JSON `null` as a value to look for.) Without that up-front refusal, the same request would reach the database and answer `500 A3001`.
+A `NULL` row matches neither a filter nor its `not`, except `equals: null` and `not: null`, which test for it. (A `Json` field's `array*` operators take a JSON `null` as a value to look for.) On a `Json?` field, `field: null` and `equals: null` match every row that reads back `null`, whether the database holds `NULL` or a JSON `null`. With a `path` beside it, `equals: null` matches documents whose value at that path is a JSON `null`, and `not: null` matches documents where the path is set and not `null`; a document without the path matches neither. Without that up-front refusal, the same request would reach the database and answer `500 A3001`.
 
-String matching (`contains`, `startsWith`, `endsWith`) uses the database's own comparison. On SQLite it is case-insensitive for ASCII (`contains: "NOTES"` finds "Notes on engines"); on PostgreSQL it is case-sensitive. Test the behavior on the database you deploy to.
+### Case: `mode`
+
+String matching (`contains`, `startsWith`, `endsWith`, `equals` and the rest) takes a `mode` next to the operator:
+
+| `mode` | Means |
+|---|---|
+| `"default"` (or no `mode`) | The database's own comparison. On SQLite it is case-insensitive for ASCII only (`contains: "NOTES"` finds "Notes on engines", but `"ä"` does not find `"Ä"`); on PostgreSQL it is case-sensitive. |
+| `"sensitive"` | Case-sensitive, promised. |
+| `"insensitive"` | Case-insensitive, promised, including non-ASCII letters. |
+
+```ts
+await avClient.User.find.many({ where: { email: { contains: "ada", mode: "insensitive" } } });
+```
+
+Not every database can keep every promise, so each field lists the modes it offers in the contract, `capabilities.filterModes` (and `pathFilterModes` for a `Json` field filtered at a `path`). `"default"` is always offered. With the Prisma 7 adapter, PostgreSQL offers all three on string fields and on `Json` at a `path`; a whole `Json` document offers `"default"` and `"sensitive"`. SQLite offers `"default"` only. A mode the field does not offer is a type error in the typed calls and is refused at runtime with `A2004` and `V1006` at the `mode` (`Filter mode "insensitive" is not available on field "email"`), before the database is asked. On PostgreSQL, `"sensitive"` relies on the column's collation: a `citext` column or a nondeterministic collation compares without case whatever the mode says.
+
+### Operand types
+
+Besides values, four operands take a fixed form: `mode` is one of `"default"`, `"sensitive"`, `"insensitive"`; `isEmpty` is a boolean; `path` is an array of strings (`["settings", "theme"]`); a `Json` field's `stringContains`, `stringStartsWith` and `stringEndsWith` take a string. Anything else is refused with `A2004` and `V1001` at that operand, and is a type error in the typed calls.
+
+Text matching and the values you compare with are passed to the ORM as you wrote them; what they match is the database's own behavior. With Prisma 7, `%` and `_` in `contains`, `startsWith` and `endsWith` act as SQL wildcards on both databases, and a `Json` field's `string*` operators compare the JSON text of the value. When the database refuses a value (out of range, a NUL character on PostgreSQL), the call is answered `A2004` with the database's reason, not `500`.
 
 ### Dates, decimals and big integers
 
@@ -89,7 +141,7 @@ await avClient.Post.find.many({ where: { publishedAt: { gte: new Date("2026-02-0
 // ids 2 and 4
 
 await avClient.Post.find.many({ where: { publishedAt: null }, select: ["id", "title"] });   // ids 3, 5, 6
-await avClient.Post.find.many({ where: { price: { gt: "5" } }, select: ["id"] });           // ids 1, 2, 6
+await avClient.Post.find.many({ where: { price: { gt: new AvDecimal("5") } }, select: ["id"] });   // ids 1, 2, 6
 await avClient.Post.find.many({ where: { bigViews: 9007199254740993n }, select: ["id"] });  // id 1
 ```
 
@@ -118,11 +170,13 @@ await avClient.Post.find.many({
 // [ { id: 3, title: 'Compilers', views: 42 }, { id: 6, title: 'Enigma', views: 100 } ]
 ```
 
+Empty conditions keep the ORM's meaning, which can surprise: with Prisma 7, `NOT: {}` and `NOT: { AND: [] }` are no condition and match every row, `OR: []` matches nothing at the top level, and `{ AND: [{ OR: [] }] }` matches every row. So `delete.count({ where: { NOT: {} } })` deletes everything. Build `where` objects so an empty list or object never stands for "nothing".
+
 A `where` tree has a limit on its nodes (`maxBooleanNodes`, 50 by default): over it the call fails with `A2009` / `V1015`. See [Limits and safety](/docs/limits-and-safety).
 
 ### Filtering through relations
 
-A to-one relation takes a nested `where` directly, or `null` for "has none". A to-many relation takes `some`, `every` or `none`.
+A to-one relation takes a nested `where` directly, or `null` for "has none". An empty nested `where`, such as `{ author: {} }`, matches the rows that have one, and its `NOT` the rows that have none. A to-many relation takes `some`, `every` or `none`.
 
 ```ts
 await avClient.Post.find.many({ where: { author: { name: { contains: "Grace" } } }, select: ["id", "title"] });
@@ -140,7 +194,7 @@ await avClient.User.find.many({ where: { posts: { every: { views: { gt: 5 } } } 
 
 ### Identifiers
 
-`find.unique`, `update.unique`, `delete.unique` and `upsert.unique` take an identifier as `where`: the primary key (`{ id: 1 }`) or a unique column (`{ email: "ada@example.com" }`), not a filter. A miss throws `NotFoundError` (`A2003`).
+`find.unique`, `update.unique`, `delete.unique` and `upsert.unique` take an identifier as `where`: the primary key (`{ id: 1 }`) or a unique column (`{ email: "ada@example.com" }`), not a filter. A miss throws `AvNotFoundError` (`A2003`).
 
 ## orderBy
 
@@ -168,7 +222,7 @@ await avClient.User.find.many({ orderBy: { posts: { $count: "desc" } }, select: 
 // [ { id: 2, ... grace }, { id: 1, ... ada }, { id: 3, ... alan } ]
 ```
 
-A field that a restriction marked `order: false` is refused with `V1006` ("Ordering is not available on field ...").
+A field whose `order` capability was taken away by [exposure](/docs/exposure) is refused with `V1006` ("Ordering is not available on field ...").
 
 ## Paging
 
@@ -182,7 +236,7 @@ A field that a restriction marked `order: false` is refused with `V1006` ("Order
 
 ```ts
 await avClient.Post.find.many({ limit: 1000 });
-// ValidationError A2009: { path: ["arguments","limit"], code: "V1014", message: "limit exceeds maxListLimit (250)." }
+// AvValidationError A2009: { path: ["arguments","limit"], code: "V1014", message: "limit exceeds maxListLimit (250)." }
 ```
 
 ### limit and offset
@@ -196,14 +250,14 @@ Always give an `orderBy` when you page: without one the database may return rows
 
 ### Cursor paging
 
-`cursor` starts at a row identified by its unique key, including that row. Combine it with an `orderBy` that ends in a unique tie-breaker (a complete identifier such as `id`). Aventara does not add one for you, and refuses a cursor without an explicit order:
+`cursor` starts at a row, including that row. It holds exactly the fields you order by, with that row's values: order by `id` and the cursor is `{ id }`; order by `createdAt` then `id` and it is `{ createdAt, id }`. Combine it with an `orderBy` that ends in a unique tie-breaker (a complete identifier such as `id`). Aventara does not add one for you, and refuses a cursor without an explicit order:
 
 ```ts
 await avClient.Post.find.many({ orderBy: [{ id: "asc" }], limit: 2, cursor: { id: 3 }, select: ["id"] });
 // [ { id: 3 }, { id: 4 } ]
 
 await avClient.Post.find.many({ limit: 2, cursor: { id: 3 }, select: ["id"] });
-// ValidationError A2004: { path: ["arguments","cursor"], code: "V1009",
+// AvValidationError A2004: { path: ["arguments","cursor"], code: "V1009",
 //   message: "Cursor pagination requires an object cursor and explicit deterministic orderBy." }
 ```
 
@@ -222,7 +276,7 @@ Nested to-many relations page too (`limit`, `offset` inside the relation's selec
 |---|---|
 | `find.many` | `[]` |
 | `find.first` | `null` |
-| `find.unique` | throws `NotFoundError` (`A2003`) |
+| `find.unique` | throws `AvNotFoundError` (`A2003`) |
 
 `find.first` takes `where` and `orderBy`, and returns the first match: `find.first({ where: { views: { gt: 5 } }, orderBy: { views: "desc" }, select: ["id", "views"] })` returns `{ id: 6, views: 100 }`.
 

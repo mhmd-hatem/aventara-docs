@@ -39,7 +39,7 @@ Reads and writes both take an optional projection: `select` (exactly these field
 // first: a miss is null, not an error
 const maybe = await avClient.User.find.first({ where: { email: "nobody@example.com" } });   // null
 
-// unique: by identifier; a miss throws NotFoundError (A2003)
+// unique: by identifier; a miss throws AvNotFoundError (A2003)
 const ada = await avClient.User.find.unique({
   where: { email: "ada@example.com" },
   select: ["id", "email", "role"],
@@ -86,7 +86,7 @@ A relation can be written inline with a nested directive:
 
 ```ts
 await avClient.Post.create.one({
-  data: { title: "Hello", author: { $connect: { id: 1 } }, categories: { $connect: [{ name: "news" }] } },
+  data: { title: "Hello", author: { $connect: { id: 1 } }, category: { $connect: { name: "news" } } },
 });
 await avClient.User.create.one({
   data: { email: "n@example.com", passwordHash: "...", posts: { $create: { title: "first post" } } },
@@ -105,7 +105,7 @@ await avClient.User.update.first({
 });
 // { id: 1, name: "First user" }
 
-// unique: by identifier; a miss is NotFoundError
+// unique: by identifier; a miss is AvNotFoundError
 await avClient.User.update.unique({ where: { id: 1 }, data: { name: "Ada L." }, select: ["id", "name"] });
 
 // many: updates every match, returns the updated records
@@ -128,7 +128,7 @@ A plain value in `data` assigns. An object with a `$` key acts on the current va
 // first: deletes the first match, returns it, or null
 await avClient.Category.delete.first({ where: { name: "tips" }, select: ["id", "name"] });   // { id: 2, name: "tips" }
 
-// unique: by identifier; a miss is NotFoundError
+// unique: by identifier; a miss is AvNotFoundError
 await avClient.Category.delete.unique({ where: { name: "news" } });
 
 // count: deletes every match, returns how many
@@ -159,7 +159,7 @@ await avClient.User.upsert.unique({
 Two behaviors to keep in mind:
 
 - `update.first` and `delete.first` run as a read followed by a write inside one transaction. The record written is one the read selected, or nothing is written and you get `A2014`. If correctness depends on the record still being the first match at the instant of the write, select it yourself and use `update.unique` or `delete.unique`.
-- Whether a variant is available is decided in two steps: the adapter advertises what it can perform faithfully, then your `restrictions.<Resource>.operations` switch some off. The result is in the contract:
+- Whether a variant is available is decided in two steps: the adapter advertises what it can perform faithfully, then [exposure](/docs/exposure#operations) can switch some off per layer. The result is in the contract:
 
 ```json
 "operations": {
@@ -170,6 +170,24 @@ Two behaviors to keep in mind:
   "upsert": { "unique": true }
 }
 ```
+
+## What a create requires
+
+Each Resource's contract entry also says what a create cannot do without, as the adapter read it off your schema:
+
+```json
+"createRequirements": {
+  "required": ["title"],
+  "oneOf": [["author", "authorId"]],
+  "parentSupplies": { "User": { "posts": ["author", "authorId"] } }
+}
+```
+
+- `required`: fields every create must write (columns that are not optional and have no default).
+- `oneOf`: each required relation, followed by the field or fields holding its reference. A create writes the relation or all of those fields, never both.
+- `parentSupplies`: what a create nested through a parent's relation gets from the parent. A `Post` created in `User.posts` needs neither `author` nor `authorId`.
+
+A layer's contract lists only what that layer lets a caller write: when exposure hides `authorId`, the group becomes `"required": ["author", "title"]`; when it hides `author`, `["authorId", "title"]`. A field with a [`compute.create`](/docs/computed-fields) stage is left out. A layer that can still create the Resource cannot leave a requirement unwritable on create (a required field hidden or with its `create` exempted, or a relation hidden with any field that holds its reference) unless a `compute.create` fills it: startup refuses it with `COMPILER_HIDDEN_REQUIRED_FIELD`. A `create.many` or `create.count` record writes no relation, so there a `oneOf` group means its fields: each record needs `authorId`, and a layer that keeps those variants cannot hide `authorId` either, even with `author` exposed. A Resource that requires nothing has no `createRequirements`. Like the rest of the contract, it is part of the [contract hash](/docs/contract-hash). The generated client and the server-side calls are typed by it ([Relations and nested writes](/docs/relations-and-nested-writes#required-relations-and-fields)).
 
 ## Success codes
 
@@ -192,4 +210,4 @@ See the [HTTP protocol](/docs/http-protocol#codes) for the failure codes.
 - [Querying](/docs/querying)
 - [Transactions](/docs/transactions)
 - [Contract layers](/docs/contract-layers)
-- Guides: [Restricting operations](/docs/restricting-operations), [Filtering, sorting and paging](/docs/filtering-sorting-paging), [Relations and nested writes](/docs/relations-and-nested-writes), [Counting](/docs/counting)
+- Guides: [Exposure](/docs/exposure), [Filtering, sorting and paging](/docs/filtering-sorting-paging), [Relations and nested writes](/docs/relations-and-nested-writes), [Counting](/docs/counting)

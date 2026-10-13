@@ -14,22 +14,25 @@ Aventara compiles two contracts from one schema and one configuration:
 | application | Your own server code (trusted) | `framework.application.*` in a Nest service |
 | client | Remote callers (untrusted) | HTTP, `avclient`'s generated client |
 
-Both run the same operations. What differs is what the configuration allows. This example continues [the blog API](/docs/example-blog-api), where restrictions are set under `client` only, so the application layer keeps full access.
+Both run the same operations. What differs is what the configuration allows. This example continues [the blog API](/docs/example-blog-api), where exemptions are set under `client` only, so the application layer keeps full access.
 
 ## The configuration, in one glance
 
 ```ts
 return {
-  entrypoint: "/api",
+  api: "/api",
   adapter: /* ... */,
   client: {                                   // remote callers only
-    restrictions: {
-      User: {
-        fields: {
-          passwordHash: { capabilities: { select: false, filter: false, order: false } },
-          internalNotes: { hidden: true },
+    exposed: true,
+    exemptions: {
+      resources: {
+        User: {
+          fields: {
+            passwordHash: ["select", "filter", "order"],
+            internalNotes: true,
+          },
+          operations: { delete: ["first", "count"] },
         },
-        operations: { delete: { first: false, count: false } },
       },
     },
     limits: { maxListLimit: 50 },
@@ -37,7 +40,7 @@ return {
 } as const;
 ```
 
-Root settings would apply to both layers; `client` and `application` override them one layer at a time. See [Contract layers](/docs/contract-layers).
+Exemptions at the root would apply to both layers; `client` and `application` can only hide more, each for its own callers. Something only the server may see is exposed at the root and hidden under `client`, as here. See [Contract layers](/docs/contract-layers).
 
 ## Server side: the application layer
 
@@ -55,17 +58,15 @@ export class AdminService {
 
   /** Trusted: passwordHash and internalNotes are readable here. */
   async usersWithPrivateFields() {
-    const res = await this.framework.application.User.find.many({
+    return this.framework.application.User.find.many({
       select: ["id", "email", "passwordHash", "internalNotes"],
     });
-    if (res.code !== "A1000") throw new Error(res.cause?.message);
-    return res.data;
   }
 
   /** Mass delete is switched off for remote callers, not for us. */
   async purgeUnpublished() {
-    const res = await this.framework.application.Post.delete.count({ where: { published: false } });
-    return { code: res.code, deleted: res.data };
+    const deleted = await this.framework.application.Post.delete.count({ where: { published: false } });
+    return { deleted };
   }
 }
 ```
@@ -99,10 +100,10 @@ curl -s -X POST localhost:3000/admin/purge
 ```
 
 ```json
-{"code":"A1007","deleted":2}
+{"deleted":2}
 ```
 
-Server-side calls return the envelope (`{ data, code, cause }`) and do not throw for operation failures, so check `code` as above.
+Server-side calls resolve their data and throw every failure as an `AvError` subclass (`AvValidationError`, `AvNotFoundError`, ...), so a failure reaches Nest as an exception: catch the class where you want another answer ([Server-side usage](/docs/server-side-usage#errors)).
 
 `AdminController` is your own controller, outside `/api`, and nothing protects it by default. Add a Nest guard as you would for any other route. Nest guards do not run on the protocol routes, but they do run on yours.
 
@@ -116,7 +117,7 @@ import avClient from "./api/AvClient";
 const users = await avClient.User.find.many({ select: ["id", "email"] });
 // [{ id: 1, email: "ada@example.com" }]
 
-avClient.User.delete.first;     // undefined: the operation does not exist for remote callers
+avClient.User.delete.first;     // type error, and undefined at runtime: the operation does not exist for remote callers
 avClient.Post.find.many({ limit: 100 });   // rejected: limit exceeds maxListLimit (50)
 ```
 
@@ -124,13 +125,14 @@ avClient.Post.find.many({ limit: 100 });   // rejected: limit exceeds maxListLim
 
 ## The same call through both layers
 
-`framework.client` runs the client layer's rules in process, with the same restrictions, limits and pipelines a remote caller gets. Use it to test or reuse exactly what the frontend sees:
+`framework.client` runs the client layer's rules in process, with the same exposure, limits and pipelines a remote caller gets. Use it to test or reuse exactly what the frontend sees:
 
 ```ts
-const res = await this.framework.client.User.find.many({ select: ["id", "passwordHash"] });
-// res.code === "A2004"
-// res.cause.issues[0] = { code: "V1008", path: ["arguments","select",1],
-//                         message: 'Field "passwordHash" is not selectable.' }
+// the field is not selectable in the client layer's types either, so this needs a cast to compile
+await this.framework.client.User.find.many({ select: ["id", "passwordHash" as never] });
+// throws AvValidationError: code "A2004",
+// cause.issues[0] = { code: "V1008", path: ["arguments","select",1],
+//                     message: 'Field "passwordHash" is not selectable.' }
 ```
 
 | | `framework.application` | `framework.client` | `avClient` over HTTP |
@@ -140,9 +142,9 @@ const res = await this.framework.client.User.find.many({ select: ["id", "passwor
 | `User.delete.first` | yes | no | no |
 | List limit | the application layer's | 50 | 50 |
 | Client guard (`requireSignIn`) | not applied | applied (writes need headers) | applied |
-| Returns | envelope | envelope | data, or throws |
+| Returns | data, or throws | data, or throws | data, or throws |
 
-Root pipelines apply to both layers; `client.pipelines` only to the client layer. Authenticate remote callers there, and keep server-only checks in your Nest code.
+Root stages apply to both layers; stages under `client` only to the client layer. Authenticate remote callers there, and keep server-only checks in your Nest code.
 
 ## When to use which
 
@@ -156,4 +158,4 @@ Root pipelines apply to both layers; `client.pipelines` only to the client layer
 - [Contract layers](/docs/contract-layers)
 - [Querying: running operations on the server](/docs/querying#running-operations-on-the-server)
 - [NestJS host](/docs/nestjs-host#injecting-the-framework)
-- Guides: [Exposing and hiding fields](/docs/exposing-and-hiding-fields), [Restricting operations](/docs/restricting-operations), [Authentication and guards](/docs/authentication-and-guards), [Server-side usage](/docs/server-side-usage)
+- Guides: [Exposure](/docs/exposure), [Exposing and hiding fields](/docs/exposing-and-hiding-fields), [Authentication and guards](/docs/authentication-and-guards), [Server-side usage](/docs/server-side-usage)

@@ -25,15 +25,23 @@ Prisma 7 on SQLite or PostgreSQL. More adapters are planned ([Roadmap](/docs/roa
 
 ## Can I hide fields from the frontend?
 
-Yes, per layer. A field marked `hidden` in the `client` layer does not exist for remote callers: not in the contract, the generated types, inputs, outputs, filters, ordering or nested projections. A field can also be made write-only (settable but never readable, filterable or orderable), which suits `passwordHash`. Your own server code can still read it through `framework.application`. See [Contract layers](/docs/contract-layers) and [Configuration reference](/docs/config-reference#restrictions-reference).
+Yes, per layer. A field hidden in the `client` layer (`exemptions: { resources: { User: { fields: { internalNotes: true } } } }`) does not exist for remote callers: not in the contract, the generated types, inputs, outputs, filters, ordering or nested projections. A field can also be made write-only (settable but never readable, filterable or orderable), which suits `passwordHash`. Your own server code can still read it through `framework.application`. See [Exposure](/docs/exposure) and [Contract layers](/docs/contract-layers).
 
 ## Can I turn operations off?
 
-Yes: `restrictions.<Resource>.operations.<family>.<variant> = false`, at the root or only for the `client` layer. A switched-off operation has no route and no method in the generated client.
+Yes: `exemptions: { resources: { <Resource>: { operations: { <family>: ["<variant>"] } } } }`, at the root or only in the `client` overlay ([Exposure](/docs/exposure#operations)). A switched-off operation has no route and no method in the generated client.
 
 ## Where does authentication go?
 
 In [pipelines](/docs/config-reference#pipelines): guards that read request headers and return `false` or throw `A4000` / `A4001` / `A4002`. Nest guards, interceptors and pipes do not run on Aventara routes, and neither does `@nestjs/throttler`; for rate limiting see [Limits and safety](/docs/limits-and-safety#rate-limiting).
+
+## Can a write update other rows in the same transaction?
+
+Yes. Set `forceTransaction` on the operation and write the other rows from an after hook through `ctx` (`ctx.Post.update.unique(...)`, `ctx.$sql`...). The hook runs inside the operation's transaction, so both commit or neither does. [The pipeline context](/docs/pipeline-context) has an outbox and a likes-counter recipe.
+
+## Can I run my own SQL?
+
+From server code, yes: `framework.appTx.$sql` adds a SQL step to an application transaction, and `ctx.$sql` runs one from a pipeline stage. Both are tagged templates whose values are bound parameters. No remote caller can send SQL ([Transactions](/docs/transactions#sql-steps-apptxsql)).
 
 ## Is the generated client a runtime dependency?
 
@@ -41,7 +49,7 @@ No. `@aventara/client` is a dev dependency that writes TypeScript source into yo
 
 ## What happens when I change my schema?
 
-The contract's hash changes. A client generated before the change is refused with `A2005` (`ContractMismatchError`) rather than misbehaving. Regenerate with `npm run avclient:generate`. See [Contract hash](/docs/contract-hash) and [Keeping in sync](/docs/keeping-in-sync).
+The contract's hash changes. A client generated before the change is refused with `A2005` (`AvContractMismatchError`) rather than misbehaving. Regenerate with `npm run avclient:generate`. See [Contract hash](/docs/contract-hash) and [Keeping in sync](/docs/keeping-in-sync).
 
 ## Why are reads `POST` requests?
 
@@ -53,7 +61,7 @@ Only what the client contract advertises, only with the arguments it allows, and
 
 ## Can I use it in production?
 
-It is a release candidate (`1.0.0-rc.0`): the API is meant to be the 1.0 API and changes only to fix what testing finds. Pin exact versions and read the [Changelog](/docs/changelog) before upgrading.
+It is a release candidate (`1.0.0-rc.2`): until 1.0 the API can still change, breaking changes included (`1.0.0-rc.1` reshaped the configuration), and every change is listed in the Changelog with its upgrade steps. Pin exact versions and read the [Changelog](/docs/changelog) before upgrading.
 
 ## The license, in plain terms
 
@@ -67,4 +75,4 @@ Aventara is source-available under PolyForm Shield 1.0.0 with an additional perm
 
 The texts are what binds; this is a summary, not legal advice. See [License](/docs/license).
 
-See also: [Exposing and hiding fields](/docs/exposing-and-hiding-fields), [Restricting operations](/docs/restricting-operations), [Authentication and guards](/docs/authentication-and-guards), [Limits and safety](/docs/limits-and-safety).
+See also: [Exposure](/docs/exposure), [Exposing and hiding fields](/docs/exposing-and-hiding-fields), [Authentication and guards](/docs/authentication-and-guards), [Limits and safety](/docs/limits-and-safety).

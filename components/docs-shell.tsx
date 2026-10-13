@@ -37,7 +37,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { navigation, primarySection } from "@/lib/navigation";
+import {
+  navigation,
+  primaryNavigation,
+  primarySection,
+} from "@/lib/navigation";
 const icons: Record<string, typeof Compass> = {
   compass: Compass,
   terminal: Terminal,
@@ -213,18 +217,16 @@ export function DocsShell({ children }: { children: React.ReactNode }) {
           <span className="docs-label">docs</span>
         </div>
         <nav className="header-nav" aria-label="Primary">
-          <Link data-active={section === "overview"} href="/docs/introduction">
-            Overview
-          </Link>
-          <Link data-active={section === "guides"} href="/docs/querying">
-            Guides
-          </Link>
-          <Link
-            data-active={section === "reference"}
-            href="/docs/config-reference"
-          >
-            Reference
-          </Link>
+          {primaryNavigation.map((item) => (
+            <Link
+              key={item.section}
+              data-active={section === item.section}
+              aria-current={section === item.section ? "page" : undefined}
+              href={item.href}
+            >
+              {item.title}
+            </Link>
+          ))}
         </nav>
         <div className="header-actions">
           <button
@@ -280,6 +282,19 @@ export function DocsShell({ children }: { children: React.ReactNode }) {
           <Link href="/" onClick={() => setMobileOpen(false)}>
             <Logo />
           </Link>
+          <nav aria-label="Primary" className="mobile-primary-nav">
+            {primaryNavigation.map((item) => (
+              <Link
+                key={item.section}
+                className="nav-link"
+                aria-current={section === item.section ? "page" : undefined}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+              >
+                {item.title}
+              </Link>
+            ))}
+          </nav>
           <Sidebar onNavigate={() => setMobileOpen(false)} />
         </DialogContent>
       </Dialog>

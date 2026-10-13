@@ -49,10 +49,13 @@ export default async function DocsPage({
   const page = source.getPage(slug);
   if (!page) notFound();
   const MDX = page.data.body;
-  const currentIndex = pages.findIndex((p) => p.slug === slug[0]);
-  const current = pages[currentIndex];
-  const prev = pages[currentIndex - 1];
-  const next = pages[currentIndex + 1];
+  const sequence = pages.filter(
+    (p) => (p.section === "ai") === (slug[0] === "ai-agents"),
+  );
+  const currentIndex = sequence.findIndex((p) => p.slug === slug[0]);
+  const current = sequence[currentIndex];
+  const prev = sequence[currentIndex - 1];
+  const next = sequence[currentIndex + 1];
   const intro = slug[0] === "introduction";
   return (
     <main
@@ -133,7 +136,10 @@ export default async function DocsPage({
             )}
           </div>
         </div>
-        <TableOfContents items={page.data.toc} />
+        <TableOfContents
+          items={page.data.toc}
+          maxDepth={slug[0] === "error-codes" ? 4 : 3}
+        />
       </div>
     </main>
   );

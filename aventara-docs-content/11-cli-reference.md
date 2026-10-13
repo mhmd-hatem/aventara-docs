@@ -9,7 +9,7 @@ section: reference
 
 Two commands: `aventara` scaffolds the server; `avclient` sets up the frontend and generates the typed client. Both are run once through `npx` (or installed globally); neither is a runtime dependency of your application.
 
-The examples use the `@rc` tag, which points to the newest release candidate (`1.0.0-rc.0`).
+The examples use the `@rc` tag, which points to the newest release candidate (`1.0.0-rc.2`).
 
 ```bash
 npx @aventara/cli@rc <command>        # or: npm i -g @aventara/cli@rc
@@ -21,8 +21,9 @@ npx @aventara/client@rc <command>     # in the frontend; after init, `npx avclie
 ```text
 aventara new <name> [options]   Create a NestJS project with Aventara (nest new, then init).
 aventara init [options]         Add Aventara to the NestJS 12 project in this directory.
+aventara skill [--force]        Write or refresh the agent skill and the AGENTS.md section.
 aventara --help                 Print usage and exit 0.
-aventara <command> --help       Print that command's usage (new, init) and exit 0.
+aventara <command> --help       Print that command's usage (new, init, skill) and exit 0.
 aventara --version, -v          Print this CLI's version and exit 0.
 ```
 
@@ -48,6 +49,10 @@ aventara: no initial commit: git has no user.name and user.email set; set them, 
 ### aventara init
 
 Runs inside an existing NestJS 12 project. See [Add to an existing project](/docs/existing-project).
+
+### aventara skill
+
+Writes or refreshes the agent skill (`.claude/skills/aventara/`) and the Aventara section of `AGENTS.md`, for the `@aventara/core` installed in the project; `aventara new` and `aventara init` already write both. Run it in the project after upgrading, with the CLI at your `@aventara/core` version. Files you changed are kept with a warning unless you pass `--force`; `AGENTS.md` outside the Aventara section is never touched. It refuses a directory with no `package.json` or no installed `@aventara/core`, and warns when the CLI's version differs from core's. See [AI agents](/docs/ai-agents).
 
 ### Flags
 
@@ -149,6 +154,7 @@ avclient --version, -v      Print this generator's version and exit 0.
 | `--skip-install` | Print the install instead of running it. | |
 | `--skip-generate` | Do not generate now. | |
 | `-y`, `--yes` | Accept every default and replace differing content. | |
+| `--verbose` | Show the install's output as it runs. | |
 
 It first checks that the project has a `tsconfig.json`: a plain JavaScript project is refused before anything is written ([Troubleshooting](/docs/troubleshooting#avclient-init-refuses-no-tsconfigjson)). Then it writes `framework.client.ts`, the variable into `.env` (only with an env var), the script, an exact devDependency on `@aventara/client`, and `.env` in the frontend's `.gitignore`, installs, then generates, type-checking the output with the project's own TypeScript. A `framework.client.mts` from `0.1.0-pilot.1` is kept and keeps working. The config may be `.ts`, `.mts`, `.cts`, `.js`, `.mjs` or `.cjs`, in ESM or CommonJS syntax. If the server is not answering, the files are left in place and the message tells you to run `avclient generate` later.
 
@@ -158,7 +164,7 @@ It first checks that the project has a `tsconfig.json`: a plain JavaScript proje
 
 ### Progress (avclient)
 
-`avclient init` and `avclient generate` show their steps the same way (on stderr, with a spinner on a terminal and one plain line per step in a pipe, in CI or with `NO_COLOR`), then a closing line with the total time. `avclient` has no `--verbose` flag. A real `avclient init` run:
+`avclient init` and `avclient generate` show their steps the same way (on stderr, with a spinner on a terminal and one plain line per step in a pipe, in CI or with `NO_COLOR`), then a closing line with the total time. `avclient init --verbose` also shows the install's output as it runs. A real `avclient init` run:
 
 ```text
 [1/6] Writing the client setup… done (0.0s)
@@ -193,7 +199,7 @@ avclient: entrypoint reads AVENTARA_API_URL, which is not set in the process env
 
 ## aventara-prisma7-generate
 
-The bin of `@aventara/prisma7-adapter`, run by the scaffold's `aventara:prepare` script. Flags `--schema`, `--client`, `--provider`, `--driver`, `--out`, `-h`/`--help`; see [Configuration reference](/docs/config-reference#aventara-prisma7-generate).
+The bin of `@aventara/prisma7-adapter`, run by the scaffold's `aventara:prepare` script. Flags `--schema`, `--client`, `--provider`, `--driver`, `--out`, `--config`, `-h`/`--help`; see [Configuration reference](/docs/config-reference#aventara-prisma7-generate).
 
 ## Exit codes
 

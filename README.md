@@ -2,11 +2,13 @@
 
 A custom documentation site built with Next.js App Router, Fumadocs Core and MDX, Tailwind CSS, and editable shadcn-style Radix components. Uses the Compass Weave logo kit with Moonlit Frost and Aurora Ink themes.
 
-## Coming-soon mode
+## Publication status
 
-The public site currently shows only the sales homepage while the framework is rebuilt. `/docs` and all nested paths temporarily redirect to `/`; `/api/search` returns 404 and publishes no index. The homepage has no documentation, release, install, or playground links.
+The deployed site currently shows only the sales homepage while the framework is rebuilt. The homepage has no documentation, release, install, or playground links.
 
-The documentation source is preserved. To restore it, move the renderer in `components/docs-page.tsx` back to `app/docs/[[...slug]]/page.tsx`, restore the docs layout and search handler from Git, and remove the temporary redirect in `next.config.mjs`. Review release claims and homepage calls to action before reopening.
+The `codex/docs-preview` branch restores the documentation routes and search for review of rc.2. It deploys as a Vercel preview; `main` continues serving the coming-soon site. `app/robots.txt` asks crawlers to skip the entire preview, and every response carries `X-Robots-Tag: noindex, nofollow`. These are crawler instructions, not access control.
+
+Before launching the docs on production, remove the preview crawler exclusions and review homepage calls to action. Do not merge this branch into `main` just to refresh the preview.
 
 ## Develop
 
@@ -52,11 +54,11 @@ To exclude your own browser, open `https://aventara-docs.vercel.app/?analytics=o
 
 ## Content
 
-The current framework release is `1.0.0-rc.0`. Shared site badges and interactive install commands read the version and `rc` dist-tag from `lib/release.ts`; the numbered source pages contain the release documentation.
+The current framework release is `1.0.0-rc.2`. Shared site badges and interactive install commands read the version and `rc` dist-tag from `lib/release.ts`; the numbered source pages contain the release documentation.
 
 Edit the numbered Markdown files in `aventara-docs-content/`. Fumadocs reads those files directly; there is no generated copy to maintain. Numeric prefixes are stripped from page URLs. README and internal site notes are excluded from publishing and search. Navigation groups live in `lib/navigation.ts`.
 
-All 56 pages are arranged in task-focused navigation groups. The current group opens automatically; other groups can be expanded. The same page list drives breadcrumbs, previous/next links, and primary-navigation highlighting. `tests/navigation.test.mjs` checks that every numbered source page appears exactly once.
+All 61 pages are registered: 60 in task-focused sidebar groups, plus Working with AI agents in the primary AI navigation. The current sidebar group opens automatically; other groups can be expanded. The same page list drives breadcrumbs, previous/next links, and primary-navigation highlighting. `tests/navigation.test.mjs` checks that every numbered source page appears exactly once. The retired `/docs/restricting-operations` URL redirects to `/docs/exposure#operations`.
 
 ## Design
 

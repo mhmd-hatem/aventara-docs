@@ -39,8 +39,8 @@ Both platforms log the same startup line, serve `GET /api/_contract` and `POST /
 |---|---|---|
 | `app.use(...)` middleware, helmet | runs on Aventara routes | runs |
 | `MiddlewareConsumer` middleware | never runs on Aventara routes | runs on them unless excluded |
-| Your own controller at `<entrypoint>/_contract` (any `_` path) | never reached | the application does not start |
-| Resource keys or entrypoints needing `*` or `: + # $ & , / ; = ? @` in a route path | accepted | refused at startup, naming it |
+| Your own controller at `<api>/_contract` (any `_` path) | never reached | the application does not start |
+| Resource keys or `api` paths needing `*` or `: + # $ & , / ; = ? @` in a route path | accepted | refused at startup, naming it |
 | Routing case | case-insensitive (`/API/_contract` answers) | case-sensitive |
 | `X-Powered-By` response header | sent (`app.disable("x-powered-by")` removes it) | not sent |
 | CORS preflight methods | `GET,HEAD,PUT,PATCH,POST,DELETE` | `GET,HEAD,POST` (all the protocol needs) |
@@ -49,7 +49,7 @@ On Express, a protocol route requested with a percent-encoding a generated clien
 
 ## Middleware on Fastify
 
-On Fastify, Nest middleware registered through `MiddlewareConsumer` runs before routing, so it also runs on Aventara routes. A logger registered with `forRoutes("*path")` would see every protocol request. Keep it off them with `.exclude()`, using your entrypoint plus `/_*path`:
+On Fastify, Nest middleware registered through `MiddlewareConsumer` runs before routing, so it also runs on Aventara routes. A logger registered with `forRoutes("*path")` would see every protocol request. Keep it off them with `.exclude()`, using your `api` path plus `/_*path`:
 
 ```ts
 // src/app.module.ts
@@ -61,7 +61,7 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(LoggerMiddleware)
-      .exclude("api/_*path")      // "<entrypoint without the slash>/_*path"
+      .exclude("api/_*path")      // "<api without the slash>/_*path"
       .forRoutes("*path");
   }
 }
@@ -73,7 +73,7 @@ Middleware you want on Aventara routes on both platforms goes through `app.use(.
 
 ## Global prefix
 
-`app.setGlobalPrefix("v1")` moves your controllers and leaves the protocol where it is. With the prefix set and entrypoint `/api`:
+`app.setGlobalPrefix("v1")` moves your controllers and leaves the protocol where it is. With the prefix set and `api: "/api"`:
 
 ```text
 GET /api/_contract      200
@@ -81,7 +81,7 @@ GET /v1/api/_contract   404
 GET /v1                 200   (your own controller's root)
 ```
 
-Put the prefix in the entrypoint instead (`entrypoint: "/v1/api"`) and generate the client against that URL.
+Put the prefix in `api` instead (`api: "/v1/api"`) and generate the client against that URL.
 
 ## CORS
 

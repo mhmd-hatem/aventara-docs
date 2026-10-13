@@ -1,6 +1,6 @@
 ---
 title: Client API reference
-description: The generated client's surface - AvClient, AvClientOptions, CallOptions, Fetch, error classes, named types, and the defineClientConfig / env / avclient generator.
+description: The generated client's surface - AvClient, AvClientOptions, AvCallOptions, AvFetch, error classes, named types, and the defineClientConfig / env / avclient generator.
 order: 85
 section: reference
 ---
@@ -15,10 +15,10 @@ Only the generator's configuration helpers (used in `framework.client.ts`, never
 
 | Export | Signature | Purpose |
 |---|---|---|
-| `defineClientConfig` | `(config: ClientConfigInput) => ClientConfigInput` | Gives the config file its type. Identity function. |
-| `env` | `(name: string) => EnvReference` | Names an environment variable to be read when the config is evaluated. |
+| `defineClientConfig` | `(config: AvClientConfigInput) => AvClientConfigInput` | Gives the config file its type. Identity function. |
+| `env` | `(name: string) => AvEnvReference` | Names an environment variable to be read when the config is evaluated. |
 | `AVENTARA_CLIENT_GENERATOR_VERSION` | `string` | The generator's version. |
-| types | `ClientConfigInput`, `ConfigValue`, `EnvReference` | |
+| types | `AvClientConfigInput`, `AvClientConfigValue`, `AvEnvReference` | |
 
 ```ts
 // framework.client.ts
@@ -30,12 +30,12 @@ export default defineClientConfig({
 });
 ```
 
-### ClientConfigInput
+### AvClientConfigInput
 
 | Option | Type | Default (from `avclient init`) | Meaning |
 |---|---|---|---|
-| `entrypoint` | `string \| EnvReference` | `env("AVENTARA_API_URL")`, value `http://localhost:3000/api` | The deployed framework entrypoint: origin plus mount path, one absolute `http(s)` URL. No credentials (the platform's `fetch` refuses them, and the value ships inside the client). No query or fragment; the mount path follows the server's [entrypoint rules](/docs/config-reference#entrypoint). |
-| `generateAt` | `string \| EnvReference` | `./src/api` | Directory the client is written into, relative to the config file. Shared: the generator owns exactly `AvClient.ts` and `generated/` there and never touches anything else. |
+| `entrypoint` | `string \| AvEnvReference` | `env("AVENTARA_API_URL")`, value `http://localhost:3000/api` | The deployed framework entrypoint: origin plus mount path, one absolute `http(s)` URL. No credentials (the platform's `fetch` refuses them, and the value ships inside the client). No query or fragment; the mount path follows the server's [mount-path rules](/docs/config-reference#api). |
+| `generateAt` | `string \| AvEnvReference` | `./src/api` | Directory the client is written into, relative to the config file. Shared: the generator owns exactly `AvClient.ts` and `generated/` there and never touches anything else. |
 
 The file is `framework.client.ts`. The generator loads it like `prisma.config`: `.ts`, `.mts`, `.cts`, `.js`, `.mjs` or `.cjs`, in ESM or CommonJS syntax (a `framework.client.mts` from `0.1.0-pilot.1` keeps working). With two of them present the generator refuses.
 
@@ -69,11 +69,11 @@ Written into `generateAt`:
 | Path | Contents |
 |---|---|
 | `AvClient.ts` | The entry point you import. |
-| `generated/client.ts` | The typed `AvClient` class, `AvClientOptions`, `CallOptions` and the ready instance. |
+| `generated/client.ts` | The typed `AvClient` class, `AvClientOptions`, `AvCallOptions` and the ready instance. |
 | `generated/types.d.ts` | The named Resource types. |
 | `generated/enums.ts` | Each enum as a union type and a same-named `as const` object. |
 | `generated/contract.ts`, `metadata.ts` | The contract the client was generated against; the hash, protocol version and default entrypoint it is bound to. |
-| `generated/runtime/*` | Codecs, `Decimal`, errors, transport, and (when transactions are interactive) fingerprints and transaction handling. |
+| `generated/runtime/*` | Codecs, `AvDecimal`, errors, transport, field-validator checks (when the contract carries any), and (when transactions are interactive) fingerprints and transaction handling. |
 | `generated/derivation/**` | Type declarations that derive argument and result types from the contract. |
 
 Every file is TypeScript source. The files import each other the way the project's `tsconfig.json` says (extensionless, `.js` or `.ts`; see [Client setup](/docs/client-setup#what-is-generated)), and you import `AvClient` the same way ([Importing the client](/docs/client-setup#importing-the-client)).
@@ -87,15 +87,15 @@ Never edit them: output is deterministic (two runs over one contract write the s
 | `default` | `AvClient` instance | The client of the deployment the tree was generated from: `import avClient from "./api/AvClient"` (spelled per project; see [Importing the client](/docs/client-setup#importing-the-client)). |
 | `AvClient` | class | `new AvClient(options?)`. |
 | `AvClientOptions` | type | See below. |
-| `CallOptions` | type | See below. |
-| `Fetch` | type | The platform's `fetch` type. |
-| `Operation` | type | A deferred transaction handle. |
+| `AvCallOptions` | type | See below. |
+| `AvFetch` | type | The platform's `fetch` type. |
+| `AvOperation` | type | A deferred transaction handle. |
 | named Resource types | types | `User`, `UserWhere`, ... See [Named types](#named-types). |
 | enums | type and value | `Role` as `"USER" \| "ADMIN"` and `{ USER: "USER", ADMIN: "ADMIN" }`. |
-| `Decimal` | class | The client's decimal value: a constructor, `toString`, `toJSON`. |
-| `FrameworkError`, `AuthError`, `ConflictError`, `ContractMismatchError`, `InternalError`, `NotFoundError`, `ProtocolError`, `ValidationError` | classes | See [Error classes](#error-classes). |
-| `TransportError` | class | |
-| `Cause`, `ValidationIssue`, `OperationCode`, `ValidationCode` | types | |
+| `AvDecimal` | class | The client's decimal value: a constructor, `toString`, `toJSON`. |
+| `AvError`, `AvAuthError`, `AvConflictError`, `AvContractMismatchError`, `AvInternalError`, `AvNotFoundError`, `AvProtocolError`, `AvValidationError` | classes | See [Error classes](#error-classes). |
+| `AvTransportError` | class | |
+| `AvCause`, `AvValidationIssue`, `AvOperationCode`, `AvValidationCode` | types | |
 
 ## AvClient
 
@@ -105,7 +105,7 @@ class AvClient {
   readonly tx: /* deferred operations, only when transactions are interactive */;
   readonly transaction: /* only when transactions are interactive */;
   // plus one property per Resource:
-  readonly [Resource]: { [family]: { [variant]: (args?, options?: CallOptions) => Promise<Result> } };
+  readonly [Resource]: { [family]: { [variant]: (args?, options?: AvCallOptions) => Promise<Result> } };
 }
 ```
 
@@ -115,14 +115,14 @@ A Resource whose name collides with a client member (`tx`, `transaction`, `then`
 
 A call resolves to the data (record, list, count; `null` for a first-style miss, `A1001`). Every other outcome throws.
 
-Values are application values: `bigint`, `Date`, `Uint8Array`, the client's `Decimal`, and JSON as is. Arguments are encoded and results revived for you.
+Values are application values: `bigint`, `Date`, `Uint8Array`, the client's `AvDecimal`, and JSON as is. Arguments are encoded and results revived for you.
 
 ### AvClientOptions
 
 | Option | Type | Default | Meaning |
 |---|---|---|---|
 | `entrypoint` | `string` | the entrypoint the client was generated from | Another deployment that serves exactly the same client contract (tests, SSR). Re-binds nothing: the hash still decides whether it accepts you. |
-| `fetch` | `Fetch` | the platform's `fetch`, read when a call is made | A custom fetch: authentication, tests, retries. |
+| `fetch` | `AvFetch` | the platform's `fetch`, read when a call is made | A custom fetch: authentication, tests, retries. |
 
 If no `fetch` is available a call throws `No fetch is available here; pass one: new AvClient({ fetch })`. Importing the client never fails.
 
@@ -133,7 +133,7 @@ const client = new AvClient({
 });
 ```
 
-### CallOptions
+### AvCallOptions
 
 The last argument of every call. Never sent in the body.
 
@@ -147,7 +147,7 @@ The last argument of every call. Never sent in the body.
 await avClient.User.find.count({}, { requestId: "from-client-1", signal });
 ```
 
-### Fetch
+### AvFetch
 
 `typeof globalThis.fetch` when your TypeScript `lib` declares one (DOM, `@types/node`); otherwise a structural `(url, init) => Promise<response>` type. The platform `fetch` therefore needs no cast.
 
@@ -157,7 +157,7 @@ When the contract advertises interactive transactions the client has `tx` and `t
 
 | Member | Signature | Meaning |
 |---|---|---|
-| `avClient.tx.<R>.<family>.<variant>(args)` | returns a handle (`Operation`) | Builds a deferred step; sends nothing. A handle's selected fields expose `$ref("field")`. |
+| `avClient.tx.<R>.<family>.<variant>(args)` | returns a handle (`AvOperation`) | Builds a deferred step; sends nothing. A handle's selected fields expose `$ref("field")`. |
 | `avClient.transaction(steps, options?)` | `Promise<tuple of results>` | Sends the plan once; resolves one typed result per handle, in order. A failing step throws its error with `cause.operation` set. |
 
 ```ts
@@ -166,33 +166,36 @@ const post = avClient.tx.Post.create.one({ data: { title: "from tx", authorId: u
 const [u, p] = await avClient.transaction([user, post]);
 ```
 
-Refused before anything is sent: the same handle twice (`ValidationError`, `A2004`/`V1001`) and a `$ref` to a handle not in the list (`A2007`/`V1010`). A `$ref` can sit in a value, a relation identifier, a unique `where`, a `cursor`, a filter at any depth and nested writes ([Transactions with $ref](/docs/transactions-with-ref)); a `$ref` to a step later in the list is `A2007`/`V1016`. More than `maxTransactionOperations` steps throws `ValidationError` `A2009`/`V1014`. A builder (`tx`) never throws for an unreadable argument: `transaction([...])` rejects with a `TypeError` that names where ([Client errors](/docs/client-errors#a-typeerror-before-anything-is-sent)). See [Transactions](/docs/transactions).
+Refused before anything is sent: an `undefined` in a step's filter, unique selector or cursor (`AvValidationError`, `A2004`/`V1001` at `["operations", i, "args", …]`), the same handle twice (`AvValidationError`, `A2004`/`V1001`) and a `$ref` to a handle not in the list (`A2007`/`V1010`). A `$ref` can sit in a value, a relation identifier, a unique `where`, a `cursor`, a filter at any depth and nested writes ([Transactions with $ref](/docs/transactions-with-ref)); a `$ref` to a step later in the list is `A2007`/`V1016`. More than `maxTransactionOperations` steps throws `AvValidationError` `A2009`/`V1014`. A builder (`tx`) never throws for an unreadable argument: `transaction([...])` rejects with a `TypeError` that names where ([Client errors](/docs/client-errors#a-typeerror-before-anything-is-sent)). See [Transactions](/docs/transactions).
 
 ## Error classes
 
 ```ts
-class FrameworkError<C extends OperationErrorCode = OperationErrorCode> extends Error {
+class AvError<C extends AvOperationErrorCode = AvOperationErrorCode> extends Error {
   readonly code: C;        // branch on this
-  readonly cause: Cause;   // { message, issues?, operation? }
+  readonly cause: AvCause;   // { message, issues?, operation? }
 }
-class TransportError extends Error {
+class AvTransportError extends Error {
   readonly status: number | null;   // null: no response arrived
 }
-interface Cause { readonly message: string; readonly issues?: readonly ValidationIssue[]; readonly operation?: number }
-interface ValidationIssue { readonly path?: readonly (string | number)[]; readonly code: ValidationCode; readonly message: string }
+interface AvCause { readonly message: string; readonly issues?: readonly AvValidationIssue[]; readonly operation?: number }
+interface AvValidationIssue {
+  readonly path?: readonly (string | number)[]; readonly code: AvValidationCode; readonly message: string;
+  readonly check?: string; readonly params?: Record<string, unknown>;   // a failed field validator
+}
 ```
 
 | Class | `code` values |
 |---|---|
-| `ProtocolError` | `A2000` `A2001` `A2002` `A2006` `A2010` `A2011` `A2012` |
-| `NotFoundError` | `A2003` |
-| `ValidationError` | `A2004` `A2007` `A2009` |
-| `ContractMismatchError` | `A2005` |
-| `ConflictError` | `A2008` `A2013` `A2014` (`A2013`/`A2014` may succeed if sent again; no retry is automatic) |
-| `InternalError` | `A3000` `A3001` `A3002` `A3003` `A3004` |
-| `AuthError` | `A4000` `A4001` `A4002` |
+| `AvProtocolError` | `A2000` `A2001` `A2002` `A2006` `A2010` `A2011` `A2012` |
+| `AvNotFoundError` | `A2003` |
+| `AvValidationError` | `A2004` `A2007` `A2009` |
+| `AvContractMismatchError` | `A2005` |
+| `AvConflictError` | `A2008` `A2013` `A2014` (`A2013`/`A2014` may succeed if sent again; no retry is automatic) |
+| `AvInternalError` | `A3000` `A3001` `A3002` `A3003` `A3004` |
+| `AvAuthError` | `A4000` `A4001` `A4002` |
 
-Each has `name` equal to its class name. `cause` is rebuilt member by member from the envelope, so nothing the protocol does not define reaches it. `TransportError` carries no cause. Full table with fixes: [Error codes](/docs/error-codes).
+Each has `name` equal to its class name. When the contract carries [field validators](/docs/field-validators), every call and every transaction checks its values first and throws the `AvValidationError` the server would answer (`A2004`, the same issues), without sending anything. `cause` is rebuilt member by member from the envelope, so nothing the protocol does not define reaches it. `AvTransportError` carries no cause. Full table with fixes: [Error codes](/docs/error-codes).
 
 ## Named types
 
@@ -222,11 +225,11 @@ List results are `readonly` arrays, so type them `readonly User[]`.
 
 ## Bound to a contract
 
-A generated client is bound to the exact contract hash and protocol version it was generated from (both in `generated/metadata.ts`) and sends them on every request. A deployment whose contract differs answers `A2005`, thrown as `ContractMismatchError`, including when the stale client calls an operation the server no longer advertises. Generate against the deployment the client will call, and regenerate when it changes. See [Contract hash](/docs/contract-hash).
+A generated client is bound to the exact contract hash and protocol version it was generated from (both in `generated/metadata.ts`) and sends them on every request. A deployment whose contract differs answers `A2005`, thrown as `AvContractMismatchError`, including when the stale client calls an operation the server no longer advertises. Generate against the deployment the client will call, and regenerate when it changes. See [Contract hash](/docs/contract-hash).
 
 ## Verified behavior
 
-Run against a live server: `find.unique` miss throws `NotFoundError`; `find.first` miss resolves `null`; an `AbortSignal` already aborted rejects with `AbortError`; a client with the wrong hash throws `ContractMismatchError`; an unreachable server throws `TransportError` with `status === null` and the message `The request for "User" find.many failed before any response arrived.`; a 404 without an envelope throws `TransportError` with `status === 404`: `The response to "User" find.many (HTTP 404) is not an Aventara response envelope.`
+Run against a live server: `find.unique` miss throws `AvNotFoundError`; `find.first` miss resolves `null`; an `AbortSignal` already aborted rejects with `AbortError`; a client with the wrong hash throws `AvContractMismatchError`; an unreachable server throws `AvTransportError` with `status === null` and the message `The request for "User" find.many failed before any response arrived.`; a 404 without an envelope throws `AvTransportError` with `status === 404`: `The response to "User" find.many (HTTP 404) is not an Aventara response envelope.`
 
 > In a CommonJS project, importing the default export (`import avClient from`) can resolve to the module object under some TypeScript runners. Use `new AvClient()` there, or a bundler/ESM setup.
 

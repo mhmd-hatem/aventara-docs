@@ -32,10 +32,11 @@ The bins refuse to run on an unsupported Node, in one sentence that names the ra
 | `@aventara/core` | Added for you | Server, dependency | The framework: configuration, contract compilation, validation, execution, transactions. Its `@aventara/core/protocol` entry exposes the HTTP protocol as plain data and functions. Transport- and ORM-agnostic. |
 | `@aventara/prisma7-adapter` | Added for you | Server, dependency | The Prisma 7 adapter for SQLite and PostgreSQL, plus the `aventara-prisma7-generate` bin that runs on install (`aventara:prepare`). |
 | `@aventara/nest` | Added for you | Server, dependency | Hosts a framework in NestJS 12 on Express or Fastify: `AventaraModule`, `@InjectFramework()`. |
+| `@aventara/mcp` | Optional | Server, dependency, same version | The MCP server: your `agent` layer as tools an AI agent calls. `@aventara/nest` mounts it when the configuration has `mcp` ([MCP](/docs/mcp)). |
 | `@aventara/client` | `avclient init` adds it | Frontend, dev dependency, exact version | The `avclient` generator. Not needed at runtime: the generated client imports nothing from it. |
 | `@aventara/testing` | Optional | Server, dev dependency | Conformance fixtures and a fake in-memory adapter, for testing code that runs a framework without a database, or an adapter, a host or a client against the protocol ([Testing and conformance](/docs/testing-and-conformance)). |
 
-The server's runtime dependencies are `@aventara/core`, `@aventara/nest` and `@aventara/prisma7-adapter`, all at the same exact version, together with Prisma (`@prisma/client`, a driver adapter, and `prisma` as a dev dependency). Your frontend ships only its own code and the generated client. `@aventara/core` itself depends on `zod`, which only its `@aventara/core/json` entry (typed JSON fields, [JSON fields](/docs/json-fields)) ever loads.
+The server's runtime dependencies are `@aventara/core`, `@aventara/nest` and `@aventara/prisma7-adapter`, all at the same exact version, together with Prisma (`@prisma/client`, a driver adapter, and `prisma` as a dev dependency). Your frontend ships only its own code and the generated client. `@aventara/core` itself depends on `zod`, which only its `@aventara/core/avz` entry (typed JSON fields and field validators: [JSON fields](/docs/json-fields), [Field validators](/docs/field-validators)) ever loads.
 
 Each package ships its `CHANGELOG.md` beside its README, so the release notes for the version you installed are in `node_modules/@aventara/<package>/`.
 
@@ -46,15 +47,15 @@ A project made by `aventara new` has this in `package.json` (versions are exact)
 ```json
 {
   "dependencies": {
-    "@aventara/core": "1.0.0-rc.0",
-    "@aventara/nest": "1.0.0-rc.0",
-    "@aventara/prisma7-adapter": "1.0.0-rc.0",
+    "@aventara/core": "1.0.0-rc.2",
+    "@aventara/nest": "1.0.0-rc.2",
+    "@aventara/prisma7-adapter": "1.0.0-rc.2",
     "@prisma/adapter-better-sqlite3": "7.10.0",
     "@prisma/client": "7.10.0"
   },
   "devDependencies": { "prisma": "7.10.0" },
   "scripts": {
-    "aventara:prepare": "aventara-prisma7-generate --schema prisma/schema.prisma --client src/generated/prisma --provider sqlite --driver @prisma/adapter-better-sqlite3 --out src/generated/aventara/discovery.artifact.ts",
+    "aventara:prepare": "aventara-prisma7-generate --schema prisma/schema.prisma --client src/generated/prisma --provider sqlite --driver @prisma/adapter-better-sqlite3 --out src/generated/aventara/discovery.artifact.ts --config src/aventara.config.ts",
     "postinstall": "npm run aventara:prepare",
     "prebuild": "npm run aventara:prepare",
     "prestart": "npm run aventara:prepare",
@@ -81,7 +82,7 @@ npx @aventara/cli@rc new my-api        # npm
 pnpm dlx @aventara/cli@rc new my-api   # pnpm
 ```
 
-Use the `@rc` tag: it points to the newest release candidate (`1.0.0-rc.0`). The CLI runs a pinned `nest new`, adds Aventara, installs, and commits the result (`Initial Aventara Scaffold`, unless git is missing or unconfigured, the directory is already inside a repository, or you pass `--skip-git`). It picks the package manager from the lockfile, else the one that launched it, else npm, and never touches a database. `aventara --version` prints the CLI's version; `--orm` takes `prisma7`. See [Getting started](/docs/getting-started), or [Add to an existing project](/docs/existing-project).
+Use the `@rc` tag: it points to the newest release candidate (`1.0.0-rc.2`). The CLI runs a pinned `nest new`, adds Aventara, installs, and commits the result (`Initial Aventara Scaffold`, unless git is missing or unconfigured, the directory is already inside a repository, or you pass `--skip-git`). It picks the package manager from the lockfile, else the one that launched it, else npm, and never touches a database. `aventara --version` prints the CLI's version; `--orm` takes `prisma7`. See [Getting started](/docs/getting-started), or [Add to an existing project](/docs/existing-project).
 
 ## Package manager and Node notes
 
@@ -89,7 +90,7 @@ Use the `@rc` tag: it points to the newest release candidate (`1.0.0-rc.0`). The
 - Node 22 needs npm 11 or newer. The npm 10 bundled with older Node 22 cannot install Nest 12's own scaffold. Check with `npm -v` and upgrade with `npm install -g npm@11`.
 - Node 24: `>=24.2.0` is supported. A CommonJS project's Jest e2e setup needs Node 24.9 or newer, a limit that comes from Nest and Jest.
 - TypeScript: the server side needs TypeScript below 7 (the `aventara new` scaffold uses 6). The frontend generator works with `>=5.5.0`, TypeScript 7 included.
-- Pin exact versions. Aventara is a release candidate and can still change to fix what testing finds, so the generated projects already pin exactly. Keep `@aventara/client` at the same version as the server.
+- Pin exact versions. Aventara is a release candidate and its API can still change before 1.0, so the generated projects already pin exactly. Keep `@aventara/client` at the same version as the server.
 
 ## See also
 

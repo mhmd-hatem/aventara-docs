@@ -42,7 +42,7 @@ Use them instead of `*.many` when you only need the number: nothing is loaded an
 
 Their codes follow the family: `find.count` answers `A1000`, `create.count` `A1003`, `update.count` `A1005`, `delete.count` `A1007`. With no match, `find.count` is `0`, and so are the bulk writes.
 
-A count variant is a separate operation: a [restriction](/docs/restricting-operations) can switch it off independently (`find: { count: false }`), and `update.count` can fail like any update (a unique-constraint conflict is `A2008`).
+A count variant is a separate operation: [exposure](/docs/exposure#operations) can switch it off independently (`operations: { find: ["count"] }`), and `update.count` can fail like any update (a unique-constraint conflict is `A2008`).
 
 ## The `$count` reducer
 
@@ -91,7 +91,7 @@ await avClient.User.find.many({ orderBy: { posts: { $count: "desc" } }, select: 
 
 ### Availability
 
-`$count` is advertised per relation in the contract, under `capabilities.reducers`. It applies to to-many relations, and a restriction can remove it (`restrictions.<Resource>.fields.<relation>.capabilities.reducers`).
+`$count` is advertised per relation in the contract, under `capabilities.reducers`. It applies to to-many relations, and exposure can remove it (`exemptions.resources.<Resource>.fields.<relation>: ["reducers"]`).
 
 ## See also
 

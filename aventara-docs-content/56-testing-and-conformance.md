@@ -17,9 +17,9 @@ Node `^22.18.0 || >=24.2.0`. The package is ES modules, and it also loads from C
 
 | Export | What it is |
 |---|---|
-| `createFakeAdapter` | An in-memory adapter, with transaction tracing, for code that runs a `Framework` without a database. |
+| `createFakeAdapter` | An in-memory adapter, with transaction tracing, for code that runs an `AvFramework` without a database. |
 | `runAvProtocolConformance(driver)` | Drives the protocol corpus through one host and reports, per row, every mismatch. |
-| `AvProtocolCorpus` | The corpus's server side: a corpus `Framework` you can serve through your own host or client. |
+| `AvProtocolCorpus` | The corpus's server side: a corpus `AvFramework` you can serve through your own host or client. |
 | `AvProtocolFixtures` | The corpus rows, as data. |
 | `@aventara/testing/fixtures/protocol-v1.json` | The same corpus as plain JSON, for a client or host written in any language. |
 
@@ -35,7 +35,7 @@ A row whose `client.outcome` is `"transport-error"` describes something no host 
 
 ## Check your host
 
-`runAvProtocolConformance` builds the corpus `Framework` itself and drives every row a host answers through a driver you supply. A driver is a function that receives a `Framework` and returns a session: `send` takes one protocol request and returns the answer, and `close` ends the session. Each row runs against a fresh framework through a fresh session.
+`runAvProtocolConformance` builds the corpus `AvFramework` itself and drives every row a host answers through a driver you supply. A driver is a function that receives an `AvFramework` and returns a session: `send` takes one protocol request and returns the answer, and `close` ends the session. Each row runs against a fresh framework through a fresh session.
 
 This driver goes straight to the protocol binding, the way a host's route handlers do. Written for your own host, `send` would call it over a socket instead:
 

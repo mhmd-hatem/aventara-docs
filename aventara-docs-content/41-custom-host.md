@@ -23,7 +23,7 @@ const protocol = AvProtocol.bind(framework);
 
 | Member | What it does |
 |---|---|
-| `protocol.surface()` | The routes to mount: `{ kind: "operation" \| "contract" \| "transactions", method, path }` with `path` relative to the entrypoint (`/_contract`, `/_resources/User/find/many`, `/_transactions`). Only advertised operations appear; `transactions` only when interactive. |
+| `protocol.surface()` | The routes to mount: `{ kind: "operation" \| "contract" \| "transactions", method, path }` with `path` relative to the `api` mount path (`/_contract`, `/_resources/User/find/many`, `/_transactions`). Only advertised operations appear; `transactions` only when interactive. |
 | `protocol.handleOperation(request)` | Decode, execute and encode one operation. Resolves to a response; never rejects. |
 | `protocol.handleTransaction(request)` | The same for `/_transactions`. |
 | `protocol.encodeContract(request)` | The `GET /_contract` answer: `ETag`, `Cache-Control: no-cache`, and `304` handling. Synchronous. |
@@ -36,7 +36,7 @@ A request is:
 ```ts
 {
   method: string;
-  path: string;          // relative to the entrypoint, e.g. "/_contract"
+  path: string;          // relative to the `api` mount path, e.g. "/_contract"
   headers: Record<string, string | readonly string[] | undefined>;   // Node's req.headers fits
   body: { kind: "raw"; content: string | Uint8Array }   // the protocol checks size, type and JSON
       | { kind: "parsed"; value: unknown };             // your parser already did
@@ -73,11 +73,11 @@ import { buildFramework } from "./framework.js";
 
 const framework = await buildFramework();
 const protocol = AvProtocol.bind(framework);   // bind once, at startup
-const base = framework.entrypoint;             // "/api"
+const base = framework.api;             // "/api"
 
 const toRequest = (req: Request, path: string): AvProtocolRequest => ({
   method: req.method,
-  path,                                        // relative to the entrypoint
+  path,                                        // relative to the `api` mount path
   headers: req.headers,
   body: { kind: "raw", content: Buffer.isBuffer(req.body) ? req.body : "" },
 });
@@ -102,7 +102,7 @@ for (const route of protocol.surface()) {
   }
 }
 
-// Anything else under <entrypoint>/_* gets the protocol's own answer (404, 405 + Allow, ...).
+// Anything else under <api>/_* gets the protocol's own answer (404, 405 + Allow, ...).
 app.use(base, (req, res, next) => {
   const answer = protocol.answerAbsent(toRequest(req, req.path));   // req.path is already relative here
   if (answer === undefined) return next();
@@ -126,7 +126,7 @@ Run it (`node --env-file .env dist/custom/express.host.js` after building, or wi
 ```text
 POST /api/_resources/Post/find/count   -> 200 {"data":4,"code":"A1000","cause":null}
 transaction (Category + Post with $ref) -> committed, [ { id: 3 }, { id: 5 } ]
-write without Authorization             -> AuthError A4000 (the pipeline guard ran)
+write without Authorization             -> AvAuthError A4000 (the pipeline guard ran)
 GET  /api/health                        -> 200
 DELETE /api/_contract                   -> 405, Allow: GET, code A2012
 POST body of 1.1 MB                     -> 413, code A2010
@@ -144,7 +144,7 @@ import { buildFramework } from "./framework.js";
 
 const framework = await buildFramework();
 const protocol = AvProtocol.bind(framework);
-const base = framework.entrypoint;
+const base = framework.api;
 const maxBytes = framework.contracts.client.limits.maxRequestBytes;
 
 // "POST /_resources/User/find/many" -> "operation", "GET /_contract" -> "contract", ...
@@ -177,7 +177,7 @@ createServer(async (req, res) => {
     res.writeHead(404).end();
     return;
   }
-  const path = url.pathname.slice(base.length);   // relative to the entrypoint
+  const path = url.pathname.slice(base.length);   // relative to the `api` mount path
   const request = {
     method: req.method ?? "GET",
     path,
@@ -208,22 +208,22 @@ Same behaviours as the Express host, verified with the generated client and `cur
 
 - Mount from `surface()`, not from a hand-written list: only advertised operations are routable. Mount every entry ([below](#a-route-the-host-left-out)).
 - Never parse the body yourself unless you must; pass it raw.
-- Authentication is still an Aventara [pipeline](/docs/configuration#pipelines): pass all request headers through (`headers`), and a guard reads `transport.headers`. A custom host has no Nest guards to bypass.
-- Your own routes may live beside the entrypoint, but not under its `_` namespace.
+- Authentication is still an Aventara [pipeline](/docs/configuration#pipelines): pass all request headers through (`headers`), and a guard reads `ctx.$transport.headers`. A custom host has no Nest guards to bypass.
+- Your own routes may live beside the `api` mount path, but not under its `_` namespace.
 - CORS, compression, TLS and logging are your server's job.
 - The request id is the client's `Aventara-Request-Id` or one the protocol mints; the response always carries it.
 
 ## A route the host left out
 
-If your host mounts only some of `protocol.surface()`, a request for a route it left out reaches `protocol.answerAbsent`, and the caller gets `500 A3000` ("Internal framework error."). So that this is not a silent failure, your `diagnostics` function receives one `A3000` diagnostic naming the route: an `"operation"` diagnostic with the Resource, family and variant (a `"transaction"` one for `/_transactions`), whose `error` is named `UnmountedRouteError` and says which `surface()` entry to mount:
+If your host mounts only some of `protocol.surface()`, a request for a route it left out reaches `protocol.answerAbsent`, and the caller gets `500 A3000` ("Internal framework error."). So that this is not a silent failure, your `diagnostics` function receives one `A3000` diagnostic naming the route: an `"operation"` diagnostic with the Resource, family and variant (a `"transaction"` one for `/_transactions`), whose `error` is named `AvUnmountedRouteError` and says which `surface()` entry to mount:
 
 ```text
 { kind: "operation", code: "A3000", origin: "client", resource: "Post", family: "find", variant: "many",
-  error: UnmountedRouteError: The ClientContract advertises Post.find.many, but the host mounted no route for
+  error: AvUnmountedRouteError: The ClientContract advertises Post.find.many, but the host mounted no route for
          POST /_resources/Post/find/many, so protocol.answerAbsent answered it 500 A3000. Mount every protocol.surface() entry. }
 ```
 
-A route your ClientContract does not offer (a restricted operation, a transaction when transactions are off) is still answered `404` without a report. `@aventara/nest` mounts every route, so Nest applications never see this ([Request IDs and diagnostics](/docs/request-ids-and-diagnostics#what-else-reaches-it)).
+A route your ClientContract does not offer (an operation exposure removed, a transaction when transactions are off) is still answered `404` without a report. `@aventara/nest` mounts every route, so Nest applications never see this ([Request IDs and diagnostics](/docs/request-ids-and-diagnostics#what-else-reaches-it)).
 
 ## Hold your host to the corpus
 

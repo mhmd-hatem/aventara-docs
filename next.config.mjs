@@ -3,7 +3,21 @@ const withMDX = createMDX();
 export default withMDX({
   reactStrictMode: true,
   devIndicators: false,
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
+    ];
+  },
   async redirects() {
-    return [{ source: "/docs/:path*", destination: "/", permanent: false }];
+    return [
+      {
+        source: "/docs/restricting-operations",
+        destination: "/docs/exposure#operations",
+        permanent: true,
+      },
+    ];
   },
 });

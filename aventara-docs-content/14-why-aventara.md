@@ -107,10 +107,13 @@ model Post { id Int @id @default(autoincrement())  title String  views Int @defa
 ```ts
 // src/aventara.config.ts
 client: {
-  restrictions: {
-    User: {
-      fields: { passwordHash: { capabilities: { select: false, filter: false, order: false } } },
-      operations: { delete: { unique: false, first: false, count: false } },
+  exposed: true,
+  exemptions: {
+    resources: {
+      User: {
+        fields: { passwordHash: ["select", "filter", "order"] },
+        operations: { delete: true },
+      },
     },
   },
 },
@@ -159,7 +162,7 @@ The client contract has a hash, and every request carries the hash the client wa
 409  A2005  Generated client contract does not match the server. Regenerate the client.
 ```
 
-The generated client throws a typed `ContractMismatchError`. See [Contract hash](/docs/contract-hash).
+The generated client throws a typed `AvContractMismatchError`. See [Contract hash](/docs/contract-hash).
 
 ### A generated client with zero runtime dependency on Aventara
 
@@ -179,7 +182,7 @@ If any step fails, nothing is committed. See [Transactions](/docs/transactions).
 
 ### Safety defaults
 
-Limits are on from the first request: at most 250 rows per list, nesting depth 12, 50 boolean nodes in a filter, 20 steps per transaction, 1 MiB per request. Arguments are validated against the contract before the ORM sees them, and database errors are sanitized into codes, never raw SQL or stack traces. Authentication and authorization are pipelines (guards and hooks) that run for every operation. See [Configuration](/docs/configuration).
+Limits are on from the first request: at most 250 rows per list, nesting depth 12, 50 boolean nodes in a filter, 20 steps per transaction, Json values 64 levels deep, 1 MiB per request. Arguments are validated against the contract before the ORM sees them, [field validators](/docs/field-validators) check lengths, ranges and formats on the server and in the generated client, and database errors are sanitized into codes, never raw SQL or stack traces. Authentication and authorization are guards, which you can place on the whole API, a Resource, one operation or one field. See [Configuration](/docs/configuration).
 
 ### Host-agnostic protocol
 
@@ -187,15 +190,15 @@ The protocol is plain HTTP and JSON, published as data and pure functions in `@a
 
 ## Tradeoffs
 
-- Release candidate. The current release is `1.0.0-rc.0`. The public API is meant to be the 1.0 API and changes only to fix what testing finds; pin exact versions.
+- Release candidate. The current release is `1.0.0-rc.2`. Until 1.0 the public API can still change, breaking changes included, each one listed in the Changelog with upgrade steps; pin exact versions.
 - NestJS and Prisma 7 only, today. The framework core is transport- and ORM-agnostic, but the adapter shipped is Prisma 7 (SQLite or PostgreSQL) and the host is NestJS 12.
-- A fixed query language. The operations and their meaning are set by the protocol; configuration can switch operations off but not redefine them. Bespoke business logic (a payment, a report) is ordinary NestJS code that sits beside Aventara, or a pipeline on the operations.
+- A fixed query language. The operations and their meaning are set by the protocol; configuration can switch operations off but not redefine them. Bespoke business logic (a payment, a report) is ordinary NestJS code that sits beside Aventara, or a pipeline on the operations; a hook can write related rows in the same transaction as the operation ([The pipeline context](/docs/pipeline-context)).
 - One `POST` per operation. Reads are `POST` requests with a JSON body, so HTTP caching of individual reads is not what the protocol optimizes for.
-- Generated client, not hand-rolled. A schema or restriction change means regenerating the client, which is the point of the contract hash, but it is a step in your workflow.
+- Generated client, not hand-rolled. A schema or exposure change means regenerating the client, which is the point of the contract hash, but it is a step in your workflow.
 
 ## See also
 
 - [Installation](/docs/installation) for requirements and packages.
 - [Getting started](/docs/getting-started) for a running API in minutes.
 - [Concepts](/docs/concepts) for the model behind the layers, operations and results.
-- Guides: [Exposing and hiding fields](/docs/exposing-and-hiding-fields), [Restricting operations](/docs/restricting-operations), [Authentication and guards](/docs/authentication-and-guards)
+- Guides: [Exposure](/docs/exposure), [Exposing and hiding fields](/docs/exposing-and-hiding-fields), [Authentication and guards](/docs/authentication-and-guards)

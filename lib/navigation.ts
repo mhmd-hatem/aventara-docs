@@ -1,4 +1,14 @@
-export type PrimarySection = "overview" | "guides" | "reference";
+export type PrimarySection = "overview" | "guides" | "reference" | "ai";
+export const primaryNavigation: {
+  section: PrimarySection;
+  title: string;
+  href: string;
+}[] = [
+  { section: "overview", title: "Overview", href: "/docs/introduction" },
+  { section: "guides", title: "Guides", href: "/docs/querying" },
+  { section: "reference", title: "Reference", href: "/docs/config-reference" },
+  { section: "ai", title: "AI", href: "/docs/ai-agents" },
+];
 type NavigationGroup = {
   title: string;
   section: PrimarySection;
@@ -33,9 +43,10 @@ export const navigation: NavigationGroup[] = [
     section: "guides",
     items: [
       ["configuration", "Configuration", "settings"],
+      ["exposure", "Exposure", "shield"],
       ["exposing-and-hiding-fields", "Exposing & hiding fields", "shield"],
-      ["restricting-operations", "Restricting operations", "shield"],
       ["computed-fields", "Computed fields", "code"],
+      ["field-validators", "Field validators", "shield"],
       ["enums-and-scalars", "Enums & scalar types", "code"],
       ["json-fields", "JSON fields", "code"],
     ],
@@ -58,6 +69,8 @@ export const navigation: NavigationGroup[] = [
     items: [
       ["authentication-and-guards", "Authentication & guards", "shield"],
       ["pipelines", "Pipelines", "workflow"],
+      ["pipeline-context", "Pipeline context", "code"],
+      ["which-stage", "Which stage do I use?", "workflow"],
       ["limits-and-safety", "Limits & safety", "shield"],
       ["request-ids-and-diagnostics", "Request IDs & diagnostics", "life"],
     ],
@@ -88,6 +101,7 @@ export const navigation: NavigationGroup[] = [
     section: "guides",
     items: [
       ["nestjs-host", "NestJS host", "server"],
+      ["mcp", "MCP", "globe"],
       ["express-and-fastify", "Express & Fastify", "server"],
       ["custom-host", "Custom host", "globe"],
       ["testing-and-conformance", "Testing & conformance", "shield"],
@@ -129,14 +143,22 @@ export const navigation: NavigationGroup[] = [
     ],
   },
 ];
-export const pages = navigation.flatMap((group) =>
-  group.items.map(([slug, title]) => ({
-    slug,
-    title,
-    group: group.title,
-    section: group.section,
-  })),
-);
+export const pages = [
+  ...navigation.flatMap((group) =>
+    group.items.map(([slug, title]) => ({
+      slug,
+      title,
+      group: group.title,
+      section: group.section,
+    })),
+  ),
+  {
+    slug: "ai-agents",
+    title: "Working with AI agents",
+    group: "For AI agents",
+    section: "ai" as const,
+  },
+];
 export function primarySection(pathname: string): PrimarySection {
   return (
     pages.find((page) => pathname === `/docs/${page.slug}`)?.section ??

@@ -230,7 +230,7 @@ CORS is a browser rule and does not control access. A server, a script or a bot 
 | `typescript could not be resolved` | `typescript` is not installed in the project; the client is generated with a syntax-only check. |
 | `no tsconfig.json was found in ... or any directory above it` | The project has no `tsconfig.json`: it is plain JavaScript, which is not supported yet. Nothing was written. Add a `tsconfig.json` (`npx tsc --init`) and run init again. |
 | `... are both in ..., and only one may configure the generator` | Two `framework.client.*` files exist. Keep one and delete the other. |
-| A browser console error about CORS, or a `TransportError` with `status` `null` | The server does not allow your frontend's origin. Add it to `CORS_ORIGINS` and restart the server. |
+| A browser console error about CORS, or an `AvTransportError` with `status` `null` | The server does not allow your frontend's origin. Add it to `CORS_ORIGINS` and restart the server. |
 
 ### Known issues
 

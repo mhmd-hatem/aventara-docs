@@ -20,7 +20,7 @@ The main `@aventara/core` entry exports no protocol names. `AvProtocol` is a nam
 
 ### AvProtocolRequest
 
-What a host hands the protocol. `path` is relative to the entrypoint (`/_contract`, `/_resources/User/find/many`).
+What a host hands the protocol. `path` is relative to the `api` mount path (`/_contract`, `/_resources/User/find/many`).
 
 ```ts
 type AvProtocolRequest = {
@@ -47,13 +47,14 @@ type AvProtocolResponse = {
 
 Every framework response carries `Content-Type: application/json` (not on `304`) and `Aventara-Request-Id`. A `405` adds `Allow`. A contract response adds `ETag` and `Cache-Control: no-cache`.
 
-## AvProtocol.bind(framework)
+## AvProtocol.bind(framework, options?)
 
 ```ts
 const protocol: AvProtocolBinding = AvProtocol.bind(framework);   // once, at startup
+const agents = AvProtocol.bind(framework, { origin: "agent" });   // for a host that serves AI agents
 ```
 
-`bind` takes the `Framework` from `createFramework` and returns a binding derived from its client contract.
+`bind` takes the `AvFramework` from `createFramework` and returns a binding derived from its client contract. With `{ origin: "agent" }` the binding is derived from the agent contract instead: `surface()` lists the agent's routes, `/_contract` serves the agent contract, the identity headers must carry the agent contract's hash (the client's is `409 A2005`), and every request it decodes runs as the agent, under the [agent layer](/docs/configuration#the-agent-layer-and-mcp)'s pipelines. The request and response shapes are the same. An MCP server uses this binding.
 
 ```ts
 type AvProtocolBinding = {
@@ -72,13 +73,13 @@ type AvProtocolBinding = {
 
 | Member | Use it to | Notes |
 |---|---|---|
-| `surface()` | List the routes to mount. | Each entry is `{ kind: "operation", method: "POST", path: "/_resources/<Resource>/<family>/<variant>", resource, family, variant }`, then `{ kind: "contract", method: "GET", path: "/_contract" }`, then `{ kind: "transactions", method: "POST", path: "/_transactions" }` only when the client contract is `interactive`. Only advertised operations appear, so a hidden Resource has no route. Paths are relative to the entrypoint. Frozen. |
+| `surface()` | List the routes to mount. | Each entry is `{ kind: "operation", method: "POST", path: "/_resources/<Resource>/<family>/<variant>", resource, family, variant }`, then `{ kind: "contract", method: "GET", path: "/_contract" }`, then `{ kind: "transactions", method: "POST", path: "/_transactions" }` only when the client contract is `interactive`. Only advertised operations appear, so a hidden Resource has no route. Paths are relative to the `api` mount path. Frozen. |
 | `handleOperation(request)` | Decode, execute and encode one operation request. | Resolves to a response; never rejects. |
 | `handleTransaction(request)` | The same for `/_transactions`. | |
 | `encodeContract(request)` | Answer `GET /_contract`. | Synchronous. Handles `If-None-Match`: a matching ETag answers `304` with no body. |
 | `answerAbsent(request)` | Answer any other path under the protocol's `_` namespace (`400 A2000` for an unknown `/_*` path, `405` with `Allow` for a wrong method on a protocol route). | Returns `undefined` for a path outside the namespace; that one is yours to answer. |
 | `decodeOperation(request)` / `decodeTransaction(request)` | Decode without executing. | `{ ok: true, request, requestId } \| { ok: false, response, requestId }`. For hosts that run their own steps between decoding and execution. |
-| `encodeOperation(response, requestId, decoded?)` / `encodeTransaction(response, requestId)` | Encode an `OperationResponse` / `TransactionResponse` you obtained yourself (for example from `framework.execute`). | |
+| `encodeOperation(response, requestId, decoded?)` / `encodeTransaction(response, requestId)` | Encode an `AvOperationResponse` / `AvTransactionResponse` you obtained yourself (for example from `framework.execute`). | |
 | `failure(code, requestId?, allow?)` | Build a complete response for a transport-level failure your host detects itself. | Codes: `"A2000"`, `"A2010"`, `"A2011"` and `"A2012"` (which requires `allow`, the permitted methods). |
 
 Verified, in process:
@@ -105,7 +106,7 @@ protocol.failure("A2012", "rid-1", ["POST"]);
 // { status: 405, headers: { "Content-Type": "application/json", "Aventara-Request-Id": "rid-1", Allow: "POST" }, body: '{"data":null,"code":"A2012","cause":{"message":"The HTTP method is not allowed on this framework route."}}' }
 ```
 
-Authentication stays a pipeline: pass what it needs through `headers`; a guard reads `transport.headers`.
+Authentication stays a pipeline: pass what it needs through `headers`; a guard reads `ctx.$transport.headers`.
 
 A complete Express host is in [HTTP protocol](/docs/http-protocol#custom-hosts-with-aventaracoreprotocol).
 
@@ -171,7 +172,7 @@ new RegExp(AvProtocol.scalarFormats.datetime).test("2026-10-06T22:42:46.119Z"); 
 ## AvProtocol.isOperationResponse
 
 ```ts
-isOperationResponse(value: unknown): value is OperationResponse
+isOperationResponse(value: unknown): value is AvOperationResponse
 ```
 
 Whether a parsed response body is a framework envelope. HTTP status plays no part. A value is an envelope when it is an object with an own `data` and an allocated `code`; for an `A1xxx` code `cause` is exactly `null` (and `data` is `null` for `A1001`); for every other code `data` is `null` and `cause` is an object with a string `message`, optional `issues` (each with an allocated V-code, a string `message`, an optional `path` of strings and integers) and optional non-negative integer `operation`. Members the protocol does not define are ignored.
@@ -192,7 +193,7 @@ normalizeEntrypoint(value: string):
   | { ok: false; reason: EntrypointRefusalReason; message: string }
 ```
 
-The rule the server applies to `entrypoint` and the generator applies to the mount path of a URL. Only the slash spelling is coerced; anything else that is not canonical is refused, naming the defect and never echoing the value.
+The rule the server applies to `api` (and `mcp`) and the generator applies to the mount path of a URL. Only the slash spelling is coerced; anything else that is not canonical is refused, naming the defect and never echoing the value.
 
 | Input | Result |
 |---|---|

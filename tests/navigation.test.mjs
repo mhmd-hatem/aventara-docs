@@ -19,4 +19,5 @@ test("new guides and references select the appropriate primary navigation", () =
   assert.equal(primarySection("/docs/computed-fields"), "guides");
   assert.equal(primarySection("/docs/client-api-reference"), "reference");
   assert.equal(primarySection("/docs/contract-layers"), "overview");
+  assert.equal(primarySection("/docs/ai-agents"), "ai");
 });

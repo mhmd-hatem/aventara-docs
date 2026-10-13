@@ -42,7 +42,7 @@ Real response for that call:
 [{"id":1,"email":"ada@example.com","posts":{"data":[{"id":1,"title":"Hello"}],"count":1}}]
 ```
 
-With no projection you get every readable scalar field. A field restricted away in the client layer (for example a write-only `passwordHash`) is not in the type, and selecting it anyway fails validation with `V1008`.
+With no projection you get every readable scalar field. A field the client layer does not expose for reading (for example a write-only `passwordHash`) is not in the type, and selecting it anyway fails validation with `V1008`.
 
 ## Values are application values
 
@@ -51,11 +51,23 @@ With no projection you get every readable scalar field. A field restricted away 
 | `DateTime` | `Date` |
 | `BigInt` | `bigint` |
 | `Bytes` | `Uint8Array` |
-| `Decimal` | the client's own `Decimal` (`toString`, `toJSON`) |
+| `Decimal` | the client's own `AvDecimal` (`toString`, `toJSON`) |
 | `Json` | as-is, or the type declared with `AvZ` ([JSON fields](/docs/json-fields#in-your-code-and-in-the-client)) |
 | enum | a string-literal union |
 
 Arguments are encoded and results revived for you.
+
+## Required create fields
+
+A create's `data` requires what the contract's `createRequirements` lists: every required field, and each required relation written as the relation or through its reference field, not both and not neither. It applies to `create.one`, every `create.many` record, `upsert`'s `create`, and nested `$create`, `$connectOrCreate` and `$upsert` payloads, where the relation the create is nested through comes from its parent. A `$ref` counts as a value.
+
+```ts
+await avClient.Post.create.one({ data: { title: "Hello", authorId: 1 } }); // ok
+await avClient.Post.create.one({ data: { authorId: 1 } });                 // type error: `title` is missing
+await avClient.Post.create.one({ data: { title: "Hello" } });              // type error: `author` or `authorId`
+```
+
+See [Relations and nested writes](/docs/relations-and-nested-writes#required-relations-and-fields).
 
 ## Named types
 
@@ -81,7 +93,7 @@ const users: readonly User[] = await avClient.User.find.many({ where });
 const data: PostCreateData = { title: "Hello", authorId: 1 };
 ```
 
-Also exported from `AvClient.ts`: `AvClient`, `AvClientOptions`, `CallOptions`, `Fetch`, `Operation`, each enum (a union type and a same-named `as const` object), `Decimal`, the error classes and the types `Cause`, `ValidationIssue`, `OperationCode`, `ValidationCode`.
+Also exported from `AvClient.ts`: `AvClient`, `AvClientOptions`, `AvCallOptions`, `AvFetch`, `AvOperation`, each enum (a union type and a same-named `as const` object), `AvDecimal`, the error classes and the types `AvCause`, `AvValidationIssue`, `AvOperationCode`, `AvValidationCode`.
 
 ```ts
 import { Role } from "./api/AvClient";
@@ -107,7 +119,7 @@ const next = { ...user, name: "Ada L." };  // fine
 
 Named types cover the default record and the argument shapes. For the result of a call with a projection, take the type from the call itself:
 
-```ts
+```tsx
 const listCards = () =>
   avClient.Post.find.many({
     select: ["id", "title", { author: { select: ["name"] } }],
@@ -134,7 +146,7 @@ type PostCards = Resolved<typeof listCards>;
 | Call | Nothing matches |
 |---|---|
 | `find.first`, `update.first`, `delete.first` | resolves to `null` |
-| `find.unique`, `update.unique`, `delete.unique` | throws `NotFoundError` |
+| `find.unique`, `update.unique`, `delete.unique` | throws `AvNotFoundError` |
 | `find.many` | `[]` |
 | `find.count` | `0` |
 

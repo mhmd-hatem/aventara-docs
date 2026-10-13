@@ -15,9 +15,11 @@ The hash covers the whole client contract, which is more than the schema:
 
 | Changes the hash | Does not change the hash |
 |---|---|
-| Adding, removing or retyping a field in the schema | Pipelines: guards, hooks, pipes (server-side code) |
-| A restriction in the client layer (a hidden field, a write-only field, a switched-off operation) | Anything that exists only in the application layer |
-| A client limit (`maxListLimit`, `maxNestingDepth`, ...) | A field hidden from the client, added to the schema (the client contract is unchanged) |
+| Adding, removing or retyping a field the client sees | Stages: guards, pipes, hooks, interceptors, filters, field pipes and field write guards (server-side code) |
+| Exposure at the root or in the `client` overlay (a hidden field, a write-only field, a switched-off operation) | Anything that exists only in the application layer |
+| A client limit (`maxListLimit`, `maxNestingDepth`, `maxJsonDepth`, ...) | A field added to the schema that the client layer does not expose (with `exposed: false` in `client`, every new field until you exempt it) |
+| A [field validator](/docs/field-validators) on a field the client sees: adding, removing or changing it | The code inside a compute stage |
+| Adding or removing a compute phase (`COMPUTED_ON_CREATE`, ...) on a field the client sees | |
 | Transaction support (`interactive` or `none`) | Restarting the server with the same schema and configuration |
 | A typed [JSON field](/docs/json-fields): declaring a shape, or changing one (it is part of the contract as JSON Schema) | |
 
@@ -80,12 +82,12 @@ HTTP/1.1 409 Conflict
 The generated client turns it into a typed error:
 
 ```ts
-import avClient, { ContractMismatchError } from "./api/AvClient";
+import avClient, { AvContractMismatchError } from "./api/AvClient";
 
 try {
   await avClient.User.find.count();
 } catch (e) {
-  if (e instanceof ContractMismatchError) {
+  if (e instanceof AvContractMismatchError) {
     // e.code === "A2005": show "please update the app", or reload
   }
 }
@@ -97,7 +99,7 @@ The refusal protects correctness. A client built against an older contract might
 
 ## The regenerate workflow
 
-Regenerate the client whenever the deployment's client contract changes: a schema change, a client restriction, a limit.
+Regenerate the client whenever the deployment's client contract changes: a schema change, an exemption, a validator, a limit.
 
 1. Change `prisma/schema.prisma` or `src/aventara.config.ts`.
 2. For a schema change, run `npx prisma db push` (or your migration workflow), `npx prisma generate` and `npm run aventara:prepare`.

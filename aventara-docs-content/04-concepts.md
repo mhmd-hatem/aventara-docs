@@ -19,15 +19,16 @@ Aventara has four ideas: contracts and layers, Resources and operations, results
 
 ## Contracts and layers
 
-A contract is passive data: which Resources exist, which fields can be read, filtered, ordered or written, and which operations are available. It holds no code, so it can be serialized, hashed and versioned. Aventara compiles three from the same schema:
+A contract is passive data: which Resources exist, which fields can be read, filtered, ordered or written, and which operations are available. It holds no code, so it can be serialized, hashed and versioned. Aventara compiles four from the same schema:
 
 | Layer | Used for | Served over HTTP |
 |---|---|---|
 | Core | The baseline everything else starts from. | No |
 | Application | Your trusted server-side code (`framework.application.*`). | No |
-| Client | Remote callers: the HTTP protocol and the generated frontend client. | Yes, at `GET <entrypoint>/_contract` |
+| Client | Remote callers: the HTTP protocol and the generated frontend client. | Yes, at `GET <api>/_contract` |
+| Agent | AI agents, through an MCP server ([the agent layer](/docs/configuration#the-agent-layer-and-mcp)). | No: the MCP server builds its tools from it |
 
-The root of your configuration is the default for all layers; an `application` or `client` block overrides it for one. A field hidden from the client layer is absent from the generated client's types. Details: [Contract layers](/docs/contract-layers).
+The root of your configuration is the core layer; `application` and `client` are overlays on it that can hide more for their own callers, never less. What each layer exposes is set with `exposed` and `exemptions` ([Exposure](/docs/exposure)). A field hidden from the client layer is absent from the generated client's types. Details: [Contract layers](/docs/contract-layers).
 
 ## Resources and operations
 
@@ -41,11 +42,11 @@ A Resource is one Prisma model, keyed by its name (`User`, `Post`). Every Resour
 | `delete` | `first`, `unique`, `count` (no `many` with the Prisma 7 adapter) |
 | `upsert` | `unique` |
 
-Their meaning is fixed by the protocol; configuration can only switch them off. Each variant, with an example, is in [Resources and operations](/docs/resources-and-operations).
+Their meaning is fixed by the protocol; configuration can only switch them off, or run your own code around them ([Pipelines](/docs/pipelines)). Each variant, with an example, is in [Resources and operations](/docs/resources-and-operations).
 
 ## Results and typing
 
-Every operation answers one envelope, `{ data, code, cause }`. The generated client resolves to `data` and throws a typed error for every failure; a `first` miss is `null`, a `count` is a number, and results are `readonly`. The type of a result follows your `select` exactly. Details: [Results and typing](/docs/results-and-typing).
+Every operation answers one envelope, `{ data, code, cause }`, on the wire. The generated client and your server-side calls (`framework.application`, `framework.client`, `framework.transaction`) resolve to `data` and throw a typed error for every failure; a `first` miss is `null`, a `count` is a number, and results are `readonly`. The type of a result follows your `select` exactly. Details: [Results and typing](/docs/results-and-typing).
 
 ```json
 { "data": { "id": 1, "email": "ada@example.com" }, "code": "A1002", "cause": null }
@@ -55,7 +56,7 @@ Branch on `code`, never on `cause.message`. The codes are listed in the [HTTP pr
 
 ## The contract hash
 
-The client contract has a hash over everything it advertises, served as the `ETag` of `/_contract` and sent by the generated client on every request. If the server's contract has changed, the request is refused with `A2005` (`CONTRACT_MISMATCH`) and the client throws `ContractMismatchError`:
+The client contract has a hash over everything it advertises, served as the `ETag` of `/_contract` and sent by the generated client on every request. If the server's contract has changed, the request is refused with `A2005` (`CONTRACT_MISMATCH`) and the client throws `AvContractMismatchError`:
 
 ```text
 Generated client contract does not match the server. Regenerate the client.
@@ -67,11 +68,12 @@ Details and the regenerate workflow: [Contract hash](/docs/contract-hash).
 
 | To learn | Read |
 |---|---|
-| What each layer sees, and how to restrict | [Contract layers](/docs/contract-layers) |
+| What each layer sees | [Contract layers](/docs/contract-layers) |
+| Hiding fields and operations per layer | [Exposure](/docs/exposure) |
 | Every operation, with an example | [Resources and operations](/docs/resources-and-operations) |
 | How results are typed | [Results and typing](/docs/results-and-typing) |
 | Identity, ETag and stale clients | [Contract hash](/docs/contract-hash) |
 | Changing what each layer exposes | [Configuration](/docs/configuration) |
 | The query language | [Querying](/docs/querying) |
 
-See also: [Exposing and hiding fields](/docs/exposing-and-hiding-fields), [Restricting operations](/docs/restricting-operations), [Pipelines](/docs/pipelines), [Limits and safety](/docs/limits-and-safety).
+See also: [Exposure](/docs/exposure), [Exposing and hiding fields](/docs/exposing-and-hiding-fields), [Pipelines](/docs/pipelines), [Limits and safety](/docs/limits-and-safety).

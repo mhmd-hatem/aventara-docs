@@ -1,6 +1,6 @@
 ---
 title: JSON fields
-description: Give a Json field a type with AvZ - declare the shape in the configuration, get it checked on every write and typed in server code and in the generated client.
+description: Give a Json field a type with AvZ - declare the shape in the configuration, add checks to its parts, get it checked on every write and typed in server code and in the generated client.
 order: 33
 section: guides
 ---
@@ -24,10 +24,10 @@ model Post {
 }
 ```
 
-Build the shape with `AvZ`, from its own entry `@aventara/core/json`, and declare it under `fields` in `src/aventara.config.ts`:
+Build the shape with `AvZ`, from its own entry `@aventara/core/avz`, and declare it as the field's `definition.json` in `src/aventara.config.ts`:
 
 ```ts
-import { AvZ } from "@aventara/core/json";
+import { AvZ } from "@aventara/core/avz";
 
 export const postMeta = AvZ.object({
   seo: AvZ.object({ title: AvZ.string(), keywords: AvZ.array(AvZ.string()) }),
@@ -41,16 +41,16 @@ export type PostMeta = AvZ.infer<typeof postMeta>;
 
 export async function aventaraConfig(prisma: PrismaService) {
   return {
-    entrypoint: "/api",
+    api: "/api",
     adapter: /* ... */,
-    fields: { Post: { meta: { json: postMeta } } },
+    resources: { Post: { fields: { meta: { definition: { json: postMeta } } } } },
   } as const;
 }
 ```
 
-`fields` is the same block that adds [computed fields](/docs/computed-fields); a `json` entry on an existing `Json` field is how you type it. It can sit at the root or in a layer block ([Configuration reference](/docs/config-reference#fields)).
+`definition` is the same key that adds [computed fields](/docs/computed-fields); a `json` entry on a `Json` field the adapter discovered is how you type it. Like every `definition` it sits at the root only, so the shape applies to your server code and to remote callers alike ([Configuration reference](/docs/config-reference#fields)).
 
-`AvZ.infer<typeof shape>` gives the TypeScript type of the shape, for your own code. Export a shape or a configuration that holds one from a project that emits declarations and the types `AvZShape`, `AvZObject`, `AvZOptional` and `AvZNullable`, exported from `@aventara/core/json`, are there to name it.
+`AvZ.infer<typeof shape>` gives the TypeScript type of the shape, for your own code. Export a shape or a configuration that holds one from a project that emits declarations and the types `AvZShape`, `AvZObject`, `AvZOptional` and `AvZNullable`, exported from `@aventara/core/avz`, are there to name it. A function that returns a call's result without a return type is fine too: a result that holds a shaped field is named with `AvZShapedSchema`, from the same entry.
 
 ## What a shape can say
 
@@ -72,10 +72,21 @@ export async function aventaraConfig(prisma: PrismaService) {
 | `AvZ.optional(shape)` | an object key that may be left out; allowed only as a key of `AvZ.object` |
 | `AvZ.nullable(shape)` | the shape or `null` (the key is still required: `null`, not absent) |
 
-That is all of it, by design:
+A string, number, integer or array node also takes checks, written the way zod/mini writes them, with the same `AvZ` checks as [field validators](/docs/field-validators):
 
-- Types only. There are no lengths, ranges, patterns, refinements, transforms or defaults. Check the *content* of a value in a [pipeline](#rules-the-shape-does-not-have).
-- Built with `AvZ` only. A Zod schema, or any other value, is refused ([startup refusals](#what-fails-at-startup)). `AvZ` is a small builder of its own; `zod` is a dependency of `@aventara/core`, and only `@aventara/core/json` loads it. An application that declares no shape never loads it.
+```ts
+const contact = AvZ.object({
+  code: AvZ.string().check(AvZ.length(4)),
+  email: AvZ.string().check(AvZ.maxLength(80), AvZ.email()),
+  rating: AvZ.int().check(AvZ.gte(0), AvZ.lte(5)),
+  tags: AvZ.array(AvZ.string()).check(AvZ.maxItems(3)),
+});
+```
+
+A string node takes length, pattern and format checks, a number or integer node bounds and `multipleOf`, an array node `minItems` and `maxItems`. That is all of it, by design:
+
+- No refinements, transforms or defaults. A rule across several keys belongs in a [pipeline](#rules-the-shape-does-not-have).
+- Built with `AvZ` only. A Zod schema, or any other value, is refused ([startup refusals](#what-fails-at-startup)). `AvZ` is a small builder of its own; `zod` is a dependency of `@aventara/core`, and only `@aventara/core/avz` loads it. An application that declares no shape and no validator never loads it.
 - Closed objects. An unknown key is an error, not ignored.
 
 A builder given something it cannot use throws as you write the shape, with a sentence that says what to do:
@@ -92,7 +103,7 @@ AvZ.object: every part of a shape must be built with AvZ (a Zod schema or any ot
 
 ## Writes are checked
 
-Every write that carries the field is checked against the shape before the database is asked: `create`, `update`, `upsert`, a nested write (`posts: { $create: { meta: ... } }`) and a transaction step, a value taken from an earlier step with `$ref` included. A value out of shape answers `A2004` (HTTP 422) with one issue per problem, each at its exact path:
+Every write that carries the field is checked against the shape before the database is asked: `create`, `update`, `upsert`, a nested write (`posts: { $create: { meta: ... } }`) and a transaction step, a value taken from an earlier step with `$ref` included. The shape is one of the field's [validators](/docs/field-validators#where-they-run), so it is checked where validators run: after every pipe, the operation's and the field's, and after write compute, and before any interceptor or hook. Its issues are listed with the other fields' validator issues, in the order the call wrote the fields. Before the pipes, the framework only checks that the value is plain JSON. A value out of shape answers `A2004` (HTTP 422) with one issue per problem, each at its exact path:
 
 (TypeScript flags these values before the server sees them; the call below is what a caller that got past the types, or a plain HTTP client, sends.)
 
@@ -113,12 +124,12 @@ await framework.application.Post.create.one({
   "cause": {
     "message": "Operation arguments failed framework validation.",
     "issues": [
-      { "code": "V1001", "path": ["arguments", "data", "meta", "seo", "title"], "message": "Value must be a string." },
-      { "code": "V1001", "path": ["arguments", "data", "meta", "seo", "keywords", 1], "message": "Value must be a string." },
-      { "code": "V1005", "path": ["arguments", "data", "meta", "seo", "extra"], "message": "Key is not part of the shape." },
-      { "code": "V1002", "path": ["arguments", "data", "meta", "status"], "message": "Value must be one of \"draft\", \"published\"." },
+      { "code": "V1000", "path": ["arguments", "data", "meta", "cover"], "message": "Required value missing." },
       { "code": "V1001", "path": ["arguments", "data", "meta", "rating"], "message": "Value must be an integer." },
-      { "code": "V1000", "path": ["arguments", "data", "meta", "cover"], "message": "Required value missing." }
+      { "code": "V1001", "path": ["arguments", "data", "meta", "seo", "keywords", 1], "message": "Value must be a string." },
+      { "code": "V1001", "path": ["arguments", "data", "meta", "seo", "title"], "message": "Value must be a string." },
+      { "code": "V1005", "path": ["arguments", "data", "meta", "seo", "extra"], "message": "Key is not part of the shape." },
+      { "code": "V1002", "path": ["arguments", "data", "meta", "status"], "message": "Value must be one of \"draft\", \"published\"." }
     ]
   }
 }
@@ -131,6 +142,7 @@ await framework.application.Post.create.one({
 | `V1002` | a value outside an enum or a literal | `Value must be one of "draft", "published".`, `Value must be "v1".` |
 | `V1004` | an integer outside the safe range | `Value must be a safe integer (between -9007199254740991 and 9007199254740991).` |
 | `V1005` | a key the shape does not declare, once per key | `Key is not part of the shape.` |
+| `V1003`, `V1004` | a failed check on a node (with `check` and `params`, as for a [field validator](/docs/field-validators)) | `Value must be at most 80 characters long.`, `List must have at most 3 entries.` |
 
 The same refusal from inside a nested write has the nested path (`["arguments", "data", "posts", "$create", "meta", "seo"]`). In a transaction step the path is the address in the request body, `["operations", i, "args", ...]`, and the error's `cause.operation` is the step's zero-based index `i`.
 
@@ -138,13 +150,15 @@ A value taken from an earlier step is checked like any other, when the step runs
 
 ```json
 { "code": "A2004", "cause": { "operation": 1, "issues": [
+  { "code": "V1000", "path": ["operations", 1, "args", "data", "meta", "cover"], "message": "Required value missing." },
   { "code": "V1000", "path": ["operations", 1, "args", "data", "meta", "seo"], "message": "Required value missing." },
+  { "code": "V1000", "path": ["operations", 1, "args", "data", "meta", "status"], "message": "Required value missing." },
   { "code": "V1005", "path": ["operations", 1, "args", "data", "meta", "whatever"], "message": "Key is not part of the shape." } ] } }
 ```
 
 `$ref` stands for a whole field value. It is not looked for *inside* a JSON value: an object with a `$ref` key inside `meta` is checked as the plain data it is ([Transactions with $ref](/docs/transactions-with-ref)).
 
-The field may be `null` only if your schema says so (`Json?` above); a shape cannot admit `null` or absence at its top level.
+The field may be `null` only if your schema says so (`Json?` above). On a `Json?` field, writing `null` stores the database `NULL`, as on any nullable field. In a filter, `field: null` and `equals: null` match every row that reads back `null`, and `not: null` matches the rest. A `null` inside a value, or compared at a `path`, is a JSON `null`. A shape cannot admit `null` or absence at its top level. How deeply a value may nest is bounded by the `maxJsonDepth` limit (64 levels by default; deeper is `A2009` / `V1021`, [Limits and safety](/docs/limits-and-safety)).
 
 ## Reads and filters are not checked
 
@@ -168,7 +182,7 @@ const created = await framework.application.Post.create.one({
   data: { title: "T", authorId: 1, meta: { seo: { title: "Hi", keywords: [] }, status: "draft", cover: null } },
   select: ["id", "meta"],
 });
-created.data?.meta?.status;   // "draft" | "published" | undefined
+created.meta?.status;   // "draft" | "published" | undefined
 
 // in the frontend
 const post = await avClient.Post.create.one({
@@ -183,11 +197,11 @@ await avClient.Post.create.one({
 // type error: "archived" is not "draft" | "published"
 ```
 
-(`?.` is there because the `Json?` column can hold `null`.) The generated client carries the type only: it needs no Zod and imports nothing from Aventara at runtime. The server still checks the write, so a value that slips past TypeScript is answered with the `A2004` above and thrown as a `ValidationError` ([Client errors](/docs/client-errors)).
+(`?.` is there because the `Json?` column can hold `null`.) The generated client carries the type, and runs the shape's checks before it sends; it needs no Zod and imports nothing from Aventara at runtime. A value that does not match the shape's form is sent, and the server answers it. The server checks every write, so a value that slips past TypeScript is answered with the `A2004` above and thrown as an `AvValidationError` ([Client errors](/docs/client-errors)).
 
 ### The shape is part of the contract
 
-The shape travels in the ClientContract as JSON Schema, which is where the generated client reads its type from. Declaring a shape, or changing one, therefore changes the contract hash: regenerate the client ([Keeping in sync](/docs/keeping-in-sync)). A client generated before the shape was declared is refused with the usual contract-mismatch error until you do ([Contract hash](/docs/contract-hash)).
+The shape travels in the ClientContract as JSON Schema (its checks as `checks` on the node), which is where the generated client reads its type from. Declaring a shape, or changing one, therefore changes the contract hash: regenerate the client ([Keeping in sync](/docs/keeping-in-sync)). A client generated before the shape was declared is refused with the usual contract-mismatch error until you do ([Contract hash](/docs/contract-hash)).
 
 ## A union of shapes
 
@@ -207,7 +221,7 @@ const block = AvZ.discriminatedUnion("type", [
 export type Block = AvZ.infer<typeof block>;
 // { type: "text"; body: string } | { type: "image"; url: string; width: number; alt?: string }
 
-// fields: { Post: { meta: { json: block } } }
+// resources: { Post: { fields: { meta: { definition: { json: block } } } } }
 ```
 
 A value is checked against the option its tag names, so the issues point at what is wrong with *that* kind:
@@ -249,46 +263,48 @@ Closed objects are `additionalProperties: false`; an optional key is missing fro
 
 ## Rules the shape does not have
 
-A shape says what a value is. A rule about what it may contain, such as "the title is at most 60 characters", belongs in a [pipe](/docs/pipelines): it runs before the write and refuses with a code you choose. The arguments have already passed validation by then, so `meta` has the shape's form (a write that does not never reaches your pipes), though a pipe's `args` is typed `unknown`, hence the casts.
+A shape says what a value is, and its checks bound each part. A rule across several keys, such as "a published post needs at least one keyword", belongs in a [pipe](/docs/pipelines): it runs before the write and refuses with a code you choose. The arguments have already passed validation by then, so `meta` has the shape's form (a write that does not never reaches your pipes), though a pipe's `args` is typed `unknown`, hence the casts.
 
 ```ts
-import { FrameworkError, type Pipe } from "@aventara/core";
+import { AvError, type AvPipe } from "@aventara/core";
 
-const metaRules: Pipe = (args, ctx) => {
-  if (ctx.resource === "Post" && (ctx.family === "create" || ctx.family === "update")) {
-    const title = (args as { data?: { meta?: { seo?: { title?: unknown } } } }).data?.meta?.seo?.title;
-    if (typeof title === "string" && title.length > 60) {
-      throw new FrameworkError("A2004", "The post title must be at most 60 characters.");
-    }
+const metaRules: AvPipe = (args) => {
+  const meta = (args as { data?: { meta?: { status?: string; seo?: { keywords?: string[] } } } }).data?.meta;
+  if (meta?.status === "published" && (meta.seo?.keywords ?? []).length === 0) {
+    throw new AvError("A2004", "A published post needs at least one keyword.");
   }
   return args;
 };
+
+// resources: {
+//   Post: { operations: { create: { pipelines: { pipes: [metaRules] } }, update: { pipelines: { pipes: [metaRules] } } } },
+// },
 ```
 
-A caller gets `422 A2004` with that message and the write does not happen (verified with a limit of 5: `{"data":null,"code":"A2004","cause":{"message":"The post title must be at most 5 characters."}}`). Put the pipe in `client.pipelines` or `application.pipelines` ([Pipelines](/docs/pipelines#typing-a-stage)); a message you choose is sent to the caller as written, so keep secrets out of it.
+A caller gets `422 A2004` with that message and the write does not happen. A message you choose is sent to the caller as written, so keep secrets out of it ([Pipelines](/docs/pipelines#typing-a-stage)).
 
 ## Where a shape applies
 
 - Only a `Json` field the adapter discovered. A shape on a string, an int, a relation or a field that does not exist is a startup error.
 - A field, not a position. The shape applies wherever the field is written: the top level of a `create`, a nested `$create` through a relation, an `upsert`'s `create` and `update`, a transaction step.
-- Per layer, if you like. A shape declared in `client.fields` applies to remote callers only: a write from `framework.application` to the same field is then untyped and unchecked, any JSON as before. Declare it at the root, or in both blocks, to cover both ([Contract layers](/docs/contract-layers)).
+- At the root, for both origins. A field's `definition` is root-only, so the shape covers your server code and remote callers alike. A `definition` in `application` or `client` is refused (`CONFIG_FORBIDDEN_IN_OVERLAY`).
+- No `validators` key. A Json field's checks live in its shape; `pipelines.validators` on a Json field is refused (`COMPILER_INVALID_VALIDATOR`).
 
 ## What fails at startup
 
-A shape that cannot work stops the server before it listens, as a `FrameworkConstructionError` with `stage: "contract-compilation"` and diagnostics with the code `COMPILER_INVALID_JSON_SHAPE` ([Startup safety checks](/docs/config-reference#startup-safety-checks)). Real messages:
+A shape that cannot work stops the server before it listens, as an `AvConstructionError` with `stage: "contract-compilation"` and diagnostics with the code `COMPILER_INVALID_JSON_SHAPE` ([Startup safety checks](/docs/config-reference#startup-safety-checks)). Real messages:
 
 ```text
 field "Post.title" is a string field; only a Json field the adapter discovered may declare a "json" shape
 field "Post.views" is an int field; only a Json field the adapter discovered may declare a "json" shape
-field "Post.meta": "json" must be a shape built with AvZ from "@aventara/core/json"; a Zod schema or any other value is not accepted
+field "Post.meta": "json" must be a shape built with AvZ from "@aventara/core/avz"; a Zod schema or any other value is not accepted
 field "Post.meta": a field's shape cannot admit null or absence at its top level; whether the field may be null comes from the adapter model
 ```
-
-Every layer is compiled, so one mistake is reported once per layer.
 
 ## See also
 
 - [Enums and scalar types](/docs/enums-and-scalars#json): how `Json` travels.
-- [Configuration reference](/docs/config-reference#fields): the `fields` option.
+- [Configuration reference](/docs/config-reference#fields): field definitions.
+- [Field validators](/docs/field-validators): the same checks on scalar fields.
 - [Pipelines](/docs/pipelines): checking the content of a value.
 - [Typed calls](/docs/typed-calls) and [Keeping in sync](/docs/keeping-in-sync).

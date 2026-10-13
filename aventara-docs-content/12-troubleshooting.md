@@ -9,7 +9,7 @@ section: reference
 
 ## Upgrading
 
-Moving between releases (`0.1.0-pilot.0` through `0.1.0-pilot.4` to `1.0.0-rc.0`) is covered on [Upgrading](/docs/upgrading), with the steps in order and what each release changes.
+Moving between releases (`0.1.0-pilot.0` through `0.1.0-pilot.4`, `1.0.0-rc.0` and `1.0.0-rc.1`) is covered on [Upgrading](/docs/upgrading), with the steps in order and what each release changes.
 
 ## Warning on `avclient init`: typescript could not be resolved
 
@@ -51,15 +51,19 @@ Node 22 bundles npm 10, which cannot install NestJS 12's own scaffold. Upgrade n
 npm i -g npm@11
 ```
 
-## `A2005` / `ContractMismatchError`: "Generated client contract does not match the server"
+## A server-side call throws instead of returning `{ data, code, cause }`
 
-Your generated client is stale. The server's contract changed (a schema change, a restriction, a limit, an operation switched off) since the client was generated, or you are pointing at another deployment. Regenerate against the deployment you call:
+Since `1.0.0-rc.1`, `framework.application`, `framework.client` and `framework.transaction` resolve the data and throw every failure, like the generated client. Code that read `res.code` and `res.data` reads the result directly and catches the error class instead (`AvNotFoundError` for `A2003`, `AvValidationError` for `A2004`, and so on, from `@aventara/core`). See [Server-side usage](/docs/server-side-usage#errors) and [Error codes](/docs/error-codes#which-error-class).
+
+## `A2005` / `AvContractMismatchError`: "Generated client contract does not match the server"
+
+Your generated client is stale. The server's contract changed (a schema change, an exemption, a validator, a limit, an operation switched off) since the client was generated, or you are pointing at another deployment. Regenerate against the deployment you call:
 
 ```bash
 npm run avclient:generate
 ```
 
-This also happens to a stale client that calls an operation the server no longer advertises. A response that is not a framework envelope at all (a host's own 404 for a path it does not mount) is a `TransportError`, not `A2005`: check the entrypoint URL.
+This also happens to a stale client that calls an operation the server no longer advertises. A response that is not a framework envelope at all (a host's own 404 for a path it does not mount) is an `AvTransportError`, not `A2005`: check the entrypoint URL.
 
 ## `A2000` on every request
 
@@ -101,7 +105,7 @@ The server side needs TypeScript below 7 (the scaffold uses 6). A TypeScript 7 *
 After upgrading the Aventara packages, `tsc` or `npm run build` stops in `aventara.config.ts` with:
 
 ```text
-error TS2741: Property 'regenerate_with_aventara_prepare' is missing in type ... but required in type 'PrismaDiscoveryArtifact<...>'
+error TS2741: Property 'regenerate_with_aventara_prepare' is missing in type ... but required in type 'AvPrismaDiscoveryArtifact<...>'
 ```
 
 The discovery artifact in `src/generated/aventara/` was written by an older version of the adapter. Regenerate it:
@@ -114,14 +118,27 @@ If the build does not catch it, the server refuses to start with a message that 
 
 The same refusal appears after upgrading to `1.0.0-rc.0`, whose discovery artifact format is 2. Regenerate the artifact (`npm run aventara:prepare`), then the client (`avclient generate`): the Contract hash of a Prisma-backed application changed, and an old client is answered `A2005` until it is regenerated ([Upgrading](/docs/upgrading#from-010-pilot4-to-100-rc0)).
 
+## Build error: Type '2' is not assignable to type '3'
+
+After upgrading to `1.0.0-rc.1`, an artifact written by rc.0 fails the build with two errors, and usually many more after them:
+
+```text
+src/aventara.config.ts: error TS2322: Type '{ readonly regenerate_with_aventara_prepare: 2; ... }' is not assignable to type ...
+  Types of property 'regenerate_with_aventara_prepare' are incompatible.
+    Type '2' is not assignable to type '3'.
+src/generated/aventara/discovery.artifact.ts: error TS2724: '"@aventara/core"' has no exported member named 'AdapterModel'. Did you mean 'AvAdapterModel'?
+```
+
+rc.1 writes artifact format 3: it carries each model's create requirements, and it imports the type under its rc.1 name, `AvAdapterModel`. Regenerate the artifact (`npm run aventara:prepare`), then rebuild. The errors that followed (an `unknown` result, a stage parameter that is implicitly `any`, a property that does not exist on a façade) come from the old artifact and go away with it. Then regenerate the frontend client (`avclient generate`): the Contract hash changed, and an old client is answered `A2005` until it is regenerated ([Upgrading](/docs/upgrading#from-100-rc0-to-100-rc1)).
+
 ## Server does not start
 
 - `DATABASE_URL is not set`: put it in `.env` (the start scripts load it) or in the environment.
-- Aventara errors at startup (`FrameworkConstructionError`) list what is wrong in the configuration, for example a hidden Resource whose relation is still visible. See [Configuration](/docs/configuration#restrictions).
+- Aventara errors at startup (`AvConstructionError`) list what is wrong in the configuration, for example a hidden Resource whose relation is still visible, or a key that moved in rc.1 (`CONFIG_MOVED_PROPERTY`, with its new place in the message). See [Exposure](/docs/exposure) and [Upgrading](/docs/upgrading#from-100-rc0-to-100-rc1).
 - A stale discovery artifact: the schema or Prisma client changed since `aventara:prepare` last ran. The server refuses to start, with one sentence that names the fix:
 
   ```text
-  PrismaDiscoveryArtifactError: The Prisma client has changed since the discovery artifact was generated (field `User.nickname` is in the client and not in the artifact): run `npm run aventara:prepare` (the adapter's `aventara-prisma7-generate`) to regenerate it, then restart.
+  AvPrismaDiscoveryArtifactError: The Prisma client has changed since the discovery artifact was generated (field `User.nickname` is in the client and not in the artifact): run `npm run aventara:prepare` (the adapter's `aventara-prisma7-generate`) to regenerate it, then restart.
   ```
 
   Run `npx prisma generate && npm run aventara:prepare`, then restart. After upgrading Aventara packages the same step applies; see [Upgrading](/docs/upgrading).
@@ -174,7 +191,9 @@ A removed or renamed model or field is also refused at startup when the Prisma c
 {"data":null,"code":"A2004","cause":{"message":"Operation arguments failed framework validation.","issues":[{"code":"V1000","path":["arguments","data","email"],"message":"Field \"email\" is required to create User."}]}}
 ```
 
-Send every required field.
+Send every required field. In TypeScript the call does not compile: the generated client and the server-side calls require every field the contract lists in `createRequirements`, and a required relation written as the relation or through its reference field (`author` or `authorId`), not both. A required relation that is missing is reported at the relation when the caller may write it there: `Relation "author" is required to create Post: write it, or "authorId".`
+
+If a [pipe](/docs/pipelines) fills the field on the server (a `tenantId` from the request, an `ownerId` from the user), callers still have to send it, because the types follow the contract, not your pipes. Fill it with a [`compute.create`](/docs/computed-fields) stage instead, which removes it from the contract's requirements, or give the column a database default. Hiding the field from the callers' layer and keeping the pipe does not work: while that layer can still create the Resource, startup refuses it (`COMPILER_HIDDEN_REQUIRED_FIELD`), because a pipe is not something the compiler can see.
 
 ## `A2008` on create
 
@@ -190,7 +209,7 @@ A list asked for more than the limit. Page with `limit` and `offset` (or `cursor
 
 ## `A2004` / `V1008`: "select and include are mutually exclusive" or "is not selectable"
 
-Use `select` or `include`, not both. A field that a restriction made write-only (`capabilities.select: false`) cannot be selected. To-many relations cannot be selected or included at the top level of `create.many` and `update.many` (to-one relations can, and a to-many nested inside an included to-one is allowed; see [Bulk variants differ](/docs/operations-reference#bulk-variants-differ)).
+Use `select` or `include`, not both. A field made write-only by [exposure](/docs/exposure) (its `select` exempted) cannot be selected. To-many relations cannot be selected or included at the top level of `create.many` and `update.many` (to-one relations can, and a to-many nested inside an included to-one is allowed; see [Bulk variants differ](/docs/operations-reference#bulk-variants-differ)).
 
 ## `A2004` / `V1009`: cursor
 
@@ -200,21 +219,23 @@ Use `select` or `include`, not both. A field that a restriction made write-only 
 
 Bulk variants (`create.many`, `create.count`, `update.many`, `update.count`) cannot write relations. Set the foreign key (`authorId`) or use `create.one` / `update.unique` with `$connect` and friends.
 
-## Startup: `FrameworkConstructionError`
+## Startup: `AvConstructionError`
 
-The message lists diagnostics with a code and a path. Real examples:
+The error carries `stage` and a `diagnostics` list, each with a `code`, a `path` and a `message` (Node prints them under the error). Real examples, one per line as stage, code, path and message:
 
 ```text
 configuration  CONFIG_INVALID_VALUE   entrypoint: entrypoint carries a query; a mount path is /-separated segments ...
 configuration  CONFIG_UNKNOWN_PROPERTY nope: unknown configuration property: nope
 configuration  CONFIG_INVALID_VALUE   limits.maxListLimit: limits.maxListLimit must be a finite non-negative integer
-configuration  CONFIG_INVALID_VALUE   transactions: transactions must be "none" or "interactive"
+configuration  CONFIG_INVALID_VALUE   transactionsStyle: transactionsStyle must be "none" or "interactive"
+configuration  CONFIG_MOVED_PROPERTY  restrictions: restrictions moved in rc.1: use exposed + exemptions
 contract-compilation  COMPILER_DANGLING_RELATION  root.resources.User.fields.posts.target: relation target "Post" is not present in the active Contract
-contract-compilation  COMPILER_UNKNOWN_FIELD      root.resources.User.fields.nope: field "nope" is not present in the canonical compilation baseline
-contract-compilation  COMPILER_UNAVAILABLE_CAPABILITY  ...fields.name.capabilities.filter: capability "filter" requested unavailable values: regex
+contract-compilation  COMPILER_UNKNOWN_FIELD      root.resources.User.fields.nope: field "nope" is neither discovered by the adapter nor defined at the root
+contract-compilation  COMPILER_MISSING_IDENTIFIER client.exemptions.resources.User.operations.find.unique: ... needs an identifier field; pick `id` (or another complete identifier) too
+contract-compilation  COMPILER_HIDDEN_REQUIRED_FIELD client.exemptions.resources.Post.fields.title: the client layer still creates resource "Post" (...) but hides its required field "title", ...; expose "title", give "title" a compute.create, or exempt the create operation
 ```
 
-Each is explained in [Configuration reference](/docs/config-reference#startup-diagnostics). The most common: hiding a Resource without hiding the relations that point at it.
+Each code is explained in [Error codes](/docs/error-codes#startup-codes). The most common: hiding a Resource without hiding the relations that point at it.
 
 ## Startup: "DATABASE_URL is not set"
 
@@ -241,7 +262,7 @@ avclient: entrypoint reads AVENTARA_API_URL, which is not set in the process env
 
 Add `AVENTARA_API_URL="http://localhost:3000/api"` to `.env`, or pass it in the environment (CI).
 
-## `TransportError`
+## `AvTransportError`
 
 Thrown when no Aventara envelope arrived:
 
@@ -259,10 +280,10 @@ A browser frontend on another origin than the API (Vite on `5173`, Next.js on `3
 CORS_ORIGINS="http://localhost:5173,https://app.example.com"
 ```
 
-A request from an allowed origin gets `Access-Control-Allow-Origin` back; any other origin gets no such header, and the browser reports a CORS error (to the generated client that is a `TransportError` with `status` `null`). The generated client sends custom headers (`Aventara-Protocol-Version`, `Aventara-Contract-Hash`, `Content-Type: application/json`), so browsers send a preflight `OPTIONS`; Nest's `enableCors` answers it. A project that was not created by the current scaffold may have no `enableCors` call at all: add one to `main.ts` ([Deploying](/docs/deploying#cors-and-browsers)). CORS is not access control; see [Rate limiting](/docs/limits-and-safety#rate-limiting) and [Authentication and guards](/docs/authentication-and-guards).
+A request from an allowed origin gets `Access-Control-Allow-Origin` back; any other origin gets no such header, and the browser reports a CORS error (to the generated client that is an `AvTransportError` with `status` `null`). The generated client sends custom headers (`Aventara-Protocol-Version`, `Aventara-Contract-Hash`, `Content-Type: application/json`), so browsers send a preflight `OPTIONS`; Nest's `enableCors` answers it. A project that was not created by the current scaffold may have no `enableCors` call at all: add one to `main.ts` ([Deploying](/docs/deploying#cors-and-browsers)). CORS is not access control; see [Rate limiting](/docs/limits-and-safety#rate-limiting) and [Authentication and guards](/docs/authentication-and-guards).
 
 ## Still stuck
 
 Capture the `Aventara-Request-Id` from the response (or send your own with `requestId`), find that id in your `diagnostics` sink output, and check [Error codes](/docs/error-codes).
 
-See also: [Upgrading](/docs/upgrading), [Restricting operations](/docs/restricting-operations), [Authentication and guards](/docs/authentication-and-guards), [Limits and safety](/docs/limits-and-safety).
+See also: [Upgrading](/docs/upgrading), [Exposure](/docs/exposure), [Authentication and guards](/docs/authentication-and-guards), [Limits and safety](/docs/limits-and-safety).

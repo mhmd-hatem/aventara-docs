@@ -75,7 +75,7 @@ const examples = {
   User: {
     schema:
       "model User {\n  id    Int     @id\n  email String  @unique\n  name  String?\n}",
-    code: 'const users = await avClient.User.find.many({\n  select: ["id", "name"],\n  take: 3,\n});',
+    code: 'const users = await avClient.User.find.many({\n  select: ["id", "name"],\n  limit: 3,\n});',
     result: "Array<{ id: number; name: string | null }>",
   },
   Post: {

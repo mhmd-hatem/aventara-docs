@@ -40,7 +40,7 @@ Without the header, the response carries a generated one, `Aventara-Request-Id: 
 ### Where it appears
 
 - the `Aventara-Request-Id` response header, on every framework response;
-- `requestId` in every [pipeline](/docs/pipelines) context: guards, pipes, hooks, interceptors, filters, and computed-field callbacks (`operation.requestId`);
+- `ctx.$requestId` in every [pipeline](/docs/pipelines) stage: guards, pipes, hooks, interceptors, filters and compute stages; a `ctx` call, `ctx.$sql` or `ctx.$transaction` a stage makes runs under the same id;
 - `requestId` in every diagnostic (below);
 - for a [transaction](/docs/transactions-with-ref), every step shares the plan's request id.
 
@@ -53,7 +53,7 @@ await avClient.User.find.count({}, { requestId: "checkout-17" });
 await avClient.transaction([a, b], { requestId: "checkout-17" });
 ```
 
-`requestId` is a per-call option and is sent as the header; see [Frontend client](/docs/client-options#calloptions). Generate one per user action to tie a screen's calls together, or let the framework do it.
+`requestId` is a per-call option and is sent as the header; see [Frontend client](/docs/client-options#avcalloptions). Generate one per user action to tie a screen's calls together, or let the framework do it.
 
 ### From server-side code
 
@@ -61,19 +61,25 @@ await avClient.transaction([a, b], { requestId: "checkout-17" });
 await this.framework.application.User.find.count({}, { requestId: "job-42" });
 ```
 
-Omit it and one is generated. See [Server-side usage](/docs/server-side-usage#executionoptions).
+Omit it and one is generated. The same options take `state`, which seeds the call's `ctx.$state` ([The pipeline context](/docs/pipeline-context#request-state)):
+
+```ts
+await this.framework.application.Post.create.one({ data }, { requestId: "job-42", state: { user } });
+```
+
+See [Server-side usage](/docs/server-side-usage#avexecutionoptions).
 
 ## Diagnostics
 
 Callers never see raw database errors, SQL, connection strings or stack traces. A failure you did not plan for answers a sanitized envelope (`A3001` "Adapter execution failed.", `A3000` "Internal framework error."), and two places learn what happened: one line in the server's own log (below), and the `diagnostics` function in your configuration, which receives the real error.
 
 ```ts
-import { createFramework, type FrameworkDiagnostic } from "@aventara/core";
+import { createFramework, type AvDiagnostic } from "@aventara/core";
 
 return {
-  entrypoint: "/api",
+  api: "/api",
   adapter: /* ... */,
-  diagnostics: (d: FrameworkDiagnostic) => {
+  diagnostics: (d: AvDiagnostic) => {
     console.error(
       JSON.stringify({
         kind: d.kind,
@@ -118,6 +124,32 @@ Whether or not you configured a `diagnostics` function, every internal failure (
 ERROR [Aventara] A3000 on Counter.find.many (client origin, request checkout-17): Error. The raw error goes to the framework's diagnostics sink.
 ```
 
+A project made by `aventara new` or `aventara init` has a `diagnostics` sink already. Its `src/aventara.config.ts` logs the raw error with its stack through Nest's `Logger`, at error level, so the error itself appears right after that line:
+
+```ts
+import type { AvDiagnostic } from '@aventara/core';
+import { Logger } from '@nestjs/common';
+
+const logger = new Logger('Aventara');
+
+// inside aventaraConfig(), beside `exposed`:
+diagnostics: (diagnostic: AvDiagnostic) => {
+  const { error } = diagnostic;
+  logger.error(
+    `${diagnostic.code} (request ${diagnostic.requestId}): raw error`,
+    error instanceof Error ? error.stack : String(error),
+  );
+},
+```
+
+```text
+ERROR [Aventara] A3000 (request checkout-17): raw error
+Error: audit service unreachable
+    at auditTrail (...)
+```
+
+Replace it with your own reporter (an error tracker, structured logs) as above. The raw error can hold SQL, a connection string or row data, so send it only where secrets are allowed.
+
 The line carries the code, the operation (`Resource.family.variant`, or `a transaction`, with the plan step), the origin (`application` or `client`), the request id and the class name of the error. The one exception is `A3004` (a pipe returned invalid arguments): the line also names the pipe, the operation and the field, because that detail is kept off the wire and the log is where you read it ([Pipelines](/docs/pipelines#what-a-pipe-may-and-may-not-do)).
 
 ### What the reporter receives
@@ -127,11 +159,11 @@ The line carries the code, the operation (`Resource.family.variant`, or `a trans
 | `kind` | `"operation"` or `"transaction"` (a plan-level failure). |
 | `error` | The raw error, exactly as thrown. Server-side only: it is never projected onto the wire. |
 | `code` | The code the caller received (`A3000`, `A3001`, ...). |
-| `origin` | `"application"` (your own server code) or `"client"` (a remote request). |
+| `origin` | `"application"` (your own server code), `"client"` (a remote request) or `"agent"` (an AI agent over [MCP](/docs/mcp)). |
 | `requestId` | The request's correlation id. |
 | `resource`, `family`, `variant` | The operation (`kind: "operation"` only). |
 | `operation` | For a transaction step, its zero-based index. |
-| `deliberate` | Readable on every diagnostic, but only an operation diagnostic (`kind: "operation"`) ever carries it; a transaction diagnostic declares it and never sets it. `true` when `error` is a `FrameworkError` with an `A3xxx` code that your own code threw on purpose (below). Absent for a failure the framework did not expect. |
+| `deliberate` | Readable on every diagnostic, but only an operation diagnostic (`kind: "operation"`) ever carries it; a transaction diagnostic declares it and never sets it. `true` when `error` is an `AvError` with an `A3xxx` code that your own code threw on purpose (below). Absent for a failure the framework did not expect. |
 
 A failing transaction step reports with the plan's request id and the step's identity:
 
@@ -141,7 +173,7 @@ A failing transaction step reports with the plan's request id and the step's ide
 
 ### When it fires
 
-The reporter is for unplanned failures: a database error the framework cannot classify, an error thrown by your own pipeline code or computed-field callback (the caller gets `A3000`), an unexpected internal state. It does not fire for planned outcomes: a validation failure (`A2004`), a missing record (`A2003`), a unique-constraint conflict (`A2008`), or an `A4xxx` your guard raised on purpose. A deliberate `A3xxx` error you threw, though, is reported ([below](#what-else-reaches-it)).
+The reporter is for unplanned failures: a database error the framework cannot classify, an error thrown by your own pipeline code or compute stage (the caller gets `A3000`), an unexpected internal state. It does not fire for planned outcomes: a validation failure (`A2004`), a missing record (`A2003`), a unique-constraint conflict (`A2008`), or an `A4xxx` your guard raised on purpose. A deliberate `A3xxx` error you threw, though, is reported ([below](#what-else-reaches-it)).
 
 A guard that throws an ordinary `Error("boom secret")`, for instance, answers `A3000` ("Internal framework error.", HTTP 500) and your reporter receives `code: "A3000"` with `error` set to the original `Error: boom secret`.
 
@@ -149,41 +181,41 @@ A guard that throws an ordinary `Error("boom secret")`, for instance, answers `A
 
 Besides unexpected failures, the reporter also receives four kinds of report. In each the caller's answer is unchanged.
 
-A deliberate internal error. A `FrameworkError` you throw on purpose with an `A3xxx` code (from a guard, pipe, hook, interceptor, computed field or adapter, or returned by a filter) reaches the reporter once, as the error you threw, under its code, with `deliberate: true`. The caller still gets the generic `A3000` or `A3001` envelope, so your message and issues are visible nowhere else. A pipe that does `throw new FrameworkError("A3001", "billing service is down")`:
+A deliberate internal error. An `AvError` you throw on purpose with an `A3xxx` code (from a guard, pipe, hook, interceptor, computed field or adapter, or returned by a filter) reaches the reporter once, as the error you threw, under its code, with `deliberate: true`. The caller still gets the generic `A3000` or `A3001` envelope, so your message and issues are visible nowhere else. A pipe that does `throw new AvError("A3001", "billing service is down")`:
 
 ```text
 caller:   {"data":null,"code":"A3001","cause":{"message":"Adapter execution failed."}}
 reporter: { kind: "operation", code: "A3001", origin: "application", resource: "Category", family: "create",
-            variant: "one", deliberate: true, error: FrameworkError: billing service is down }
+            variant: "one", deliberate: true, error: AvError: billing service is down }
 ```
 
-A result that does not match its Contract. An adapter row with a wrong value, a missing field, a result of the wrong shape: one `A3000` diagnostic whose `error` is an `OutputValidationError` that names the operation and lists the problems in `error.issues`:
+A result that does not match its Contract. An adapter row with a wrong value, a missing field, a result of the wrong shape: one `A3000` diagnostic whose `error` is an `AvOutputValidationError` that names the operation and lists the problems in `error.issues`:
 
 ```text
-error.name:     OutputValidationError
+error.name:     AvOutputValidationError
 error.message:  The result of Post.find.many does not satisfy its Contract at "data.0.title" (V1001: Value must be a string.)
 error.issues:   [ { code: "V1001", path: ["data", 0, "title"], message: "Value must be a string." } ]
 ```
 
-A computed field that returns the wrong thing. A read or write behavior that returns a value its field refuses is reported as a `ComputedValueError`, with the issues:
+A computed field that returns the wrong thing. A read or write compute stage that returns a value its field refuses is reported as an `AvComputedValueError`, with the issues:
 
 ```text
-error.name:     ComputedValueError
-error.message:  The read behavior of Post.shout returned a value its Contract refuses (V1001: Value must be a string.)
+error.name:     AvComputedValueError
+error.message:  The compute.read stage of Post.shout returned a value its Contract refuses (V1001: Value must be a string.)
 ```
 
-A route your own host did not mount. If a [custom host](/docs/custom-host#a-route-the-host-left-out) mounts only some of `protocol.surface()` and a request reaches `protocol.answerAbsent` for a route it left out, you get one `A3000` diagnostic naming the route, with the error `UnmountedRouteError`:
+A route your own host did not mount. If a [custom host](/docs/custom-host#a-route-the-host-left-out) mounts only some of `protocol.surface()` and a request reaches `protocol.answerAbsent` for a route it left out, you get one `A3000` diagnostic naming the route, with the error `AvUnmountedRouteError`:
 
 ```text
-error.name:     UnmountedRouteError
+error.name:     AvUnmountedRouteError
 error.message:  The ClientContract advertises Post.find.many, but the host mounted no route for POST /_resources/Post/find/many, so protocol.answerAbsent answered it 500 A3000. Mount every protocol.surface() entry.
 ```
 
 A diagnostic for `/_transactions` has `kind: "transaction"`. The caller's answer is `500 A3000` as before, and a route your ClientContract does not offer is still answered without a report. `@aventara/nest` mounts every route, so a Nest application never sees this.
 
-A [filter](/docs/pipelines) that inspects an error sees the original error in these cases (an `OutputValidationError`, say), not a `FrameworkError` with the code `A3000`.
+A [filter](/docs/pipelines) that inspects an error sees the original error in these cases (an `AvOutputValidationError`, say), not an `AvError` with the code `A3000`.
 
-The message you put in a `FrameworkError` is yours to read in the reporter, and it is sent to the caller as written for every code outside `A3xxx` (such as `A4002`), so such a message must not carry database text, SQL, a stack, a path or a secret.
+The message you put in an `AvError` is yours to read in the reporter, and it is sent to the caller as written for every code outside `A3xxx` (such as `A4002`), so such a message must not carry database text, SQL, a stack, a path or a secret.
 
 ### Misuse reports
 
@@ -197,7 +229,7 @@ It is configured once at the root of the configuration. It is not a pipeline sta
 
 ### Typing
 
-As with pipelines, annotate the parameter: `(d: FrameworkDiagnostic) => ...`. An unannotated parameter inside an `as const` configuration has no contextual type.
+As with pipelines, annotate the parameter: `(d: AvDiagnostic) => ...`. An unannotated parameter inside an `as const` configuration has no contextual type.
 
 ## See also
 

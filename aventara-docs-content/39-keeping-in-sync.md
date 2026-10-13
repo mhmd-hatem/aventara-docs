@@ -14,7 +14,7 @@ A generated client is a snapshot of your server's client contract. When the cont
 The client is bound to the hash of the whole contract the deployment advertises, not only your schema. Regenerate after any of:
 
 - a schema change (a new model, field or enum value),
-- a change to `client` restrictions, limits or operations in your configuration,
+- a change to exposure (at the root or under `client`), field validators, limits or operations in your configuration,
 - transactions switched on or off for the client layer,
 - a typed [JSON field](/docs/json-fields) declared or changed (its shape is part of the contract),
 - moving to a new Aventara release that changes what a contract states: the release notes say so ([Upgrading](/docs/upgrading)).
@@ -53,20 +53,20 @@ If the contract is unchanged but the generator or the entrypoint changed, the ou
 
 ## What a stale client does
 
-Every request carries the contract hash and protocol version. If they do not match the server, the server answers `409 A2005` and the client throws `ContractMismatchError`:
+Every request carries the contract hash and protocol version. If they do not match the server, the server answers `409 A2005` and the client throws `AvContractMismatchError`:
 
 ```ts
 try {
   await avClient.User.find.many({});
 } catch (e) {
-  // e instanceof ContractMismatchError, e.code === "A2005"
+  // e instanceof AvContractMismatchError, e.code === "A2005"
   // e.cause.message: "Generated client contract does not match the server. Regenerate the client."
 }
 ```
 
-It happens before anything runs, so nothing is half-applied. This includes calling an operation the server no longer advertises. A response that is not an Aventara envelope at all (a host's own 404, a proxy error) is a `TransportError` instead: nothing in it says the client is stale.
+It happens before anything runs, so nothing is half-applied. This includes calling an operation the server no longer advertises. A response that is not an Aventara envelope at all (a host's own 404, a proxy error) is an `AvTransportError` instead: nothing in it says the client is stale.
 
-Two deployments of one schema can advertise different contracts (different restrictions, different limits). A client generated against one is refused by the other, so generate against the deployment the client will call. In practice: generate against the environment you deploy to, or make sure every environment runs the same configuration.
+Two deployments of one schema can advertise different contracts (different exemptions, different limits). A client generated against one is refused by the other, so generate against the deployment the client will call. In practice: generate against the environment you deploy to, or make sure every environment runs the same configuration.
 
 ## Generating in CI
 
@@ -87,7 +87,7 @@ If `AvClient.ts` or `generated/` holds something the generator did not write, it
 
 ## A workflow that works
 
-1. Change the schema or restrictions on the server; `prisma db push` / `npm run aventara:prepare`; restart.
+1. Change the schema or the configuration on the server; `prisma db push` / `npm run aventara:prepare`; restart.
 2. `npm run avclient:generate` in the frontend.
 3. Fix the type errors the compiler now reports: they are exactly what changed in the contract.
 4. Commit the server change and the regenerated client together.
@@ -95,7 +95,7 @@ If `AvClient.ts` or `generated/` holds something the generator did not write, it
 ## See also
 
 - [Client setup](/docs/client-setup)
-- [Client errors](/docs/client-errors#contractmismatcherror)
+- [Client errors](/docs/client-errors#avcontractmismatcherror)
 - [Contract hash](/docs/contract-hash)
 - [CLI reference](/docs/cli-reference)
 - Guides: [Deploying](/docs/deploying), [Upgrading](/docs/upgrading)

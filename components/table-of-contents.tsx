@@ -3,14 +3,16 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowUp, List } from "lucide-react";
 export function TableOfContents({
   items,
+  maxDepth = 3,
 }: {
   items: { title: ReactNode; url: string; depth: number }[];
+  maxDepth?: number;
 }) {
   const [active, setActive] = useState("");
   const navRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const headings = items
-      .filter((item) => item.depth > 1 && item.depth < 4)
+      .filter((item) => item.depth > 1 && item.depth <= maxDepth)
       .map((item) => ({
         url: item.url,
         element: document.getElementById(item.url.slice(1)),
@@ -44,7 +46,7 @@ export function TableOfContents({
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
     };
-  }, [items]);
+  }, [items, maxDepth]);
 
   useEffect(() => {
     const nav = navRef.current;
@@ -84,13 +86,13 @@ export function TableOfContents({
       </div>
       <nav ref={navRef} aria-label="On this page">
         {items
-          .filter((i) => i.depth > 1 && i.depth < 4)
+          .filter((i) => i.depth > 1 && i.depth <= maxDepth)
           .map((i) => (
             <a
               key={i.url}
               href={i.url}
               aria-current={active === i.url ? "location" : undefined}
-              className={`${active === i.url ? "toc-active" : ""} ${i.depth === 3 ? "toc-nested" : ""}`}
+              className={`${active === i.url ? "toc-active" : ""} ${i.depth >= 3 ? "toc-nested" : ""}`}
             >
               {i.title}
             </a>
@@ -102,7 +104,10 @@ export function TableOfContents({
       <div className="toc-note">
         <span className="pilot-dot" />
         <strong>Release candidate</strong>
-        <p>The public API is set for 1.0. Your testing helps find the fixes.</p>
+        <p>
+          Breaking changes are still possible before 1.0. Pin exact versions and
+          check the changelog before upgrading.
+        </p>
       </div>
     </aside>
   );

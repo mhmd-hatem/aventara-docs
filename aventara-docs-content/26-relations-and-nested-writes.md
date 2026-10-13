@@ -22,7 +22,7 @@ await avClient.User.find.first({ where: { id: 3 }, include: ["posts"] });
 // {
 //   avatar: null, createdAt: 2026-10-06T22:58:25.885Z, email: 'alan@example.com', id: 3, name: null,
 //   passwordHash: '', role: 'USER', settings: null,
-//   posts: [ { authorId: 3, bigViews: 0n, body: null, categoryId: 1, id: 6, price: Decimal {},
+//   posts: [ { authorId: 3, bigViews: 0n, body: null, categoryId: 1, id: 6, price: AvDecimal {},
 //             publishedAt: null, title: 'Enigma', views: 100 } ]
 // }
 ```
@@ -75,7 +75,7 @@ await avClient.Category.find.many({
 
 To count related rows instead of loading them, use `$count` ([Counting](/docs/counting)). To filter or order parents by their relations, see [Filtering, sorting and paging](/docs/filtering-sorting-paging#filtering-through-relations).
 
-A restriction can hide a relation, forbid including it, or narrow its pagination: [Exposing and hiding fields](/docs/exposing-and-hiding-fields).
+[Exposure](/docs/exposure) can hide a relation, forbid including it, or narrow its pagination: [Exposing and hiding fields](/docs/exposing-and-hiding-fields).
 
 ## Writing relations
 
@@ -83,6 +83,27 @@ Inside `data` of a `create` or `update`, a relation field takes directives. You 
 
 - Not together with the same relation: setting `authorId` and `author: { $connect: … }` in one record names the reference twice and is refused before the database is asked: `422` `A2004` with a `V1012` issue at the relation, `Set "authorId" or "author", not both.` It holds for required and optional relations, for `create`, `update` and `upsert`, for nested writes at any depth and for each step of a transaction. Either one alone is fine.
 - Not beside another relation's write (Prisma): a record that writes one relation through its field and another relation directly, such as `authorId` beside `category: { $connect: … }`, is refused with `V1012`: `Use relation fields only, or reference fields only, in one record: "authorId" is a reference field and "category" is a relation.` Write all the record's relations as relations, or all through their fields. A field beside a relation that holds no reference on that side (`mentorId` beside `posts: { $create: … }` on an author) is accepted.
+
+### Required relations and fields
+
+A create must write every field the database requires and every required relation. The contract says which, per Resource, as `createRequirements` ([Resources and operations](/docs/resources-and-operations#what-a-create-requires)), and the types follow it: in the generated client, `framework.application`, `framework.client`, the transaction builders and a stage's `ctx`, a create that leaves one out does not compile.
+
+A required relation is written one way or the other: the relation (`author: { $connect: … }` or `$create`), or the field that holds its reference (`authorId`). Neither is a type error, and so is both:
+
+```ts
+await avClient.Post.create.one({ data: { title: "Hi", authorId: 1 } });                     // ok
+await avClient.Post.create.one({ data: { title: "Hi", author: { $connect: { id: 1 } } } }); // ok
+// @ts-expect-error: write `author` or `authorId`
+await avClient.Post.create.one({ data: { title: "Hi" } });
+// @ts-expect-error: `author` and `authorId` both
+await avClient.Post.create.one({ data: { title: "Hi", authorId: 1, author: { $connect: { id: 1 } } } });
+```
+
+When the reference has several fields (a composite key), the field way means all of them together. A create nested through a relation gets that relation from its parent, so a `Post` in `User.posts: { $create: … }` needs its `title` and nothing for its author. A `$ref` counts as a value. `create.many` and `create.count` records write no relation, so each one needs `authorId` (all the fields of a composite reference), and a record without it is refused with `V1000` at `data.<n>.authorId`.
+
+What a layer hides is not asked of its callers: if the client layer hides `authorId`, a client create needs `author`; if it hides `author`, it needs `authorId`. Hiding both (or exempting their `create`) while the layer can still create posts is refused at startup (`COMPILER_HIDDEN_REQUIRED_FIELD`, see [Exposure](/docs/exposure#creates-need-what-they-require)). So is hiding `authorId` while the layer keeps `create.many` or `create.count`, even with `author` exposed: those records have no other way to name the author. Exempt the two variants in that layer, or keep `authorId`.
+
+A field a [`compute.create`](/docs/computed-fields) stage fills is not required in the generated client, `framework.application`, `framework.client` and the transaction builders, whether the stage is written inline in `createFramework`, in a `defineResource` block, or in an overlay (where it counts for that layer only). A stage's `ctx` is the exception: its calls are typed from the adapter's model, with no layer or compute applied, so `ctx.Post.create.one` still asks for `slug` even where a `compute.create` fills it. Pass any value there (the compute overwrites it), or call through the façade. A request that gets past the types is refused the same way at runtime: `A2004` with `V1000` at the missing field (`Relation "author" is required to create Post: write it, or "authorId".`), or `V1012` for both.
 
 | Directive | Meaning | On create | On update |
 |---|---|---|---|
@@ -95,7 +116,7 @@ Inside `data` of a `create` or `update`, a relation field takes directives. You 
 | `$disconnect` | Unlink without deleting: `true` on an optional to-one, identifiers on a to-many. | | optional to-one, to-many |
 | `$set` | Make the relation exactly this set. | | to-many |
 
-The directives a relation accepts are in the contract (`capabilities.create` / `update`), and a restriction can narrow them. Directives are only valid in writes: in a `where` they answer `V1006`.
+The directives a relation accepts are in the contract (`capabilities.create` / `update`), and exposure can narrow them. Directives are only valid in writes: in a `where` they answer `V1006`.
 
 ### Create and link
 
@@ -182,15 +203,20 @@ await avClient.User.upsert.unique({
 
 | Mistake | Result |
 |---|---|
-| `$connect` to a record that does not exist | `ValidationError`, `A2004` ("The operation's arguments referenced a record that does not exist.") |
-| A foreign key that does not exist (`authorId: 999`) | `ConflictError`, `A2008` |
-| `$update` / `$delete` on a to-many without `where` | `ValidationError`, `A2004` / `V1012` |
-| A reference field and its own relation in one record (`authorId` with `author: { $connect: … }`) | `ValidationError`, `A2004` / `V1012`: `Set "authorId" or "author", not both.` |
-| One relation written through its reference field and another written directly, on Prisma (`authorId` with `category: { $connect: … }`) | `ValidationError`, `A2004` / `V1012`: `Use relation fields only, or reference fields only, in one record: …` |
-| A directive the contract does not offer on that relation | `ValidationError`, `A2004` / `V1006` |
-| A relation filter in the `where` of a to-many nested `$update` or `$delete` (at any depth, under `AND`, `OR` or `NOT` too) | `ValidationError`, `A2004` / `V1006` (below) |
+| `$connect` to a record that does not exist | `AvNotFoundError`, `404` `A2003` ("The operation's arguments referenced a record that does not exist."), in a transaction step too |
+| A nested write the target Resource's own guard refuses (a client `$create` of a `Category` when `Category`'s create guard says no) | `AvAuthError`, `A4001` (or the code the guard threw) |
+| A foreign key that does not exist (`authorId: 999`) | `AvConflictError`, `A2008` |
+| `$update` / `$delete` on a to-many without `where` | `AvValidationError`, `A2004` / `V1012` |
+| A reference field and its own relation in one record (`authorId` with `author: { $connect: … }`) | `AvValidationError`, `A2004` / `V1012`: `Set "authorId" or "author", not both.` |
+| One relation written through its reference field and another written directly, on Prisma (`authorId` with `category: { $connect: … }`) | `AvValidationError`, `A2004` / `V1012`: `Use relation fields only, or reference fields only, in one record: …` |
+| A directive the contract does not offer on that relation | `AvValidationError`, `A2004` / `V1006` |
+| A relation filter in the `where` of a to-many nested `$update` or `$delete` (at any depth, under `AND`, `OR` or `NOT` too) | `AvValidationError`, `A2004` / `V1006` (below) |
 
-On a required relation, a directive that would leave a child with no parent (for example `$set` that drops a `Post` from its `User`) is refused by the database and answers `ConflictError`, `409` `A2008` ("The operation conflicts with the current state of the resource."). Nothing is written. This applies to `User.update.unique` with `posts: { $disconnect: [{ id: 1 }] }` or `posts: { $set: [] }` where `Post.authorId` is required.
+On a required relation, a directive that would leave a child with no parent (for example `$set` that drops a `Post` from its `User`) is refused by the database and answers `AvConflictError`, `409` `A2008` ("The operation conflicts with the current state of the resource."). Nothing is written. This applies to `User.update.unique` with `posts: { $disconnect: [{ id: 1 }] }` or `posts: { $set: [] }` where `Post.authorId` is required.
+
+### Nested writes run the target's guards
+
+A nested write is checked by the Resource it reaches, before the single database call. `Post.create.one({ data: { category: { $create: { name: "x" } } } })` runs `Category`'s own Resource and `create` guards, and its field pipes, validators, write guards and compute, on the nested data. A `$update` or `$upsert` runs the target's `update` guards, a `$delete` its `delete` guards, and a `$connect`, `$disconnect` or `$set` the target's `update` guards when the target's row is what changes. A guard there sees `ctx.$operation.nested === true`. The whole table is in [Pipelines](/docs/pipelines#nested-writes-run-the-targets-stages).
 
 ### The `where` of a nested `$update` or `$delete`
 
@@ -201,7 +227,7 @@ await avClient.User.update.unique({
   where: { id: 1 },
   data: { posts: { $update: { where: { category: { name: "News" } }, data: { views: 1 } } } },
 });
-// ValidationError A2004 (422): { path: ["arguments","data","posts","$update","where","category"], code: "V1006",
+// AvValidationError A2004 (422): { path: ["arguments","data","posts","$update","where","category"], code: "V1006",
 //   message: 'Relation filter "category" is not available here: a nested $update or $delete filter on this relation takes scalar fields only.' }
 ```
 
@@ -218,7 +244,11 @@ await avClient.Post.update.many({ where: { views: { gt: 50 } }, data: { views: {
 // [ { id: 6, views: 200 } ]
 ```
 
-`$increment`, `$decrement`, `$multiply` and `$divide` apply to numeric fields (`Int`, `BigInt`, `Decimal`). A required to-one relation such as `Post.author` has no `$disconnect` or `$delete`.
+`$increment`, `$decrement`, `$multiply` and `$divide` apply to numeric fields (`Int`, `BigInt`, `Float`, `Decimal`). A required to-one relation such as `Post.author` has no `$disconnect` or `$delete`.
+
+One object holds one directive: `{ $increment: 1, $decrement: 2 }` is a type error and is refused with `422` `A2004` / `V1001` at the field.
+
+A `$divide` by zero is the database's to answer. PostgreSQL refuses the division, and SQLite computes `NULL`, which a required column refuses. Either way the call answers `422` `A2004` / `V1004` at `["arguments"]` and nothing is written. On SQLite a nullable column stores the `NULL`.
 
 ## See also
 

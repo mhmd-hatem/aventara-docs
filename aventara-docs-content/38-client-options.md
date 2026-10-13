@@ -7,7 +7,7 @@ section: frontend
 
 # Client options
 
-The default export `avClient` is ready to use against the deployment the client was generated from. When you need another deployment, authentication, or per-call control, there are two levels of options: the client (`new AvClient({ ... })`) and the call (`CallOptions`).
+The default export `avClient` is ready to use against the deployment the client was generated from. When you need another deployment, authentication, or per-call control, there are two levels of options: the client (`new AvClient({ ... })`) and the call (`AvCallOptions`).
 
 ## new AvClient({ entrypoint, fetch })
 
@@ -45,7 +45,7 @@ export const authedClient = new AvClient({
 });
 ```
 
-`getToken()` runs on every call, so a refreshed token is picked up. Use a plain `avClient` for public reads and `authedClient` for the rest; a server guard that only guards writes (as in [Example: blog API](/docs/example-blog-api)) answers the plain client with `AuthError` (`A4000`).
+`getToken()` runs on every call, so a refreshed token is picked up. Use a plain `avClient` for public reads and `authedClient` for the rest; a server guard that only guards writes (as in [Example: blog API](/docs/example-blog-api)) answers the plain client with `AvAuthError` (`A4000`).
 
 For cookies, send credentials in the custom fetch:
 
@@ -57,9 +57,9 @@ const cookieClient = new AvClient({
 
 The server must then allow credentialed CORS for your origin.
 
-## CallOptions
+## AvCallOptions
 
-Every call takes optional `CallOptions` as its last argument. They are never sent in the body:
+Every call takes optional `AvCallOptions` as its last argument. They are never sent in the body:
 
 ```ts
 await avClient.User.find.many(
@@ -87,7 +87,7 @@ controller.abort();
 try {
   await pending;
 } catch (e) {
-  // e.name === "AbortError" (a DOMException): not a TransportError, not a FrameworkError
+  // e.name === "AbortError" (a DOMException): not a AvTransportError, not a AvError
 }
 ```
 

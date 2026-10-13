@@ -7,7 +7,7 @@ section: guides
 
 # Enums and scalar types
 
-JSON has strings, numbers, booleans, `null`, arrays and objects. A Prisma model also has dates, 64-bit integers, exact decimals and byte arrays. Aventara carries each of them as a defined JSON form on the wire and revives them into real values on the other side, so your code works with `Date`, `bigint`, `Decimal` and `Uint8Array`, and never with a half-parsed string.
+JSON has strings, numbers, booleans, `null`, arrays and objects. A Prisma model also has dates, 64-bit integers, exact decimals and byte arrays. Aventara carries each of them as a defined JSON form on the wire and revives them into real values on the other side, so your code works with `Date`, `bigint`, `AvDecimal` and `Uint8Array`, and never with a half-parsed string.
 
 The examples use this schema:
 
@@ -76,7 +76,7 @@ Enum fields support `equals`, `not`, `in` and `notIn` in `where`. Adding a membe
 | `Boolean` | `boolean` | `true` / `false` |
 | `DateTime` | `Date` | string, canonical UTC ISO-8601: `2026-01-15T10:00:00.000Z` |
 | `BigInt` | `bigint` | string of decimal digits: `"9007199254740993"` |
-| `Decimal` | `Decimal` (the client's own, see below) | string: `"12.5"` |
+| `Decimal` | `AvDecimal` (the client's own, see below) | string: `"12.5"` |
 | `Bytes` | `Uint8Array` | string, RFC 4648 base64: `"AQID"` |
 | `Json` | any JSON value, or the type you declare with `AvZ` ([JSON fields](/docs/json-fields)) | the same JSON |
 | any optional (`?`) | the type or `null` | the type or `null` |
@@ -84,7 +84,7 @@ Enum fields support `equals`, `not`, `in` and `notIn` in `where`. Adding a membe
 The wire form of a field is in the contract (`type: { scalar: "datetime" }`), and the generated client decodes and encodes by it. Calls resolve to revived values, including inside nested relations:
 
 ```ts
-import avClient, { Role, Decimal } from "./api/AvClient";
+import avClient, { Role, AvDecimal } from "./api/AvClient";
 
 const u = await avClient.User.create.one({
   data: { email: "typed@example.com", role: Role.ADMIN, avatar: new Uint8Array([1, 2, 3]), settings: { theme: "dark" } },
@@ -98,14 +98,14 @@ const p = await avClient.Post.create.one({
   data: {
     title: "Typed",
     authorId: u.id,
-    price: new Decimal("12.50"),
+    price: new AvDecimal("12.50"),
     bigViews: 9007199254740993n,
     publishedAt: new Date("2026-05-01T12:00:00Z"),
   },
 });
 typeof p.bigViews;             // 'bigint'   (9007199254740993n: past Number.MAX_SAFE_INTEGER, exact)
 p.price.toString();            // '12.5'
-p.price instanceof Decimal;    // true
+p.price instanceof AvDecimal;  // true
 p.publishedAt;                 // 2026-05-01T12:00:00.000Z
 ```
 
@@ -138,20 +138,35 @@ Keep values within the signed 64-bit range (`-9223372036854775808` to `922337203
 
 ## Decimal
 
-`Decimal` is exact, so it is a string on the wire and an object in your code. The generated client ships a minimal `Decimal` class (exported from `AvClient.ts`):
+A `Decimal` is exact on the wire: it is a string on the wire and an object in your code, and Aventara never rounds it. Whether the database keeps every digit is up to the database ([What the database keeps](#what-the-database-keeps)). The generated client ships a minimal `AvDecimal` class (exported from `AvClient.ts`):
 
 ```ts
-import { Decimal } from "./api/AvClient";
+import { AvDecimal } from "./api/AvClient";
 
-const price = new Decimal("12.50");
+const price = new AvDecimal("12.50");
 price.toString();            // "12.50" exactly as given
 JSON.stringify({ price });   // {"price":"12.50"}
-new Decimal("abc");          // TypeError: Decimal value must be a valid decimal string.
+new AvDecimal("abc");        // TypeError: Decimal value must be a valid decimal string.
 ```
 
 It does no arithmetic: it holds the digits. To calculate, hand the string to the decimal library you prefer (`decimal.js`, `big.js`), or use the update directives (`{ $increment: 1 }`) and let the database do it.
 
 The server normalizes what it stores and returns: `"12.50"` is read back as `"12.5"`, `"0.30"` as `"0.3"`, `"1e3"` as `"1000"`. A value that is not a decimal string is refused (`V1001` / `V1003`).
+
+## What the database keeps
+
+Aventara passes every value to the ORM as you send it; how it is stored is the database's behavior. With Prisma 7:
+
+- SQLite stores a `Decimal` as a 64-bit float: up to 15 significant digits are kept exactly, more are rounded. Use PostgreSQL when you need more.
+- PostgreSQL stores a `Decimal` in its column's digits (`numeric(65,30)` by default, or `@db.Decimal(p, s)`), rounding extra places after the point.
+- Arithmetic directives (`$increment`, `$decrement`, `$multiply`, `$divide`) are computed by the database, so their result follows the column like any SQL `UPDATE`: on a `@db.Decimal(10, 2)` column, `{ $divide: 3 }` on `1.00` stores `0.33`.
+- A `Float` holds what JavaScript's `number` holds. SQLite stores `Number.MAX_VALUE` as infinity, which JSON cannot carry, so a later read of that field fails; keep `Float`s inside the finite range you need.
+
+When the database refuses a value (a number out of the column's range, a NUL character in PostgreSQL text, a string longer than a `VarChar` allows, a division by zero), the call is answered `422` `A2004` with the database's reason, not `500`:
+
+```text
+{"code":"A2004","cause":{"message":"The database refused a value in the arguments: it cannot store or compare it as written.", ...}}
+```
 
 ## Bytes
 
@@ -168,14 +183,14 @@ Do not store large files in a `Bytes` column behind this API: they travel inside
 
 ## Json
 
-A `Json` field carries any JSON value untouched: objects, arrays, strings, numbers, booleans. `null` means the field's optional `null`.
+A `Json` field carries any JSON value untouched: objects, arrays, strings, numbers, booleans. `null` means the field's optional `null`. On a `Json?` field, writing `null` stores the database `NULL`, as on any nullable field. In a filter, `field: null` and `equals: null` match every row that reads back `null`, and `not: null` matches the rest. A `null` inside a value, or compared at a `path`, is a JSON `null`. An `undefined` inside a value becomes what JSON makes of it, on every surface: a key holding it is left out, and an array element holding it (or a hole) is `null`. So `{ a: undefined, b: [undefined] }` is stored as `{"b":[null]}`.
 
 ```json
 // create: "settings": {"a":[1,2,{"b":null}]}
 {"data":{"id":5,"settings":{"a":[1,2,{"b":null}]}},"code":"A1002","cause":null}
 ```
 
-Filter operators for `Json` depend on the database; read `fields.settings.capabilities.filter` in the contract (on SQLite: `equals`, `not`, `stringContains`, `stringStartsWith`, `stringEndsWith`, `arrayStartsWith`, `arrayEndsWith`, `mode`). A Prisma schema cannot say what is inside a `Json` column, so by default a `Json` field is any JSON. To give it a type that is checked on every write and known to `framework.application`, `framework.client` and the generated client, declare a shape with `AvZ`: [JSON fields](/docs/json-fields).
+Filter operators for `Json` depend on the database; read `fields.settings.capabilities.filter` in the contract (on SQLite: `equals`, `not`, `stringContains`, `stringStartsWith`, `stringEndsWith`, `arrayStartsWith`, `arrayEndsWith`, `mode`; PostgreSQL adds `path`). A Prisma schema cannot say what is inside a `Json` column, so by default a `Json` field is any JSON. To give it a type that is checked on every write and known to `framework.application`, `framework.client` and the generated client, declare a shape with `AvZ`: [JSON fields](/docs/json-fields).
 
 ## On the server
 
@@ -183,10 +198,10 @@ Inside your NestJS code the forms differ by layer ([Server-side usage](/docs/ser
 
 | Call | Input | Result |
 |---|---|---|
-| `framework.application.*` | application values: `Date`, `bigint`, `Decimal` (exported from `@aventara/core`), `Uint8Array` | the same application values |
+| `framework.application.*` | application values: `Date`, `bigint`, `AvDecimal` (exported from `@aventara/core`), `Uint8Array` | the same application values |
 | `framework.client.*` | wire values: ISO strings, decimal strings, base64 | application values |
 
-`bigint` and `Date` are not JSON-serializable by themselves, so a server-side result cannot be returned as a JSON response unchanged: a controller that returns `res.data` with a `bigint` in it fails (Nest answers `500`). Convert first (`value.toString()`, `date.toISOString()`), or go through the HTTP protocol, which encodes for you.
+`bigint` and `Date` are not JSON-serializable by themselves, so a server-side result cannot be returned as a JSON response unchanged: a controller that returns a result with a `bigint` in it fails (Nest answers `500`). Convert first (`value.toString()`, `date.toISOString()`), or go through the HTTP protocol, which encodes for you.
 
 ## See also
 

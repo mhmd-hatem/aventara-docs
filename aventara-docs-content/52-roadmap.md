@@ -7,7 +7,7 @@ section: about
 
 # Roadmap
 
-Aventara is a release candidate (`1.0.0-rc.0`). It works end to end today, and the public API is meant to be the 1.0 API: it changes from here only to fix what testing finds. This page lists what we are aiming at, in the order we expect to get there. It has no dates.
+Aventara is a release candidate (`1.0.0-rc.2`). It works end to end today. Until 1.0 the public API can still change, breaking changes included; each change is listed in the Changelog with its upgrade steps. This page lists what we are aiming at, in the order we expect to get there. It has no dates.
 
 ## Today
 
@@ -21,7 +21,7 @@ Aventara is a release candidate (`1.0.0-rc.0`). It works end to end today, and t
 
 ## Toward 1.0
 
-1. Release candidates, then 1.0. Feedback from real projects decides what changes. With a release candidate out, the public API is frozen except for fixes.
+1. Release candidates, then 1.0. Feedback from real projects decides what changes. Until 1.0, a release candidate may still make breaking changes; from 1.0 on, a breaking change needs a new major version.
 2. A stable public API. The configuration, the generated client surface, the protocol and the error codes are the things 1.0 commits to, and the release candidates test them.
 3. Protocol header naming. The `Aventara-` prefix of the protocol's headers may change before 1.0; regenerating picks up a change.
 4. Clearer failures. Sharper validation and error mapping for the cases that are still rougher than they should be. A required field omitted on create, a `BigInt` out of range and an orphaned required child already answer with specific codes.
