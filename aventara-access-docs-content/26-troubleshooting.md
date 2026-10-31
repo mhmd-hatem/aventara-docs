@@ -34,7 +34,7 @@ Run on a supported Node.js ([Installation](/docs/installation#requirements)).
 Aventara Access: Access issues its tokens with a fixed issuer and audience, the app's base URL, and Better Auth has none: set ... (or `BETTER_AUTH_URL`), or give a dynamic `baseURL` its `fallback`.
 ```
 
-Code `ACCESS_OPTIONS_INVALID`. Set `baseURL` in the `betterAuth` block or `BETTER_AUTH_URL` in the environment ([The base URL](/docs/create-access#the-base-url)). Commands that load `src/access.ts` (`npx auth@~1.7.12 generate`, and on Next.js the build) need the variable too, so set it in the environment they run in.
+Code `ACCESS_OPTIONS_INVALID`. Set `baseURL` in the `betterAuth` block or `BETTER_AUTH_URL` in the environment ([The base URL](/docs/create-access#the-base-url)). Commands that load `src/access.ts` (`npx auth@~1.7.12 generate --yes`, and on Next.js the build) need the variable too, so set it in the environment they run in.
 
 ### Argon2 on Node.js 22
 
@@ -70,7 +70,7 @@ Code `ACCESS_OPTIONS_INVALID`. Without `prismaAdapter`, nothing ties a table to 
 
 ### A table `resources` opens is missing
 
-Code `ACCESS_RESOURCE_MISSING`. Add the Better Auth plugin that owns the table, or run `npx auth@~1.7.12 generate`, migrate, and run `aventara:prepare` again so the rules' schema has it. The organization bridge needs `organization()` in `plugins`.
+Code `ACCESS_RESOURCE_MISSING`. Add the Better Auth plugin that owns the table, or run `npx auth@~1.7.12 generate --yes`, migrate, and run `aventara:prepare` again so the rules' schema has it. The organization bridge needs `organization()` in `plugins`.
 
 ### AVENTARA_PREBUILT_STALE on Next.js
 
@@ -80,11 +80,11 @@ The framework warns this when `access` is given only in `server.ts`. Put `access
 
 ### prisma validate fails after auth generate
 
-The scaffold's `User.id` is an `Int`, and Better Auth's ids are strings. Put `advanced: { database: { generateId: "serial" } }` in the `betterAuth` block, delete the models `generate` wrote (and Access's), and run it again ([Better Auth's tables](/docs/create-access#better-auths-tables)). Map `sub` with `Number(sub)` in `principal`.
+`User.id` is an `Int`, and Better Auth's ids are strings. Make it `id String @id @default(cuid())`, delete the models `generate` wrote (and Access's), and run it again ([User ids](/docs/create-access#user-ids)). Numeric ids (`generateId: "serial"`) are refused.
 
 ### auth generate says the schema is already up to date
 
-It only adds what the schema lacks. If it wrote `String` ids before you added `generateId: "serial"`, delete those models and run it again.
+It only adds what the schema lacks. If its models were written against an older schema, delete them (and Access's) and run it again.
 
 ### A Babel note about AvComputedFields
 
@@ -96,7 +96,7 @@ Harmless. It comes from a type the discovery artifact re-exports, and the schema
 
 ### Better Auth refuses to start: the audit table is missing
 
-With `audit: true`, run `npx auth@~1.7.12 generate` and migrate, then `aventara:prepare` ([The audit log](/docs/audit-log#the-table)).
+With `audit: true`, run `npx auth@~1.7.12 generate --yes` and migrate, then `aventara:prepare` ([The audit log](/docs/audit-log#the-table)).
 
 ### A rule on User is refused
 
@@ -210,7 +210,7 @@ Without `--migrate`, a database Better Auth migrates itself is checked first. Ru
 
 ### --migrate exits 2
 
-The database is behind an ORM's adapter (Prisma, Drizzle). Run `npx auth@~1.7.12 generate`, then the ORM's migration. `--migrate` refuses it.
+The database is behind an ORM's adapter (Prisma, Drizzle). Run `npx auth@~1.7.12 generate --yes`, then the ORM's migration. `--migrate` refuses it.
 
 ### 413 from the server
 

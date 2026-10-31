@@ -14,7 +14,7 @@ Access goes into an Aventara app. Create one with the Aventara CLI, then add Acc
 | | Supported |
 |---|---|
 | Node.js | `^22.23.4 \|\| >=24.22.1` |
-| Aventara framework | `1.0.0-rc.11`: tested on it. `1.0.0-rc.10` or later works. |
+| Aventara framework | `1.0.0-rc.12`: tested on it. `1.0.0-rc.10` or later works. |
 | Better Auth | `~1.7.12`: 1.7.12 or any later 1.7 patch. Tested on 1.7.14. |
 | Package type | ESM (`"type": "module"`) |
 
@@ -45,7 +45,7 @@ Everything but `@aventara/access` is an optional peer, so install only what the 
 
 | Package | Range | You need it for |
 |---|---|---|
-| `@aventara/access` | `1.0.0-rc.1` (`@rc`) | Everything |
+| `@aventara/access` | `1.0.0-rc.2` (`@rc`) | Everything |
 | `better-auth` | `~1.7.12` | `createAccess`, `aventaraAccess()` and everything built on them. The engine alone (`definePolicies`, `createAccessEngine`) works without it, and type-checks without it with `skipLibCheck: false`. |
 | `@better-auth/oauth-provider` | `~1.7.12` | [Agents over MCP](/docs/agents-mcp), and one audience per service |
 | `@better-auth/cimd` | `~1.7.12` | Agent clients that register by a metadata document URL |

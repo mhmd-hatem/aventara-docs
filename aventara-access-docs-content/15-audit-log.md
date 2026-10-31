@@ -18,7 +18,7 @@ section: guides
 
 ## The table
 
-`npx auth@~1.7.12 generate` writes the table into an ORM's schema (Prisma: `model AccessAudit`), and
+`npx auth@~1.7.12 generate --yes` writes the table into an ORM's schema (Prisma: `model AccessAudit`), and
 `npx auth@~1.7.12 migrate` creates it, beside Better Auth's tables. Better Auth refuses to start while the table is
 missing.
 
@@ -61,7 +61,7 @@ Then `audit: { sink: auditSink }`.
 | Kind | What it is |
 |---|---|
 | `sign-in` | A session Better Auth created. `origin` is `client` through Access's routes and `application` when your server calls Better Auth's API. `impersonatedBy` is the admin's id for an impersonation. |
-| `sign-in-failed` | A route that starts a session refusing the caller. `route` is Better Auth's endpoint, `reason` the code it refused with. |
+| `sign-in-failed` | A route that starts a session refusing the caller. `route` is Better Auth's endpoint, `reason` the code it refused with. A failed kiosk PIN is one on `/kiosk/switch-user`, with the device's `deviceId`. |
 | `sign-out` | A session ended through `/sign-out` |
 | `token` | A JWT issued for a session by `GET /token` |
 | `kiosk-*` | The kiosk profile's events ([The kiosk profile](/docs/kiosk)) |

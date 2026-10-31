@@ -44,8 +44,8 @@ sign-up. The same registry can run inside an app that builds Better Auth itself 
 hub](/docs/better-auth-plugin#the-app-as-the-hub)).
 
 The registry's tables (`accessNamespace`, `accessKey`, `accessPolicyRevision`, `accessGuardrailRevision`, `accessHead`,
-`accessPushLog`, `accessResourceOwner`) are Better Auth plugin tables, created by Better Auth's migration or by
-`npx auth@~1.7.12 generate`. `access.handler` serves the registry's routes under Better Auth's base path:
+`accessPushLog`, `accessResourceOwner`, `accessBeacon`) are Better Auth plugin tables, created by Better Auth's migration or by
+`npx auth@~1.7.12 generate --yes`. `access.handler` serves the registry's routes under Better Auth's base path:
 
 | Route | Does |
 |---|---|
@@ -55,7 +55,7 @@ The registry's tables (`accessNamespace`, `accessKey`, `accessPolicyRevision`, `
 | `GET …/:ns/revisions/:hash` | One revision |
 | `GET …/:ns/head` | The current revision |
 | `GET …/:ns/guardrails` | The org's guardrails |
-| `GET …/:ns/foreign/:owner` | The owner's schema entries for the Resources your current file reads as foreign ([Beacons and `foreign`](/docs/beacons-and-foreign)) |
+| `GET …/:ns/foreign/:owner` | What `:ns` reads of `:owner` as foreign: `:owner`'s beacon hash, and its entry of each Resource `?resources=A,B` names ([Beacons and `foreign`](/docs/beacons-and-foreign)) |
 | `GET /access/v1/key` | The namespace and kind of the key sent |
 
 A service sends its key in the `x-access-key` header. With the registry off, `/access/v1/*` answers `404`. One org per

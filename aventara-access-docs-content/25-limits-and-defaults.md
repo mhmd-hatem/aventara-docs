@@ -42,7 +42,7 @@ Each value was checked against the package. Where an option sets it, the option 
 | Largest request body | 1 MiB (`1048576`) | `maxBodyBytes`, `--max-body-bytes` |
 | Drain on `close()` | 10 seconds, then the rest are ended | fixed |
 | Health check | `GET /health` answers `200 {"status":"ok"}` | fixed |
-| Better Auth's rate limit under `avaccess serve` | on, whatever `NODE_ENV` says | `betterAuth.rateLimit.enabled` |
+| Better Auth's rate limit under `avaccess serve` | on when `NODE_ENV=production` (Better Auth's own default) | `betterAuth.rateLimit.enabled` |
 | Migration on start | off | `--migrate`, `AVACCESS_MIGRATE` |
 
 ## Server-side verb calls

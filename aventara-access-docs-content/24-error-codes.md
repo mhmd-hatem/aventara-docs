@@ -29,7 +29,7 @@ try {
 | `ACCESS_CLAIMS_UNDECLARED` | The rules or the guardrails read a claim, or a token carries one, that `policies.claims` does not declare | Declare the claim in `policies.claims` |
 | `ACCESS_PLUGIN_DUPLICATE` | `betterAuth.plugins` holds `jwt()` or `aventaraAccess()`, which `createAccess` installs itself. Or a second Access plugin beside `aventaraAccess()`. Or one `aventaraAccess()` in two Better Auth instances whose options differ. Or a plugin that defines `jwt()`'s endpoints, Access's `/me`, (kiosk profile) anything under `/kiosk/`, or (registry on) a registry route. | Remove it from the plugins |
 | `ACCESS_OPTIONS_INVALID` | An option Access does not take or cannot accept. [Every case is below.](#access_options_invalid) | Follow the message |
-| `ACCESS_RESOURCE_MISSING` | A table `resources` opens is missing: Better Auth lacks its plugin, or the rules' schema lacks its Resource. Or the organization bridge without `organization()`. | Add the plugin, or run `npx auth@~1.7.12 generate` and regenerate the model |
+| `ACCESS_RESOURCE_MISSING` | A table `resources` opens is missing: Better Auth lacks its plugin, or the rules' schema lacks its Resource. Or the organization bridge without `organization()`. | Add the plugin, or run `npx auth@~1.7.12 generate --yes` and regenerate the model |
 | `ACCESS_LOCK_MISMATCH` | A pulled file no longer hashes to its pin in `avAccess.lock.json`, the engine was given files the lock does not pin, or `requireLock` is set and no lock was given | Run `avaccess pull` again. Never edit a pulled file. Pass the lock. |
 | `ACCESS_KEY_REFUSED` | A registry key that is wrong, revoked, rotated out or another namespace's (`401`), or a pull key that pushes (`403`) | Use the namespace's current key of the right kind |
 | `ACCESS_OWNERSHIP` | A pushed file names a Resource another namespace owns, or one the operator has not assigned it (`ownership: "assigned"`), or the org's guardrails grant (`403`) | Grant only on your own Resources. Ask the owner or the operator, or add a guardrail. |
@@ -49,6 +49,7 @@ One code, many causes. The message names the option and the reason. The cases, b
 | Options | An option or block `createAccess` does not take, or cannot read. `accessOf` given an instance without `aventaraAccess()`. |
 | Base URL and cookies | No base URL to fix the tokens' issuer. A session cookie with `sameSite: "none"` and no `trustedOrigins`. |
 | Claims and principal | A claim read from a user field a user can set (no `input: false`). A `principal` object shared by two users. |
+| User ids | Better Auth's numeric ids (`advanced.database.generateId: "serial"`), in every app and in `avaccess serve` and `avaccess keys` ([User ids](/docs/create-access#user-ids)). |
 | Passwords | `passwords` set beside your own `emailAndPassword.password`. Node.js 22 without `@node-rs/argon2`. |
 | Better Auth tables | A grant on a table `resources` leaves closed. Better Auth off its Prisma adapter without `resources.authTables`. An opened table whose secret column is not found. |
 | Organizations | An organization plugin without `requireEmailVerificationOnInvitation: true` under `resources.members` or the bridge. Under the bridge: one that lets any user create an organization, or that maps a role dynamic access control lets admins name. |

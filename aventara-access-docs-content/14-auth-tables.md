@@ -91,8 +91,8 @@ export const authTables = {
 These checks run when `access.policy` is first read, which is when the framework is built.
 
 - A key whose tables Better Auth lacks, or that the rules' schema lacks, is refused with `ACCESS_RESOURCE_MISSING`: add
-  the plugin, or run `npx auth@~1.7.12 generate` and regenerate the model.
+  the plugin, or run `npx auth@~1.7.12 generate --yes` and regenerate the model.
 - A grant on a closed table, or of a write the table never takes, is refused with `ACCESS_OPTIONS_INVALID`.
 
-The instance itself still builds, so `npx auth@~1.7.12 generate` can load your configuration before the schema has the
+The instance itself still builds, so `npx auth@~1.7.12 generate --yes` can load your configuration before the schema has the
 tables.

@@ -13,6 +13,60 @@ relation or enum value that does not exist is a type error at the key that names
 
 ## A first set of rules
 
+The rules below use `Campaign`, `Member` and `Note`, which the scaffold does not have. Add them to
+`prisma/schema.prisma` first, with the two relation lines in the scaffold's `User`, then run `npm run aventara:prepare`
+so the model has them. Better Auth's `generate` adds its own fields to this `User` later and keeps these.
+
+```prisma
+// prisma/schema.prisma: the scaffold's User, with `members` and `notes` added
+model User {
+  id      String   @id @default(cuid())
+  email   String   @unique
+  name    String?
+  members Member[]
+  notes   Note[]
+}
+
+enum CampaignRole {
+  DM
+  PLAYER
+}
+
+enum Visibility {
+  PARTY
+  PRIVATE
+  DM_ONLY
+}
+
+model Campaign {
+  id      String   @id @default(cuid())
+  name    String
+  members Member[]
+  notes   Note[]
+}
+
+model Member {
+  id         String       @id @default(cuid())
+  campaignId String
+  userId     String
+  role       CampaignRole
+  campaign   Campaign     @relation(fields: [campaignId], references: [id])
+  user       User         @relation(fields: [userId], references: [id])
+
+  @@unique([campaignId, userId])
+}
+
+model Note {
+  id         String     @id @default(cuid())
+  campaignId String
+  authorId   String
+  body       String
+  visibility Visibility
+  campaign   Campaign   @relation(fields: [campaignId], references: [id])
+  author     User       @relation(fields: [authorId], references: [id])
+}
+```
+
 ```ts
 // src/access.policies.ts
 import { definePolicies } from "@aventara/access";
@@ -154,10 +208,10 @@ on Aventara (a generated client, the standalone server) holds no reference and g
 It is a warning only: the engine decides exactly as before. A read grant reaches a role when it names that role,
 `signedIn` or `anyone`. A grant that names the target Resource itself also reaches a `signedIn` writer, whatever role it
 names, and reaches a role held on rows of one Resource when it names another role held on that same Resource, since one
-caller can hold both. When the target is a Better Auth table that stays closed until a `resources` key opens it
-(`User`, until `resources: { users: true }` in `createAccess`), the warning names that key too: no grant on the table
-is taken before it is opened. A reference the write grant locks with `write: { except }` is not warned about. A
-reference to a foreign Resource is not either: see below. Each warning is printed once per process and namespace. Node's
+caller can hold both. Under `createAccess` (or its plugin), when the target is a Better Auth table that stays closed
+until a `resources` key opens it (`User`, until `resources: { users: true }`), the warning names that key too: no grant
+on the table is taken before it is opened. A reference the write grant locks with `write: { except }` is not warned
+about. A reference to a foreign Resource is not either: see below. Each warning is printed once per process and namespace. Node's
 `--disable-warning=ACCESS_REFERENCE_UNREADABLE` silences it.
 
 ### A reference to a foreign Resource
@@ -325,6 +379,7 @@ console.log(
 | `grantsOf(question)` | The update grants that cover a row before an update ([Updates](/docs/updates)) |
 | `explain(question)` | In development, which rules took part in a `can` decision. It throws when `NODE_ENV` is `production`. |
 | `checkBeacons(reader, pins, environment)` | The startup beacon check ([Beacons and `foreign`](/docs/beacons-and-foreign)) |
+| `hosted({ held })` | Called by Aventara when it hosts the engine: checks the rules against the Resources it holds a written reference to ([Writing a reference needs read on its target](#writing-a-reference-needs-read-on-its-target)) |
 
 The engine also holds `governed` (the fields governed for reading, by Resource), `afterChecks` (the Resources whose updates are
 checked after the write) and `paths` (the relation paths and operators each rule filters on) ([Reference](/docs/reference)).

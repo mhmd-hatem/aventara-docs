@@ -68,7 +68,8 @@ So the decision about the row before is made before the write:
    covers the row after must be one of those keys.
 
 Aventara does this itself for every Resource in `afterChecks` (it needs `@aventara/core` `1.0.0-rc.10` or later). It asks
-`grantsOf` after it reads the row and before any of your stages or the write runs.
+`grantsOf` after it reads the row and before any of your stages or the write runs. An older core hands `can` the row
+after only, and `can` then lets an update in when any update grant covers that row.
 
 Outside Aventara, the same two calls look like this:
 

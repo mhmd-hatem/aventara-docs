@@ -24,6 +24,12 @@ import { access } from "@/access";
 export const { GET, POST } = toNextJsHandler(access);
 ```
 
+Better Auth's rate limit counts each client by its `X-Forwarded-For`, and Next.js keeps one the client sent (it
+fills the header from the socket only when it is missing). On Vercel there is nothing to do: the platform sets it.
+Self-hosted (`next start`), run behind a proxy that overwrites `X-Forwarded-For` with the client's address, or one that
+appends to it and is listed in Better Auth's `advanced.ipAddress.trustedProxies`. Never let clients reach `next start`
+directly: each could pick the address it is counted under.
+
 Wire it by putting `access` in `aventaraConfig`, in `src/aventara/config.ts`, not in `server.ts`:
 
 ```ts
@@ -49,7 +55,8 @@ export const aventaraConfig = {
 ## NestJS
 
 Mount Better Auth's Node.js handler before the body parser: `app.use()` between `NestFactory.create()` and `listen()`,
-with a path test. It works on Express and Fastify alike.
+with a path test. It works on Express and Fastify alike. This is the scaffold's `src/main.ts` with the mount added
+after its CORS block, so Access's routes answer the same origins:
 
 ```ts
 // src/main.ts
@@ -58,22 +65,112 @@ import { NestFactory } from "@nestjs/core";
 import { toNodeHandler } from "better-auth/node";
 import { access } from "./access.js";
 import { AppModule } from "./app.module.js";
+import { clientAddressed } from "./client-address.js";
 
 async function bootstrap() {
 	const app = await NestFactory.create(AppModule);
-	// Access's routes, under /api/auth, before Nest's body parser (listen() adds it).
+	// The browser origins allowed to call this server: CORS_ORIGINS in .env,
+	// comma-separated. Unset or empty, CORS stays off.
+	const corsOrigins = (process.env.CORS_ORIGINS ?? "")
+		.split(",")
+		.map((origin) => origin.trim())
+		.filter(Boolean);
+	app.enableCors({ origin: corsOrigins.length > 0 ? corsOrigins : false });
+	// Rate limiting: @nestjs/throttler is a Nest guard and does not run on Aventara's
+	// routes; a platform-level limiter does. `npm i express-rate-limit`, import
+	// { rateLimit } from 'express-rate-limit', pick your limits and uncomment below.
+	// See: https://aventara.razor34.dev/framework/docs/limits-and-safety#rate-limiting
+	// app.use(rateLimit({ windowMs: 60_000, limit: 100 }));
+	// Access's routes, under /api/auth: after CORS, before Nest's body parser
+	// (listen() adds it), each request with its client's address.
 	const auth = toNodeHandler(access);
 	app.use(
-		(request: IncomingMessage, response: ServerResponse, next: () => void) =>
-			request.url?.startsWith("/api/auth/") ? auth(request, response) : next(),
+		(request: IncomingMessage, response: ServerResponse, next: () => void) => {
+			if (!request.url?.startsWith("/api/auth/")) {
+				return next();
+			}
+			clientAddressed(request);
+			return auth(request, response);
+		},
 	);
 	await app.listen(process.env.PORT ?? 3000);
 }
 await bootstrap();
 ```
 
-On Fastify, `app.use("/api/auth", …)` hands Better Auth the URL without its base path, so use the path test above. If
-you enable CORS, register it before this mount, so Access's routes answer the same origins.
+Node.js's handler hands Better Auth no client address, and Better Auth reads one only from a header
+(`X-Forwarded-For` unless `advanced.ipAddress.ipAddressHeaders` names others). Without one, in production its rate
+limit puts every client in one bucket per route, so three wrong sign-ins lock everyone out of signing in; and a header
+the client sent itself would buy it a fresh bucket each time. `clientAddressed` does what [`serve`](#standalone) does:
+
+```ts
+// src/client-address.ts
+import type { IncomingMessage } from "node:http";
+import { BlockList, isIP } from "node:net";
+import type { BetterAuthOptions } from "better-auth";
+import { access } from "./access.js";
+
+const options: BetterAuthOptions = access.options;
+const ip = options.advanced?.ipAddress;
+/** Where Better Auth reads the client's address: its first `ipAddressHeaders`, `x-forwarded-for` by default. */
+const headers = (ip?.ipAddressHeaders ?? ["x-forwarded-for"]).map((header) =>
+	header.toLowerCase(),
+);
+/** Better Auth's `trustedProxies`: the proxies whose forwarded headers are kept. */
+const proxies = new BlockList();
+for (const entry of ip?.trustedProxies ?? []) {
+	const [address = "", prefix] = entry.split("/");
+	const family = isIP(address);
+	const type = family === 4 ? "ipv4" : "ipv6";
+	if (family !== 0 && prefix === undefined) {
+		proxies.addAddress(address, type);
+	} else if (family !== 0 && /^\d+$/.test(prefix ?? "")) {
+		proxies.addSubnet(address, Number(prefix), type);
+	}
+}
+
+/**
+ * Gives a request its client's address, as `serve` does: the socket's, in the header
+ * Better Auth reads. A client's own `X-Forwarded-For` (and `-Proto`, `-Host`) is
+ * dropped first, unless the socket is a proxy `trustedProxies` lists: then the
+ * proxy's headers are kept, and Better Auth reads the client from them.
+ */
+export function clientAddressed(request: IncomingMessage): void {
+	if (ip?.disableIpTracking === true) {
+		return;
+	}
+	// An IPv4 client on a dual-stack socket reads as ::ffff:203.0.113.7.
+	const socket = request.socket.remoteAddress?.replace(
+		/^::ffff:(?=\d{1,3}(?:\.\d{1,3}){3}$)/i,
+		"",
+	);
+	const family = socket === undefined ? 0 : isIP(socket);
+	const proxy =
+		socket !== undefined &&
+		family !== 0 &&
+		proxies.check(socket, family === 4 ? "ipv4" : "ipv6");
+	if (!proxy) {
+		for (const header of headers) {
+			delete request.headers[header];
+		}
+		delete request.headers["x-forwarded-proto"];
+		delete request.headers["x-forwarded-host"];
+	}
+	const first = headers[0];
+	if (socket !== undefined && first !== undefined && !(first in request.headers)) {
+		request.headers[first] = socket;
+	}
+}
+```
+
+- On a server clients reach directly, a client's own `X-Forwarded-For` is replaced with its socket's address, so no
+  client picks the address it is counted under.
+- Behind a proxy (a load balancer, a TLS terminator), list it in Better Auth's `advanced.ipAddress.trustedProxies`
+  (`["10.0.0.2"]`, or a CIDR range): its `X-Forwarded-For` is kept, and Better Auth reads the client from the rightmost
+  address in it that is not a trusted proxy. Without it, every client counts as the proxy's address.
+- Run production with `NODE_ENV=production`: Better Auth's rate limit, and Access's limit on `access.client`'s calls, are on only under it, and the scaffold's `start:prod` does not set it.
+
+On Fastify, `app.use("/api/auth", …)` hands Better Auth the URL without its base path, so use the path test above.
 
 Wire it by putting `access` beside `adapter` in the `config` that the scaffold's `forRootAsync` factory returns. This is
 the scaffold's `src/app.module.ts` with the two `access` lines added:
@@ -119,18 +216,24 @@ stale.
 
 ## Express
 
-In a plain Express app, mount `toNodeHandler(access)` before `express.json()`. With Express 5, Better Auth's docs use a
-named wildcard:
+In a plain Express app, mount `toNodeHandler(access)` before `express.json()`, with `clientAddressed` from
+`src/client-address.ts` above. With Express 5, Better Auth's docs use a named wildcard:
 
 ```ts
 // src/express.main.ts
 import { toNodeHandler } from "better-auth/node";
 import express from "express";
 import { access } from "./access.js";
+import { clientAddressed } from "./client-address.js";
 
 const app = express();
-// Access's routes first: Better Auth reads the body itself.
-app.all("/api/auth/*splat", toNodeHandler(access));
+// Access's routes first, each request with its client's address: Better Auth reads
+// the body itself.
+const auth = toNodeHandler(access);
+app.all("/api/auth/*splat", (request, response) => {
+	clientAddressed(request);
+	return auth(request, response);
+});
 // Your own routes after, with the JSON body parser.
 app.use(express.json());
 app.listen(Number(process.env.PORT ?? 3000));
@@ -159,6 +262,8 @@ import access from "../access.config.js";
 const server = await serve(access, { port: 4000 });
 console.log(`Access listens on ${server.url}`);
 ```
+
+In production, run it with `NODE_ENV=production` (`NODE_ENV=production node dist/access.server.js`).
 
 | Option | Default |
 |---|---|

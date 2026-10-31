@@ -50,6 +50,8 @@ export const access = createAccess({
 			...(claims.banned === undefined ? {} : { banned: claims.banned }),
 		},
 	}),
+	// The rules read User, one of Better Auth's tables: open it explicitly.
+	resources: { users: true },
 });
 
 export default access;
@@ -147,7 +149,7 @@ that defines one of `jwt()`'s endpoints. Every other Better Auth plugin passes t
 |---|---|
 | `access.handler` | Better Auth's request handler, `(Request) => Promise<Response>`, with Access's routes |
 | `access.api` | Better Auth's server API, as `auth.api` |
-| `access.options` | The options Better Auth runs with: your block plus the installed plugins |
+| `access.options` | The options Better Auth runs with: your block plus the installed plugins. Your block's plain data (its plain objects and arrays) is a frozen copy taken when `createAccess` ran, so changing it in your block afterwards does not reach Better Auth. Plugin objects, functions and class instances (the adapter, a database client or pool) are kept as you gave them and not frozen |
 | `access.$Infer` | Types only: `Session`, `Me` (the principal) and `Claims` |
 | `access.policy` | The policy engine. It is built on first read. |
 | `access.state({ headers })` | The request's state, `{ readonly me }`. `me` is a copy of the plain data `principal` returned (its plain objects and arrays, all the way down), frozen, and the state holds it read-only, so no code that runs during the request can replace or change the principal the policy decides for. A class instance, `Map`, `Set`, `Date`, typed array or getter is kept as you returned it and is not frozen: return plain data for the fields the rules read. Your own objects are never frozen. Under an OAuth access token, return a plain object: a `Map` or `Set` principal is not supported there, and a class instance loses its `#private` fields |
@@ -183,16 +185,35 @@ origins your app is served from.
 ## Better Auth's tables
 
 Better Auth's tables go into your schema the way Better Auth's docs say. With Prisma,
-`npx auth@~1.7.12 generate --config src/access.ts` writes Better Auth's models (and Access's own tables, when `audit` or
+`npx auth@~1.7.12 generate --config src/access.ts --yes` writes Better Auth's models (and Access's own tables, when `audit` or
 `registry` is on) into `prisma/schema.prisma`. It reads the module's default export. Then migrate with Prisma and run
 `aventara:prepare` again. Its first run may print a Babel note that an identifier such as `AvComputedFields` "is not
 declared in Babel's scope tracker": a type the discovery artifact re-exports, and harmless.
 
-The project `aventara new` creates has a numeric `User.id`. Better Auth's ids are strings by default. Put
-`advanced: { database: { generateId: "serial" } }` in the `betterAuth` block before you run `npx auth@~1.7.12 generate`,
-and map `sub` with `Number(sub)` in `principal`. The command only adds what the schema lacks, so on a schema that
-already has Better Auth's models with `String` ids it changes nothing: delete those models, then run it again. Better Auth's single-use checks (SAML assertion ids, DPoP proofs,
-`private_key_jwt` assertions) are not enforced with `"serial"`: if you use those, change `User.id` to `String` instead.
-
 Access closes Better Auth's tables to every request until you open them ([Better Auth's tables as
 Resources](/docs/auth-tables)).
+
+## User ids
+
+Better Auth's ids are strings, and so is a token's `sub`: map the principal with `id: sub` and type it `id: string`.
+If `User.id` in `prisma/schema.prisma` is an `Int` (`aventara new` 1.0.0-rc.11 and earlier writes one), make it
+`id String @id @default(cuid())` before you run `generate`, or `generate` writes `String` foreign keys
+(`Session.userId`, `Account.userId`) against that `Int` and `prisma validate` fails.
+
+Numeric ids are refused in every app (`ACCESS_OPTIONS_INVALID`), and `avaccess serve` and `avaccess keys` refuse
+them before they migrate or listen. Under Better Auth's `advanced.database.generateId: "serial"`, Better Auth does not
+enforce its single-use checks (`private_key_jwt` client assertions, DPoP proofs, SAML assertion ids, the magic-link,
+email-OTP and SIWE locks), and it reads an id with `Number()`, so ids written differently (`"01"`, `"1e0"`) name the
+same user. Numeric ids the database makes (`generateId: false` on `Int` id columns) have the same problem and are not
+supported either.
+
+An app on `1.0.0-rc.1` with numeric ids refuses to start after upgrading until it moves to String ids:
+
+- Remove `generateId: "serial"`.
+- Make `User.id` a `String` (`id String @id @default(cuid())`), with every id and reference to it in Better Auth's
+  tables and Access's, and your own models' references to a user (`Note.authorId Int` becomes `String`).
+- Map the principal with `id: sub` where it was `id: Number(sub)`, and type it `id: string` where the policies file
+  has `id: number`.
+- A deployed database needs a data migration, not only the new schema: each id and foreign-key column becomes text,
+  each row keeping its id as a string (`1` becomes `"1"`).
+- With Better Auth's OAuth provider, revoke the refresh tokens it issued while on numeric ids.
