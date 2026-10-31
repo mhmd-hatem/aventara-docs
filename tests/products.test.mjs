@@ -123,6 +123,21 @@ test("a third product is content-only and drafts never enter the collection", as
     assert.deepEqual(product.topPages, []);
     assert.equal(product.primaryNavigation[0].href, "/docs/introduction");
     assert.ok(!JSON.stringify(product).includes(content));
+    // An explicit publication hold survives removal of the editorial draft marker.
+    registry[0].unpublishedPages = ["draft"];
+    await writeFile(file, JSON.stringify(registry));
+    await writeFile(
+      join(content, "02-draft.md"),
+      "---\ntitle: Draft\n---\n# Draft\n## Stable Anchor\nStill awaiting approval.",
+    );
+    const held = await prepareContent({ registry: file, output });
+    assert.ok(held.fixture.drafts.draft);
+    assert.ok(
+      !(await readFile(join(output, "source.config.ts"), "utf8")).includes(
+        "02-draft.md",
+      ),
+    );
+
     assert.ok(
       (await readFile(join(output, "collections.ts"), "utf8")).includes(
         '"fixture": product0',

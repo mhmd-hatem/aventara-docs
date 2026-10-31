@@ -74,15 +74,15 @@ export function LandingNav() {
 const examples = {
   User: {
     schema:
-      "model User {\n  id    Int     @id\n  email String  @unique\n  name  String?\n}",
+      "model User {\n  id    String  @id @default(cuid())\n  email String  @unique\n  name  String?\n}",
     code: 'const users = await avClient.User.find.many({\n  select: ["id", "name"],\n  limit: 3,\n});',
-    result: "Array<{ id: number; name: string | null }>",
+    result: "Array<{ id: string; name: string | null }>",
   },
   Post: {
     schema:
-      "model Post {\n  id        Int     @id\n  title     String\n  published Boolean @default(false)\n}",
+      "model Post {\n  id        String  @id @default(cuid())\n  title     String\n  published Boolean @default(false)\n}",
     code: 'const posts = await avClient.Post.find.many({\n  where: { published: true },\n  select: ["id", "title"],\n});',
-    result: "Array<{ id: number; title: string }>",
+    result: "Array<{ id: string; title: string }>",
   },
 };
 export function SchemaShowcase() {

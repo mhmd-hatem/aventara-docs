@@ -7,6 +7,7 @@
 !scripts
 !public
 !aventara-docs-content
+!aventara-access-docs-content
 !package.json
 !package-lock.json
 !next.config.mjs
@@ -18,5 +19,7 @@
 
 aventara-docs-content/README.md
 aventara-docs-content/_site-notes.md
+aventara-access-docs-content/README.md
+aventara-access-docs-content/_site-notes.md
 **/.env*
 **/*.tsbuildinfo

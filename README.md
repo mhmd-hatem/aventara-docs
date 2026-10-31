@@ -30,7 +30,7 @@ npm run dev -- --webpack
 The default content sources are live folders:
 
 - Framework: `./aventara-docs-content/`
-- Access: `../Aventara Access Docs/aventara-access-docs-content/`
+- Access: `./aventara-access-docs-content/`
 
 Override these with `AVENTARA_FRAMEWORK_CONTENT` and `AVENTARA_ACCESS_CONTENT` when checkouts live elsewhere. Both folders must exist before installing/building. The app reads them directly; it does not maintain copies of their Markdown.
 
@@ -67,18 +67,18 @@ When content moves to each product repository's `docs/`, replace its local sourc
 
 Access's repository is `mhmd-hatem/Aventara-Access`. Both repositories were verified private. Supply a read-only build token as an environment secret; never put it in the registry. The adapter fetches numbered Markdown into temporary build storage and never serializes credentials or source paths into the public product metadata. It refreshes moving refs every build. Local and GitHub adapters share the same interface.
 
-Cloud builds cannot read the sibling Access checkout on this computer. Before deploying, configure a reachable source (when its `docs/` exists), or provide the source directories to the build environment. Do not point at a nonexistent future ref or silently fall back to stale content.
+Both content folders are now versioned in this repository and included in cloud build inputs. The framework content branch and Access content branch are merged into `codex/unified-docs`. When moving content to product repositories, configure an existing ref and supply a read-only token for private content.
 
 ## Drafts and indexing
 
-Pages carrying a `<!-- DRAFT ... -->` marker are excluded from MDX collections, search, raw Markdown and full exports. Existing links to these pages show a neutral review notice with preserved heading IDs. The Framework policies page stays in this state until maintainer approval; its draft body is not published. README and `_site-notes.md` are never published.
+Pages carrying a `<!-- DRAFT ... -->` marker or listed in a product’s `unpublishedPages` are excluded from MDX collections, search, raw Markdown and full exports. Existing links to these pages show a neutral review notice with preserved heading IDs. The Framework policies page is explicitly held in `unpublishedPages` until maintainer approval, even if its source draft marker is removed; its draft body is not published. README and `_site-notes.md` are never published.
 
 Crawler indexing remains blocked by `robots.txt` and `X-Robots-Tag`. The agreed enablement point is the **rc.11 launch**: set `AVENTARA_INDEXING=enabled` on the production deployment then, keeping previews blocked. Draft holding pages retain their own noindex metadata. Crawler directives are not access control.
 
-Before launch:
+Deploy only after the architect gives the launch go-ahead. Before launch:
 
-1. Recheck npm releases and update `currentVersion` plus its matching version entry in the registry. Badges currently use the verified published versions: Framework `1.0.0-rc.10`, Access `0.1.0-rc.0`.
-2. Make both content sources available in the deployment build.
+1. Recheck npm releases and update `currentVersion` plus its matching version entry in the registry. The site is prepared for Framework `1.0.0-rc.12` and Access `1.0.0-rc.2` as requested in the 31 October handoff. At integration time npm still had Framework rc.11 and Access rc.1; confirm the target releases are published before launch.
+2. Pull any final content commits from both release content branches. Both sources are available in this repository for cloud builds.
 3. Run tests, the production build, and built-output verification.
 4. Attach `aventara.razor34.dev` to the existing Vercel project before deploying the old-host redirects. Check redirects and fragments on the deployed hosts.
 5. Review both products on mobile and desktop in both themes, then enable production indexing at launch.

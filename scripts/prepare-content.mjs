@@ -42,7 +42,10 @@ export async function prepareContent({
         title: parsed.data.title,
         description: parsed.data.description || "",
       };
-      if (/<!--\s*DRAFT\b/i.test(parsed.content)) {
+      if (
+        /<!--\s*DRAFT\b/i.test(parsed.content) ||
+        product.unpublishedPages?.includes(slug)
+      ) {
         const slugger = new GithubSlugger();
         const ids = [];
         let fence = false;

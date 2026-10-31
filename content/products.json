@@ -6,10 +6,10 @@
     "headline": "Your schema. Every layer connected.",
     "detail": "Keep your Prisma schema, client and migrations. Aventara turns your models and configuration into contracts, a typed HTTP API and a frontend client.",
     "accent": "iris",
-    "currentVersion": "1.0.0-rc.10",
+    "currentVersion": "1.0.0-rc.12",
     "versions": [
       {
-        "version": "1.0.0-rc.10",
+        "version": "1.0.0-rc.12",
         "source": {
           "kind": "local",
           "path": "aventara-docs-content",
@@ -256,20 +256,20 @@
           {
             "label": "User",
             "file": "schema.prisma",
-            "source": "model User {\n  id    Int     @id\n  email String  @unique\n  name  String?\n}",
+            "source": "model User {\n  id    String  @id @default(cuid())\n  email String  @unique\n  name  String?\n}",
             "outputFile": "frontend.ts",
             "output": "const users = await avClient.User.find.many({\n  select: [\"id\", \"name\"],\n  limit: 3,\n});",
-            "result": "{ id: number; name: string | null }[]",
+            "result": "{ id: string; name: string | null }[]",
             "caption": "The selected fields shape your result. Your Prisma schema stays the source.",
             "status": "Fields selected"
           },
           {
             "label": "Post",
             "file": "schema.prisma",
-            "source": "model Post {\n  id        Int     @id\n  title     String\n  published Boolean @default(false)\n}",
+            "source": "model Post {\n  id        String  @id @default(cuid())\n  title     String\n  published Boolean @default(false)\n}",
             "outputFile": "frontend.ts",
             "output": "const posts = await avClient.Post.find.many({\n  where: { published: true },\n  select: [\"id\", \"title\"],\n});",
-            "result": "{ id: number; title: string }[]",
+            "result": "{ id: string; title: string }[]",
             "caption": "Filter through a typed client. Keep the query close to the UI that needs it.",
             "status": "Query shaped"
           }
@@ -295,7 +295,8 @@
           "answer": "The framework is a release candidate. Breaking changes are still possible before a stable release. Pin versions and follow the upgrade guide."
         }
       ]
-    }
+    },
+    "unpublishedPages": ["policies"]
   },
   {
     "id": "access",
@@ -304,13 +305,13 @@
     "headline": "Know exactly who can do what.",
     "detail": "Write role-first rules that follow your schema. Access decides which rows and fields a caller may use. Better Auth handles sign-in and credentials.",
     "accent": "mint",
-    "currentVersion": "0.1.0-rc.0",
+    "currentVersion": "1.0.0-rc.2",
     "versions": [
       {
-        "version": "0.1.0-rc.0",
+        "version": "1.0.0-rc.2",
         "source": {
           "kind": "local",
-          "path": "../Aventara Access Docs/aventara-access-docs-content",
+          "path": "aventara-access-docs-content",
           "env": "AVENTARA_ACCESS_CONTENT"
         }
       }
@@ -516,7 +517,7 @@
             "file": "access.policies.ts · excerpt",
             "source": ".grants(({ grant, me }) => [\n  grant(\"signedIn\", \"update\", \"Note\", {\n    where: { authorId: me.id },\n  }),\n])\n.denies(({ deny }) => [\n  deny(\"*\", \"*\", {\n    if: { claims: { banned: true } },\n  }),\n]);",
             "outputFile": "Illustrative decision",
-            "output": "Caller    Ada · id 1\nAction    update Note\nRow       authorId: 1\nBanned    false",
+            "output": "Caller    Ada · id user_ada\nAction    update Note\nRow       authorId: \"user_ada\"\nBanned    false",
             "result": "ALLOW · author matches caller",
             "caption": "The author can edit their own note. This is a local illustration of the quickstart rules.",
             "status": "Grant matches"
@@ -526,7 +527,7 @@
             "file": "access.policies.ts · excerpt",
             "source": ".grants(({ grant, me }) => [\n  grant(\"signedIn\", \"update\", \"Note\", {\n    where: { authorId: me.id },\n  }),\n])\n.denies(({ deny }) => [\n  deny(\"*\", \"*\", {\n    if: { claims: { banned: true } },\n  }),\n]);",
             "outputFile": "Illustrative decision",
-            "output": "Caller    Grace · id 2\nAction    update Note\nRow       authorId: 1\nBanned    false",
+            "output": "Caller    Grace · id user_grace\nAction    update Note\nRow       authorId: \"user_ada\"\nBanned    false",
             "result": "DENY · no matching grant",
             "caption": "Being signed in is not enough to edit someone else’s note. No matching grant means no permission.",
             "status": "Default deny"
@@ -536,7 +537,7 @@
             "file": "access.policies.ts · excerpt",
             "source": ".grants(({ grant, me }) => [\n  grant(\"signedIn\", \"update\", \"Note\", {\n    where: { authorId: me.id },\n  }),\n])\n.denies(({ deny }) => [\n  deny(\"*\", \"*\", {\n    if: { claims: { banned: true } },\n  }),\n]);",
             "outputFile": "Illustrative decision",
-            "output": "Caller    Ada · id 1\nAction    update Note\nRow       authorId: 1\nBanned    true",
+            "output": "Caller    Ada · id user_ada\nAction    update Note\nRow       authorId: \"user_ada\"\nBanned    true",
             "result": "DENY · matching deny wins",
             "caption": "The author’s grant still matches. The banned-user deny takes precedence.",
             "status": "Deny takes precedence"
