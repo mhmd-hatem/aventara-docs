@@ -1,9 +1,9 @@
 import type { MetadataRoute } from "next";
+import { indexingEnabled } from "@/lib/indexing.mjs";
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules:
-      process.env.AVENTARA_INDEXING === "enabled"
-        ? { userAgent: "*", allow: "/", disallow: ["/api/", "/*/api/"] }
-        : { userAgent: "*", disallow: "/" },
+    rules: indexingEnabled()
+      ? { userAgent: "*", allow: "/", disallow: ["/api/", "/*/api/"] }
+      : { userAgent: "*", disallow: "/" },
   };
 }

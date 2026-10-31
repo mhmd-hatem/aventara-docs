@@ -1,5 +1,6 @@
 import { createMDX } from "fumadocs-mdx/next";
 import { readFileSync } from "node:fs";
+import { indexingEnabled } from "./lib/indexing.mjs";
 import { docsRedirects } from "./lib/redirects.mjs";
 const products = JSON.parse(
   readFileSync(new URL("./content/products.json", import.meta.url), "utf8"),
@@ -9,7 +10,7 @@ export default withMDX({
   reactStrictMode: true,
   devIndicators: false,
   async headers() {
-    return process.env.AVENTARA_INDEXING === "enabled"
+    return indexingEnabled()
       ? []
       : [
           {

@@ -73,15 +73,15 @@ Both content folders are now versioned in this repository and included in cloud 
 
 Pages carrying a `<!-- DRAFT ... -->` marker or listed in a product’s `unpublishedPages` are excluded from MDX collections, search, raw Markdown and full exports. Existing links to these pages show a neutral review notice with preserved heading IDs. The Framework policies page is explicitly held in `unpublishedPages` until maintainer approval, even if its source draft marker is removed; its draft body is not published. README and `_site-notes.md` are never published.
 
-Crawler indexing remains blocked by `robots.txt` and `X-Robots-Tag`. The agreed enablement point is the **rc.11 launch**: set `AVENTARA_INDEXING=enabled` on the production deployment then, keeping previews blocked. Draft holding pages retain their own noindex metadata. Crawler directives are not access control.
+The public launch enables indexing on Vercel production (`VERCEL_ENV=production`). Local and preview builds retain crawler exclusions even if `AVENTARA_INDEXING=enabled` is inherited. Set `AVENTARA_INDEXING=disabled` on production to pause indexing. Draft holding pages retain their own noindex metadata. Crawler directives are not access control.
 
-Deploy only after the architect gives the launch go-ahead. Before launch:
+Publication was authorized on 31 October 2026. Deploy production directly to the intended Vercel account. The maintainer noted that the GitHub integration belongs to a different account; do not use a `main` push as a substitute for direct deployment. Before subsequent releases:
 
-1. Recheck npm releases and update `currentVersion` plus its matching version entry in the registry. The site is prepared for Framework `1.0.0-rc.12` and Access `1.0.0-rc.2` as requested in the 31 October handoff. At integration time npm still had Framework rc.11 and Access rc.1; confirm the target releases are published before launch.
+1. Recheck npm releases and update `currentVersion` plus its matching version entry in the registry. The site is prepared for Framework `1.0.0-rc.12` and Access `1.0.0-rc.2` as requested in the 31 October handoff. The maintainer explicitly chose to publish these upcoming labels while npm still has Framework rc.11 and Access rc.1.
 2. Pull any final content commits from both release content branches. Both sources are available in this repository for cloud builds.
 3. Run tests, the production build, and built-output verification.
 4. Attach `aventara.razor34.dev` to the existing Vercel project before deploying the old-host redirects. Check redirects and fragments on the deployed hosts.
-5. Review both products on mobile and desktop in both themes, then enable production indexing at launch.
+5. Review both products on mobile and desktop in both themes, and confirm production indexing and preview exclusions.
 
 ## Design and analytics
 
