@@ -1,6 +1,6 @@
 ---
 title: HTTP protocol
-description: Routes, headers, the response envelope, A- and V-codes with HTTP statuses, ETag and 304, a curl walkthrough, and writing a custom host with @aventara/core/protocol.
+description: Routes, headers, the response envelope, A- and V-codes with HTTP statuses, ETag and 304, a curl walkthrough, Operation Sets (/_all) and their streamed answer, cached reads as GET, and writing a custom host with @aventara/core/protocol.
 order: 83
 section: reference
 ---
@@ -17,7 +17,9 @@ All routes are relative to your configured [`api` mount path](/docs/nestjs-host#
 |---|---|---|
 | `GET` | `/api/_contract` | The client contract. No identity headers needed. |
 | `POST` | `/api/_resources/<Resource>/<family>/<variant>` | One operation, for example `/api/_resources/User/find/many`. Every operation is a `POST`, reads included. |
+| `GET` | `/api/_resources/<Resource>/find/<variant>?q=<arguments>&v=<contract hash>` | The same read, cached: present only for a read with a [`cache` stage](/docs/caching-reads). See [Cached reads](#cached-reads). |
 | `POST` | `/api/_transactions` | A transaction plan. Present only when transactions are interactive. |
+| `POST` | `/api/_all` | An Operation Set: several independent operations in one request. Present whenever the contract advertises an operation. See [Operation Sets](#operation-sets). |
 
 Only advertised operations are routable. The Resource segment is the exact Resource key (the Prisma model name). The `_` prefix is reserved for the protocol; any other `/api/_*` path answers with a protocol error.
 
@@ -25,7 +27,7 @@ The body of every `POST` is a JSON object. An empty operation body is `{}`; an a
 
 ## Headers
 
-Every `_resources` and `_transactions` request must send:
+Every `POST` to `_resources`, `_transactions` and `_all` must send:
 
 | Header | Value |
 |---|---|
@@ -36,23 +38,28 @@ Every `_resources` and `_transactions` request must send:
 
 Header names are case-insensitive. A request missing either identity header answers `400 A2000`, and the message names what is missing (see below). A wrong protocol version answers `A2006`; a hash that is not the current one answers `A2005`.
 
-Every framework response carries `Content-Type: application/json` and `Aventara-Request-Id` (the one you sent if it is valid, otherwise a generated one; see [Request IDs and diagnostics](/docs/request-ids-and-diagnostics)).
+Every framework response carries `Content-Type: application/json` and `Aventara-Request-Id` (the one you sent if it is valid, otherwise a generated one; see [Request IDs and diagnostics](/docs/request-ids-and-diagnostics)). Three answers differ: a streamed `/_all` answer is `application/x-ndjson`, a `304` has no body and no `Content-Type`, and a public cached read carries no `Aventara-Request-Id` ([Cached reads](#cached-reads)).
 
 ### All headers at a glance
 
 | Header | Direction | Where | Meaning |
 |---|---|---|---|
-| `Content-Type` | request | `_resources`, `_transactions` | Must be `application/json`; otherwise `415 A2011`. |
-| `Content-Encoding` | request | `_resources`, `_transactions` | Optional. `gzip`, `deflate` and `br` are inflated (the size limit counts decoded bytes); any other coding is `415 A2011`; a body that does not decode in the coding it names is `400 A2000`. |
-| `Aventara-Protocol-Version` | request | `_resources`, `_transactions` | `1`. Missing: `400 A2000`. Other value: `400 A2006`. |
-| `Aventara-Contract-Hash` | request | `_resources`, `_transactions` | The caller's contract hash. Missing: `400 A2000`. Not current: `409 A2005`. |
-| `Aventara-Request-Id` | request and response | all | Optional on requests (an invalid value is silently replaced by a generated UUID). Always on responses. |
-| `If-None-Match` | request | `_contract` | A quoted contract hash; a match answers `304`. |
-| `ETag` | response | `_contract` | The quoted contract hash. |
-| `Cache-Control` | response | `_contract` | `no-cache`. |
-| `Allow` | response | `405` | The permitted method: `POST` on operations and `_transactions`, `GET` on `_contract`. |
+| `Content-Type` | request | `POST` to `_resources`, `_transactions`, `_all` | Must be `application/json`; otherwise `415 A2011`. |
+| `Content-Encoding` | request | `POST` to `_resources`, `_transactions`, `_all` | Optional. `gzip`, `deflate` and `br` are inflated (the size limit counts decoded bytes); any other coding is `415 A2011`; a body that does not decode in the coding it names is `400 A2000`. |
+| `Aventara-Protocol-Version` | request | `POST` to `_resources`, `_transactions`, `_all` | `1`. Missing: `400 A2000`. Other value: `400 A2006`. Optional on a cached read's `GET`; checked when sent. |
+| `Aventara-Contract-Hash` | request | `POST` to `_resources`, `_transactions`, `_all` | The caller's contract hash. Missing: `400 A2000`. Not current: `409 A2005`. A cached read's `GET` sends it as `v` in the query instead. |
+| `Aventara-Request-Id` | request and response | all | Optional on requests (an invalid value is silently replaced by a generated UUID). On every response except a public cached read. |
+| `Accept` | request | `_all` | `application/x-ndjson` asks for the [streamed answer](#streamed-answer); anything else, or none, gets one JSON body. |
+| `If-None-Match` | request | `_contract`, cached reads | An `ETag` the caller holds; a match answers `304`. |
+| `ETag` | response | `_contract`, cached reads | `_contract`: the quoted contract hash. A cached read: the SHA-256 of the body, base64url, quoted. |
+| `Cache-Control` | response | `_contract`, cached reads, streamed `_all` | `_contract`: `no-cache`. A cached read: `private` or `public` with `max-age` ([Caching reads](/docs/caching-reads#the-three-audiences)), or `no-store` on any answer but a `200` or `304`. A streamed `_all`: `no-store`. |
+| `Vary` | response | cached reads | `Authorization, Cookie`, for `for: "user"` and `for: "anonymous"`. |
+| `Referrer-Policy` | response | cached reads | `no-referrer`: the URL holds the arguments. |
+| `X-Content-Type-Options` | response | every answer to a `GET` | `nosniff`. |
+| `X-Accel-Buffering` | response | streamed `_all` | `no`, so a buffering proxy passes each line on. |
+| `Allow` | response | `405` | The permitted methods: `POST` on operations, `_transactions` and `_all`, `GET` on `_contract`, `GET, POST` on a cached read's route. |
 
-`X-Request-Id` is never read. A query string on the URL is ignored.
+`X-Request-Id` is never read. A query string is read only by a cached read's `GET`; on any other route it is ignored.
 
 The `Aventara-` prefix of these header names may still change before 1.0; the generated client picks up a change when you regenerate.
 
@@ -110,7 +117,7 @@ The full tables with typical causes and fixes are on [Error codes](/docs/error-c
 | `A3004` | PIPE_OUTPUT_INVALID | 500 | A server pipe returned arguments the server's own contract refuses. Always the generic message `A server pipeline produced invalid arguments.` |
 | `A4000` | UNAUTHENTICATED | 401 | Authentication required or failed. |
 | `A4001` | FORBIDDEN | 403 | Not permitted (including a guard that returned `false`). |
-| `A4002` | POLICY_DENIED | 403 | A guard denied the operation with a policy reason. |
+| `A4002` | POLICY_DENIED | 403 | The configuration's [policy](/docs/policies) refused the request, or a guard denied it with a policy reason. |
 
 Raw database errors, SQL, connection strings and stack traces are never put in `cause`.
 
@@ -156,7 +163,7 @@ These appear in `cause.issues[].code`, under an `A2004`, `A2007` or `A2009` enve
 
 ## ETag and 304
 
-`GET /_contract` returns the contract as canonical JSON with the quoted hash as its `ETag`, and `Cache-Control: no-cache`. Send `If-None-Match` to revalidate cheaply; a match answers `304 Not Modified` with no body (the `ETag` is repeated):
+`GET /_contract` returns the contract as canonical JSON with the quoted hash as its `ETag`, `Cache-Control: no-cache` and `X-Content-Type-Options: nosniff`. Send `If-None-Match` to revalidate cheaply; a match answers `304 Not Modified` with no body (the `ETag` is repeated):
 
 ```bash
 curl -i http://localhost:3000/api/_contract -H 'If-None-Match: "sha256:0b2afa72..."'
@@ -167,29 +174,33 @@ curl -i http://localhost:3000/api/_contract -H 'If-None-Match: "sha256:0b2afa72.
 
 ## Walkthrough with curl
 
-Fetch the contract and keep its hash:
+Each operation is `POST <api>/_resources/<Resource>/<family>/<variant>`, where `<Resource>` is the model's name exactly as in `prisma/schema.prisma` (`User`, not `users`). Send the two identity headers: `Aventara-Protocol-Version: 1`, and `Aventara-Contract-Hash` with the hash `GET <api>/_contract` serves (its body's `protocol.hash`, and its `ETag`). The JSON body holds the operation's arguments: a create sends `{ "data": … }`.
 
-```bash
-HASH=$(curl -s http://localhost:3000/api/_contract | node -pe 'JSON.parse(require("fs").readFileSync(0)).protocol.hash')
-```
+Fetch the hash, then create a record:
 
-Create a record:
-
-```bash
-curl -i -X POST http://localhost:3000/api/_resources/User/create/one \
+```sh
+HASH=$(curl -s http://localhost:3000/api/_contract | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).protocol.hash')
+curl -X POST http://localhost:3000/api/_resources/User/create/one \
   -H 'Content-Type: application/json' \
   -H 'Aventara-Protocol-Version: 1' \
   -H "Aventara-Contract-Hash: $HASH" \
-  -d '{"data":{"email":"ada@example.com","name":"Ada"}}'
+  -d '{ "data": { "email": "ada@example.com", "name": "Ada" } }'
 ```
 
-```text
-HTTP/1.1 201 Created
-Content-Type: application/json
-Aventara-Request-Id: 13fae664-ef46-4d07-b969-30df42519f6f
+It answers `201`:
 
+```json
 {"data":{"email":"ada@example.com","id":1,"name":"Ada"},"code":"A1002","cause":null}
 ```
+
+The same command works against a [Next.js app](/docs/nextjs-host) on its own port. The agent skill `aventara new` and `aventara init` write has this example too ([AI agents](/docs/ai-agents)). What each mistake gets:
+
+| Mistake | Answer |
+|---|---|
+| Either identity header left out | `400` `A2000`, naming the missing header |
+| The Resource lower-cased (`/_resources/user/...`) | `404` `A2001` |
+| Arguments outside `data` (`{"email": ...}`) | `422` `A2004` |
+| An old hash, after a schema or configuration change | `409` `A2005`: fetch the hash again |
 
 Read with a nested count:
 
@@ -231,7 +242,7 @@ Transport-level answers (all carry `Aventara-Request-Id`):
 |---|---|
 | Body is not JSON, or is an array | `400 A2000` `The request is malformed and cannot be interpreted.` |
 | `Content-Type: text/plain` | `415 A2011` `The request content type is not supported; send application/json.` |
-| `GET` on an operation route (identity headers sent; without them the answer is `400 A2000`) | `405 A2012` with `Allow: POST` |
+| `GET` on an operation route with no `cache` stage (identity headers sent; without them the answer is `400 A2000`) | `405 A2012` with `Allow: POST` |
 | `POST` on `/_contract` | `405 A2012` with `Allow: GET` |
 | Any other path under `/api/_` (for example `/api/_nope`) | `400 A2000` |
 | Body over `maxRequestBytes` | `413 A2010` `The request body exceeds the maximum request size.` |
@@ -288,6 +299,86 @@ Every error path in a transaction answer is the literal address in the request b
 
 A committed plan answers `200 A1009` with `data` an array of per-step results. A failed plan rolls back and answers the failing step's code and status, with `cause.operation` set.
 
+## Operation Sets
+
+`POST /api/_all` carries several independent operations in one request: any mix of reads and writes the contract advertises. They run concurrently, in no set order, and not atomically; each one runs exactly as it would on its own route. Ordered, all-or-nothing or referencing work stays on [`/_transactions`](#transactions). The generated client sends one for the calls you make together ([Several operations in one round trip](/docs/operation-sets)).
+
+The body is one object with `operations`, an object of entries under keys you choose:
+
+```json
+{
+  "operations": {
+    "posts": { "resource": "Post", "family": "find", "variant": "many", "args": { "select": ["id", "title"] } },
+    "drafts": { "resource": "Post", "family": "find", "variant": "count", "args": { "where": { "published": false } } },
+    "author": { "resource": "User", "family": "find", "variant": "unique", "args": { "where": { "id": 999 } } },
+    "locale": { "resource": "User", "family": "update", "variant": "unique", "args": { "where": { "id": 1 }, "data": { "locale": "fr" }, "select": ["id", "locale"] } }
+  }
+}
+```
+
+- **Keys** are ASCII identifiers (`[A-Za-z_$][A-Za-z0-9_$]*`). `__proto__` and `constructor` are plain keys like any other.
+- **Each entry** is exactly `resource`, `family`, `variant` and `args`: a transaction step without its fingerprint. `args` is the body its own route would take.
+- **The identity headers and the body are checked once** for the whole request, and every entry runs under the request's id, its state and its principal.
+
+### The answer
+
+`200 A1000`, with `data` holding each key's own envelope, byte for byte what its own route would answer, a refusal or a miss included:
+
+```json
+{"data":{"posts":{"data":[{"id":1,"title":"Hello"}],"code":"A1000","cause":null},"drafts":{"data":2,"code":"A1000","cause":null},"author":{"data":null,"code":"A2003","cause":{"message":"No record matched the unique selector."}},"locale":{"data":{"id":1,"locale":"fr"},"code":"A1004","cause":null}},"code":"A1000","cause":null}
+```
+
+The status is always `200` when the set ran: read each entry's own `code`. A write that ran stays written whatever the other entries answered.
+
+### Streamed answer
+
+With `Accept: application/x-ndjson`, the answer is `200` with `Content-Type: application/x-ndjson`, `Cache-Control: no-store` and `X-Accel-Buffering: no`, and one line per entry, written as each one finishes:
+
+```text
+{"key":"author","envelope":{"data":null,"code":"A2003","cause":{"message":"No record matched the unique selector."}}}
+{"key":"drafts","envelope":{"data":2,"code":"A1000","cause":null}}
+{"key":"locale","envelope":{"data":{"id":1,"locale":"fr"},"code":"A1004","cause":null}}
+{"key":"posts","envelope":{"data":[{"id":1,"title":"Hello"}],"code":"A1000","cause":null}}
+```
+
+When the client disconnects, entries not yet started never start and nothing more is written. An entry already running still finishes on the server.
+
+### Concurrency
+
+At most `limits.maxAllConcurrency` entries (4 by default) run at once for one request; the others wait and start in key order. The limit belongs to the contract, so a request cannot take more than its share of your database pool. See [Limits and safety](/docs/limits-and-safety#operation-sets).
+
+### What fails the whole request
+
+Only these answer for the whole request, as plain JSON at their own status even when the caller asked for a stream:
+
+| Request | Answer |
+|---|---|
+| A missing or stale identity header, a wrong method (`405`, `Allow: POST`), content type or size | as on any route |
+| More entries than `limits.maxAll` (10 by default) | `422 A2009`, `V1014` at `["operations"]` |
+| No entries | `422 A2004`, `V1004` at `["operations"]` |
+| A key that is not an identifier | `422 A2004`, `V1001` at `["operations"]` |
+| An entry that is not exactly its four members | `422 A2004`, `V1001` at `["operations", "<key>", "<member>"]` |
+| A body member beside `operations` | `422 A2004`, `V1001` at `["<member>"]` |
+
+An entry naming a Resource or an operation the contract does not offer is not one of them: it is answered on its own key, as its own route would answer it (`A2001`, `A2002`). A contract that advertises no operation has no `/_all` route at all.
+
+## Cached reads
+
+A read with a [`cache` stage](/docs/caching-reads) is also served as a `GET` at its own path:
+
+```text
+GET /api/_resources/Post/find/many?q=%7B%22where%22%3A%7B%22published%22%3Atrue%7D%7D&v=sha256%3A0b2afa72...
+```
+
+- The query holds exactly `q` and `v`, each once and percent-decoded once (`+` is a plus, not a space). Anything else is `400 A2000`.
+- `q` is the arguments object as canonical JSON (RFC 8785). It has two forms, told apart by the first character: `{` is the JSON itself, percent-encoded; anything else is base64url (no padding) of the JSON's deflate-raw bytes. The generated client sends the shorter one. The JSON, inflated or not, may be at most `limits.maxRequestBytes` (`413 A2010`); text that is not base64url, deflate-raw, UTF-8 or a JSON object is `400 A2000`.
+- `v` is the client contract hash. Another hash is the stale client's `409 A2005`.
+- The read needs no other header: the hash names one contract, of one protocol version. An `Aventara-Protocol-Version` you send anyway is checked as on a `POST`.
+
+The read runs exactly as its `POST`. Its `200` carries the `Cache-Control` and `Vary` its `for` asks for, a strong `ETag` (SHA-256 of the body, base64url, quoted), `Referrer-Policy: no-referrer` and `X-Content-Type-Options: nosniff`. A matching `If-None-Match` (strong, weak `W/"..."`, a list or `*`) is `304` with no body. Every other answer is `Cache-Control: no-store`. A public answer carries no `Aventara-Request-Id`. The full header table per audience is on [Caching reads](/docs/caching-reads#the-headers).
+
+A `GET` of a write, or of a read with no `cache` stage, is `405 A2012` with `Allow: POST`. Any other method on a cached read's route is `405` with `Allow: GET, POST`.
+
 ## Custom hosts with @aventara/core/protocol
 
 If you do not use NestJS, `@aventara/core/protocol` is the same protocol as passive data and pure functions. It mounts nothing and imports no HTTP library; you adapt your server to it.
@@ -300,19 +391,20 @@ const protocol = AvProtocol.bind(framework);   // bind once, at startup
 
 | Member | What it does |
 |---|---|
-| `protocol.surface()` | The list of routes to mount: each `{ kind: "operation" \| "contract" \| "transactions", method, path }`, with `path` relative to the `api` mount path. Only advertised operations appear; `transactions` only when interactive. |
-| `protocol.handleOperation(request)` | Decode, execute and encode one operation request. Resolves to `{ status, headers, body }`. Never rejects. |
+| `protocol.surface()` | The list of routes to mount: each `{ kind: "operation" \| "contract" \| "transactions" \| "all", method, path }`, with `path` relative to the `api` mount path. Only advertised operations appear; `transactions` only when transactions are interactive; `all` (`POST /_all`) whenever at least one operation is advertised; a cached read has a second `operation` entry with `method: "GET"`. |
+| `protocol.handleOperation(request)` | Decode, execute and encode one operation request, a cached read's `GET` included. Resolves to `{ status, headers, body }`. Never rejects. |
 | `protocol.handleTransaction(request)` | The same for `/_transactions`. |
-| `protocol.encodeContract(request)` | The `GET /_contract` answer: ETag, `no-cache`, and `304` handling. |
+| `protocol.handleAll(request, { signal })` | The same for `/_all`. Resolves to `{ status, headers, body }`; `body` is a string, or, when the caller sent `Accept: application/x-ndjson`, an async iterable of lines to write as each operation settles. Abort `signal` when the client leaves. |
+| `protocol.encodeContract(request)` | The `GET /_contract` answer: ETag, `no-cache`, `nosniff`, and `304` handling. |
 | `protocol.answerAbsent(request)` | The answer for any other path under the protocol's `_` namespace (404, 405, 400 ...), or `undefined` for a path outside it, which is yours to answer. |
 | `protocol.failure(...)` | A transport-level code (`A2000`, `A2010`, `A2011`, `A2012`) as a complete response, for hosts that parse the body themselves. |
-| `protocol.decodeOperation(request)`, `protocol.decodeTransaction(request)` | Decode without executing. |
+| `protocol.decodeOperation(request)`, `protocol.decodeTransaction(request)` | Decode a `POST` without executing (a cached read's `GET` goes to `handleOperation`). |
 | `protocol.encodeOperation(response, requestId)`, `protocol.encodeTransaction(response, requestId)` | Encode a response you obtained yourself. |
 | `AvProtocol.headers`, `AvProtocol.httpStatus`, `AvProtocol.scalarFormats`, `AvProtocol.isOperationResponse`, `AvProtocol.normalizeEntrypoint` | The header names, the code to status table, the wire grammars of string-encoded scalars, the envelope check and the mount-path rule, as data and pure functions. |
 
 Every member, with types and examples: [Protocol API reference](/docs/protocol-api-reference).
 
-A request is `{ method, path, headers, body }`, where `path` is relative to the `api` mount path and `body` is `{ kind: "raw", content }` (the protocol enforces size, content type and JSON) or `{ kind: "parsed", value }` (your parser already did). The response is `{ status, headers, body }` with `body` a JSON string.
+A request is `{ method, path, query?, headers, body }`, where `path` is relative to the `api` mount path, `query` is the URL's query without its `?` (read only by a cached read's `GET`), and `body` is `{ kind: "raw", content }` (the protocol enforces size, content type and JSON) or `{ kind: "parsed", value }` (your parser already did). The response is `{ status, headers, body }` with `body` a JSON string; `handleAll`'s may be an async iterable of lines instead.
 
 ### Express example
 
@@ -329,6 +421,7 @@ const toRequest = (req: Request) =>
   ({
     method: req.method,
     path: req.path.slice(base.length),                    // relative to the `api` mount path
+    query: req.originalUrl.split("?")[1] ?? "",           // a cached read's arguments travel here
     headers: req.headers,
     body: { kind: "raw", content: Buffer.isBuffer(req.body) ? req.body : "" },
   }) as const;
@@ -346,6 +439,21 @@ for (const route of protocol.surface()) {
     app.get(path, (req, res) => send(res, protocol.encodeContract(toRequest(req))));
   } else if (route.kind === "transactions") {
     app.post(path, raw, async (req, res) => send(res, await protocol.handleTransaction(toRequest(req))));
+  } else if (route.kind === "all") {
+    // One JSON body; with `Accept: application/x-ndjson`, one line per operation as it settles.
+    app.post(path, raw, async (req, res) => {
+      const gone = new AbortController();
+      res.on("close", () => gone.abort());
+      const { status, headers, body } = await protocol.handleAll(toRequest(req), { signal: gone.signal });
+      res.status(status).set(headers);
+      if (typeof body === "string") return res.send(body);
+      res.flushHeaders();
+      for await (const line of body) res.write(line);
+      res.end();
+    });
+  } else if (route.method === "GET") {
+    // A read with a `cache` stage: also served as a GET, its arguments in the query.
+    app.get(path, async (req, res) => send(res, await protocol.handleOperation(toRequest(req))));
   } else {
     app.post(path, raw, async (req, res) => send(res, await protocol.handleOperation(toRequest(req))));
   }
@@ -361,6 +469,6 @@ app.use(base, (req, res, next) => {
 app.listen(3100);
 ```
 
-This runs: `GET /api/_contract`, operations, and the protocol's own `405` (with `Allow`) for a wrong method on a protocol route. Authentication is still an Aventara [pipeline](/docs/configuration#pipelines): pass what it needs through `headers`, and a guard reads `ctx.$transport.headers`.
+This serves: `GET /api/_contract`, operations, cached reads as `GET`, `/_all` (one body or streamed lines), and the protocol's own `405` (with `Allow`) for a wrong method on a protocol route. Authentication is still an Aventara [pipeline](/docs/configuration#pipelines): pass what it needs through `headers`, and a guard reads `ctx.$transport.headers`.
 
 See also: [Limits and safety](/docs/limits-and-safety), [Authentication and guards](/docs/authentication-and-guards), [Transactions with $ref](/docs/transactions-with-ref).

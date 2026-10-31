@@ -19,6 +19,8 @@ For the platform differences (middleware, global prefix, CORS) see [Express and 
 // src/app.module.ts
 import { Module } from "@nestjs/common";
 import { AventaraModule } from "@aventara/nest";
+import { createPrismaAdapter } from "@aventara/prisma7-adapter";
+import adapter from "./aventara.adapter.js";
 import { aventaraConfig } from "./aventara.config.js";
 import { PrismaModule, PrismaService } from "./prisma.service.js";
 
@@ -29,13 +31,18 @@ import { PrismaModule, PrismaService } from "./prisma.service.js";
       imports: [PrismaModule],
       inject: [PrismaService],
       useFactory: async (prisma: PrismaService) => ({
-        config: await aventaraConfig(prisma),
+        config: {
+          ...aventaraConfig,
+          adapter: await createPrismaAdapter({ ...adapter, client: prisma }),
+        },
       }),
     }),
   ],
 })
 export class AppModule {}
 ```
+
+`aventaraConfig` is a plain value with no adapter in it, so `aventara-build` can run it without a database client. The adapter is built here, from `src/aventara.adapter.ts` and the Prisma client ([Configuration](/docs/configuration#adapter)).
 
 It takes the framework in one of three forms:
 
@@ -52,11 +59,18 @@ The `config` form is checked like `createFramework`'s parameter, against your ad
 `@InjectFramework()` injects the `AvFramework` anywhere. Nest's DI carries no type argument, so declare a type alias from your configuration:
 
 ```ts
-// src/aventara.config.ts
+// src/aventara.framework.ts
 import { createFramework } from "@aventara/core";
+import { createPrismaAdapter } from "@aventara/prisma7-adapter";
+import adapter from "./aventara.adapter.js";
+import { aventaraConfig } from "./aventara.config.js";
+import type { PrismaService } from "./prisma.service.js";
 
-const buildFramework = async (prisma: PrismaService) =>
-  createFramework(await aventaraConfig(prisma));
+export const buildFramework = async (prisma: PrismaService) =>
+  createFramework({
+    ...aventaraConfig,
+    adapter: await createPrismaAdapter({ ...adapter, client: prisma }),
+  });
 export type AppFramework = Awaited<ReturnType<typeof buildFramework>>;
 ```
 
@@ -64,7 +78,7 @@ export type AppFramework = Awaited<ReturnType<typeof buildFramework>>;
 // src/stats.service.ts
 import { Injectable } from "@nestjs/common";
 import { InjectFramework } from "@aventara/nest";
-import type { AppFramework } from "./aventara.config.js";
+import type { AppFramework } from "./aventara.framework.js";
 
 @Injectable()
 export class StatsService {
@@ -89,7 +103,7 @@ The module owns no resource to shut down. Your Prisma service closes its own cli
 When the application starts, the host logs one line:
 
 ```text
-Aventara mounted 42 operations at /api (+ GET /api/_contract, POST /api/_transactions)
+Aventara mounted 42 operations at /api (+ GET /api/_contract, POST /api/_transactions, POST /api/_all)
 ```
 
 The number is how many operations are advertised and `/api` is your `api` mount path. The `POST /api/_transactions` part appears only when transactions are interactive.
@@ -109,7 +123,7 @@ This is the case when `AventaraModule` builds the framework from `config` (the f
 `AvConfig.api` alone decides where the protocol is mounted:
 
 ```ts
-return { api: "/api", adapter: /* ... */ } as const;
+export const aventaraConfig = { api: "/api" } as const;
 ```
 
 `app.setGlobalPrefix("v1")` does not move the protocol: with the prefix set, `/api/_contract` still answers `200` and `/v1/api/_contract` answers `404`. Set `api` to where you want it (`"/v1/api"`), and point the generated client at that URL ([Client setup](/docs/client-setup)).

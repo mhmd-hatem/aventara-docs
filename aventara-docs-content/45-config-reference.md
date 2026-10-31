@@ -1,15 +1,15 @@
 ---
 title: Configuration reference
-description: Every AvConfig key and createPrismaAdapter option with its type, default, the layers it applies to and an example.
+description: Every AvConfig key (adapter, prebuilt, policy included) and the createPrismaAdapter, describePrismaAdapter and aventara-build options, with type, default, the layers it applies to and an example.
 order: 80
 section: reference
 ---
 
 # Configuration reference
 
-A lookup table for everything you can put in the object returned from `src/aventara.config.ts` (the `AvConfig`), plus the options of `createPrismaAdapter`. For a walkthrough with explanations, see [Configuration](/docs/configuration). For how layers combine, see [Contract layers](/docs/contract-layers).
+A lookup table for everything you can put in the object exported from `src/aventara.config.ts` (the `AvConfig`; the scaffold leaves `adapter` out of it and joins it where the framework is created), plus the options of `describePrismaAdapter` and `createPrismaAdapter`. For a walkthrough with explanations, see [Configuration](/docs/configuration). For how layers combine, see [Contract layers](/docs/contract-layers).
 
-All types below are exported from `@aventara/core` (`AvConfig`, `AvConfigLayer`, `AvConfigResource`, `AvConfigExemptions`, `AvPipeline`, `AvContractLimits`, ...). Keep `as const` on the object you return so TypeScript can check Resource and field names against your schema. `@aventara/core/avz` is a separate entry that holds `AvZ`, the builder for Json shapes and field validators ([JSON fields](/docs/json-fields), [Field validators](/docs/field-validators)). `@aventara/core/internal` exists for Aventara's own packages and is not public API; do not import from it.
+All types below are exported from `@aventara/core` (`AvConfig`, `AvConfigLayer`, `AvConfigResource`, `AvConfigExemptions`, `AvPipeline`, `AvContractLimits`, ...). Keep `as const` on the object you export so TypeScript can check Resource and field names against your schema. `@aventara/core/avz` is a separate entry that holds `AvZ`, the builder for Json shapes and field validators ([JSON fields](/docs/json-fields), [Field validators](/docs/field-validators)). `@aventara/core/internal` exists for Aventara's own packages and is not public API; do not import from it.
 
 ## Where a key can go
 
@@ -19,7 +19,9 @@ The object has a root, two overlays, `application` (your server-side code) and `
 |---|---|---|---|---|---|
 | `api` | yes | no | no | no | Required. |
 | `mcp` | yes | no | no | no | Root only; optional. Its presence turns MCP on. |
-| `adapter` | yes | no | no | no | Required. |
+| `adapter` | yes | no | no | no | Required by `createFramework`. |
+| `prebuilt` | yes | no | no | no | Root only; optional. Contracts compiled ahead of time. |
+| `policy` | yes | no | no | no | Root only; optional. In an overlay it is `CONFIG_UNKNOWN_PROPERTY`. |
 | `diagnostics` | yes | no | no | no | Root only. |
 | `misuse` | yes | no | no | no | Root only; optional. |
 | `extends` | no | no | no | yes | Agent only: `"client"` (default), `"application"` or `"root"`. |
@@ -92,7 +94,29 @@ A path inside the protocol's `_` routes under `api` (`/api/_mcp`) is refused too
 | Default | none (required) |
 | Layer | root only |
 
-What the framework runs against. For Prisma 7 it is the result of `createPrismaAdapter(...)` ([below](#createprismaadapter)). The adapter advertises what it can perform; your configuration can only narrow that. A model whose name starts with `$` is refused (`COMPILER_RESERVED_RESOURCE_NAME`): `$` names belong to the framework.
+What the framework runs against. For Prisma 7 it is the result of `createPrismaAdapter({ ...description, client })` ([below](#createprismaadapter)). The scaffold does not write it in `src/aventara.config.ts`, which `aventara-build` runs without a database client: `app.module.ts` spreads the configuration and adds `adapter` beside it. A configuration that still builds its adapter inside keeps working; the framework compiles its Contracts at startup. The adapter advertises what it can perform; your configuration can only narrow that. A model whose name starts with `$` is refused (`COMPILER_RESERVED_RESOURCE_NAME`): `$` names belong to the framework.
+
+### `prebuilt`
+
+| | |
+|---|---|
+| Type | `AvPrebuiltContracts` |
+| Default | none: the Contracts are compiled at startup |
+| Layer | root only |
+
+The four Contracts compiled ahead of time by `aventara-build`, exported as `aventaraContracts` from `contracts.generated.ts`. For serverless and edge platforms, where every cold start would otherwise compile them ([Deploying](/docs/deploying#build-time-contracts)).
+
+```ts
+import { aventaraContracts } from "./generated/aventara/contracts.generated.js";
+
+const framework = await createFramework({
+  ...aventaraConfig,
+  adapter: await createPrismaAdapter({ ...adapter, client: prisma }),
+  prebuilt: aventaraContracts,
+});
+```
+
+The file is used only when this `@aventara/core` compiled it, for this protocol version, from the same configuration and adapter model. The Contracts, hashes and `GET /api/_contract` bytes are then the ones compiling would give. Any other file is ignored whole: the framework compiles at startup and prints one warning, `AVENTARA_PREBUILT_STALE`, naming the Resources whose configuration or model changed, or the version that differs. A value that is not an object is `CONFIG_INVALID_TYPE`.
 
 ### `diagnostics`
 
@@ -156,7 +180,7 @@ import type { AvMisuseEvent } from "@aventara/core";
 misuse: (event: AvMisuseEvent) => metrics.increment("aventara.misuse", { kind: event.kind }),
 ```
 
-In a configuration a function returns `as const`, the parameter has no contextual type, so annotate it as shown (otherwise TypeScript reports `Parameter 'event' implicitly has an 'any' type`).
+In a configuration written as an `as const` object, the parameter has no contextual type, so annotate it as shown (otherwise TypeScript reports `Parameter 'event' implicitly has an 'any' type`).
 
 ```ts
 type AvMisuseEvent = {
@@ -175,6 +199,42 @@ One event per refused value, never the value itself. The operation members are p
 ```json
 {"kind":"unreadable-value","path":["arguments","where"],"origin":"application","resource":"User","family":"find","variant":"unique"}
 ```
+
+### `policy`
+
+| | |
+|---|---|
+| Type | `{ engine: AvPolicyEngine; principal: (facts: { $state; $origin }) => unknown }` |
+| Default | none: no policy, and nothing below runs |
+| Layer | root only |
+
+The policy engine that client and agent requests are checked against, and the function that derives a request's principal from its `ctx.$state`. Core never imports an engine: any object with the right shape satisfies `AvPolicyEngine`. The guide is [Policies](/docs/policies).
+
+```ts
+const framework = await createFramework({
+  api: "/api",
+  adapter,
+  policy: {
+    engine,                                   // satisfies AvPolicyEngine
+    principal: ({ $state }) => $state.user ?? null,   // null: an anonymous caller
+  },
+});
+```
+
+`engine` has three questions, each answered now or as a promise, and three passive lists:
+
+| Member | Meaning |
+|---|---|
+| `can({ principal, origin, action, resource, row?, exists })` | May the principal run `action` (`"read"`, `"create"`, `"update"`, `"delete"`) on `resource`? Asked without a row before anything runs, and with the row for a create and after an update. Returns a boolean. |
+| `scopeOf({ principal, origin, resource, action })` | Which rows: `true` (all), `false` (none) or a `where` fragment (`AvPolicyWhere`) that core adds to the request. `action` is `"read"`, `"update"` or `"delete"`. |
+| `fieldsOf({ principal, origin, resource, access })` | Which fields, for `access` `"read"` or `"write"`: `{ always: "all" \| string[], perRow: { field: where } }`. |
+| `governed` | `{ [Resource]: string[] }`: fields and relations left out of every default projection. |
+| `paths` | `{ [rule]: string[][] }`: the relation paths and operators the rules filter on, each path a list of segments such as `["Note", "campaign", "members", "some", "userId", "equals"]`. |
+| `afterChecks` | `{ [Resource]: ["update"] }`: the updates whose grants carry an `after` condition. |
+
+`governed`, `paths` and `afterChecks` are checked against the Core Contract when the framework is constructed. A name or path the Contract does not have is `CONFIG_INVALID_VALUE`, naming the Resource or the rule. A missing `policy.engine` or `policy.principal` is `CONFIG_REQUIRED`. Only `governed` reaches a Contract (a `governed: true` mark on each such field and relation), so the Contract hash changes only when that set changes. Policies never reach the ClientContract.
+
+A refusal answers `403` `A4002` ([Error codes](/docs/error-codes#a4002)).
 
 ### `application` and `client`
 
@@ -269,7 +329,7 @@ The client contract then has no `delete` family on `User`, `passwordHash` carrie
 | | |
 |---|---|
 | Type | `"none" \| "interactive"` |
-| Default | what the adapter provides (`"interactive"` for the Prisma adapter on SQLite and PostgreSQL) |
+| Default | what the adapter provides (`"interactive"` for the Prisma adapter on SQLite and PostgreSQL, `"none"` with `@prisma/adapter-d1`) |
 | Layer | root, `application`, `client` (override) |
 
 `"interactive"` mounts `POST <api>/_transactions` and gives the generated client `avClient.tx` and `avClient.transaction`, and allows `forceTransaction`. `"none"` removes them for that layer. Any other value fails startup: `transactionsStyle must be "none" or "interactive"`. A layer cannot offer transactions the adapter cannot perform.
@@ -296,8 +356,10 @@ See [Transactions](/docs/transactions).
 | `maxTransactionOperations` | `20` | Steps in one transaction plan. | `A2009` / `V1014` |
 | `maxBooleanNodes` | `50` | Nodes in a `where` boolean tree (`AND` / `OR` / `NOT`). | `A2009` / `V1015` |
 | `maxJsonDepth` | `64` | Levels of nesting inside a Json field's value. | `A2009` / `V1021` |
+| `maxAll` | `10` | Operations in one `POST /_all` ([Operation Sets](/docs/operation-sets)). In-process `all` is not bound by it. | `A2009` / `V1014` at `["operations"]` (HTTP only) |
+| `maxAllConcurrency` | `4` | Operations of one Operation Set running at once; the rest wait. Also bounds in-process `all`'s `avLazy` calls. | none |
 
-Each must be a finite non-negative integer; otherwise startup fails (`CONFIG_INVALID_VALUE` at `limits.maxListLimit`). An unknown name fails with `CONFIG_UNKNOWN_PROPERTY` (`unknown limit property: foo`).
+Each must be a finite non-negative integer (`maxAllConcurrency`: a whole number of at least `1`); otherwise startup fails (`CONFIG_INVALID_VALUE` at `limits.maxListLimit`). An unknown name fails with `CONFIG_UNKNOWN_PROPERTY` (`unknown limit property: foo`).
 
 ```ts
 limits: { maxListLimit: 100 },
@@ -315,6 +377,8 @@ With this configuration the served contract has `"limits": { ..., "maxListLimit"
 | Layer | root, `application`, `client` (additive) |
 
 Stages around every operation of the layer. The same `AvPipeline` shape goes on a Resource, a family and a variant under `resources`. See [Pipelines](#pipelines-reference).
+
+`pipelines.cache` is the one stage that does not add up: `cache({ for, maxAge })` (from `@aventara/core`) on reads, at the root or `client` layer, a Resource, the `find` family or a `find` variant. The most specific level wins, and at one level `client`'s replaces the root's. Anywhere else it is `CONFIG_INVALID_VALUE`. See [Caching reads](/docs/caching-reads).
 
 ### `resources`
 
@@ -416,6 +480,7 @@ type AvPipeline = {
   hooks?:        { before?: AvBeforeHook[]; after?: AvAfterHook[] };
   interceptors?: AvInterceptor[];
   filters?:      AvFilter[];
+  cache?:        { for: "user" | "anonymous" | "everyone"; maxAge: number };   // cache({ for, maxAge }), reads only
 };
 
 // resources.<R>.transactions.pipelines
@@ -453,7 +518,7 @@ Order: guards (layer, Resource, family, variant, then field write guards, then n
 | `$requestId` | `string` | The correlation id. |
 | `$contract` | `AvContract` | The contract of the layer. |
 | `$state` | `AvState` | The request's state: one writable object shared by every stage of the request and the ctx calls they make. Declare its members by augmenting `AvState` ([The pipeline context](/docs/pipeline-context#request-state)). Read-only in compute. |
-| `$transport` | `{ method: "POST"; headers: Record<string, string> } \| undefined` | Present only for remote requests. Header names are lower-cased; repeated headers are joined. |
+| `$transport` | `{ method: "POST" \| "GET"; headers: Record<string, string> } \| undefined` | Present only for remote requests; `"GET"` for a [cached read](/docs/caching-reads). Header names are lower-cased; repeated headers are joined. |
 | `$sql` | tagged template | Run SQL now ([The pipeline context](/docs/pipeline-context#ctxsql)). |
 | `$transaction` | `(work: (tx) => Promise<T>) => Promise<T>` | Run calls in one transaction. |
 | `<Resource>` | `{ <family>: { <variant>(args) } }` | Raw application-origin calls ([The pipeline context](/docs/pipeline-context)). |
@@ -474,44 +539,60 @@ Denial answers (`client` layer): `return false` gives `{"code":"A4001","cause":{
 
 A non-framework error thrown from a stage becomes `A3000` with the generic message `Internal framework error.`; the original goes to `diagnostics`. A pipe that returns arguments the server's own contract refuses becomes `A3004` with the generic message `A server pipeline produced invalid arguments.` ([Pipelines](/docs/pipelines#what-a-pipe-may-and-may-not-do)). In the Nest host, either one also writes one line to the server log ([Request IDs and diagnostics](/docs/request-ids-and-diagnostics#internal-failures-in-the-server-log)).
 
-> Annotate a stage with its exported type (`AvGuard`, `AvPipe`, `AvBeforeHook`, `AvAfterHook`, `AvInterceptor`, `AvFilter`, ...), as above, when the configuration uses `as const` and a function returns it, or the parameter has no contextual type. Details: [Pipelines](/docs/pipelines#typing-a-stage).
+> Annotate a stage with its exported type (`AvGuard`, `AvPipe`, `AvBeforeHook`, `AvAfterHook`, `AvInterceptor`, `AvFilter`, ...), as above, when the configuration is an `as const` object (as the scaffold's is), or the parameter has no contextual type. Details: [Pipelines](/docs/pipelines#typing-a-stage).
+
+## describePrismaAdapter
+
+From `@aventara/prisma7-adapter`. It takes `discovery`, `provider` and `driver` (the same three options as `createPrismaAdapter`, below) and returns the adapter's passive facts: the model, the driver's transaction capability, the referential actions and the computed fields. It takes no client and connects to nothing, so `aventara-build` can compile the Contracts from it. The scaffold's `src/aventara.adapter.ts` default-exports it:
+
+```ts
+// src/aventara.adapter.ts
+import { describePrismaAdapter } from "@aventara/prisma7-adapter";
+import { discovery } from "./generated/aventara/discovery.artifact.js";
+
+export default describePrismaAdapter({
+  discovery,
+  provider: "postgresql",
+  driver: "@prisma/adapter-pg",
+});
+```
 
 ## createPrismaAdapter
 
-From `@aventara/prisma7-adapter`. It is `async` and returns the `adapter`.
+From `@aventara/prisma7-adapter`. It is `async` and returns the `adapter`. Spread the description into it: `createPrismaAdapter({ ...description, client })`. It still checks the client against the discovery artifact; the description cannot, because it has no client.
 
 | Option | Type | Default | Meaning |
 |---|---|---|---|
 | `client` | your `PrismaClient` | required | A client you have already constructed, with a driver adapter. The adapter never builds one or reads the environment. |
 | `discovery` | `AvPrismaDiscoveryArtifact` | required | The generated artifact (`src/generated/aventara/discovery.artifact.ts`), produced by `aventara:prepare`. |
 | `provider` | `"sqlite" \| "postgresql"` | required | Declared, never sniffed. |
-| `driver` | `"@prisma/adapter-better-sqlite3" \| "@prisma/adapter-pg" \| "@prisma/adapter-d1"` | required | Declared, never sniffed. The driver decides whether transactions are offered; `@prisma/adapter-d1` offers none. This release is tested on SQLite (`better-sqlite3`) and PostgreSQL (`pg`). |
+| `driver` | `"@prisma/adapter-better-sqlite3" \| "@prisma/adapter-pg" \| "@prisma/adapter-d1"` | required | Declared, never sniffed. The driver decides whether transactions are offered; `@prisma/adapter-d1` offers none. This release is tested on SQLite (`better-sqlite3`), PostgreSQL (`pg`) and D1 (`@prisma/adapter-d1`, through Miniflare's local D1). On D1 there are no transactions and no `update.first`/`delete.first`, and a nested write is not atomic (Prisma's D1 adapter runs it as separate statements). A `BigInt` must lie within ±(2^53 − 1) on D1; beyond it is `422` `A2004` / `V1004` at the value. |
 | `transactionOptions` | `{ maxWait?: number; timeout?: number; isolationLevel?: ... }` | Prisma's defaults (`maxWait` 2000 ms, `timeout` 5000 ms) | Owned by the adapter, not by Aventara's configuration. |
 
-`isolationLevel` values: `"ReadUncommitted"`, `"ReadCommitted"`, `"RepeatableRead"`, `"Snapshot"`, `"Serializable"`. SQLite supports `Serializable` only; PostgreSQL supports the first four except `Snapshot`.
+`isolationLevel` values: `"ReadUncommitted"`, `"ReadCommitted"`, `"RepeatableRead"`, `"Snapshot"`, `"Serializable"`. SQLite supports `Serializable` only; PostgreSQL supports all of them except `Snapshot`.
 
 ```ts
+import adapter from "./aventara.adapter.js";
+
 await createPrismaAdapter({
+  ...adapter,                       // discovery, provider, driver and the rest of the description
   client: prisma,
-  discovery,
-  provider: "postgresql",
-  driver: "@prisma/adapter-pg",
   transactionOptions: { timeout: 10_000, isolationLevel: "Serializable" },
 });
 ```
 
 ### aventara-prisma7-generate
 
-The `aventara:prepare` script runs this bin to write the discovery artifact. Run it again whenever the Prisma schema changes (the scaffold also runs it on `postinstall`).
+The `aventara:prepare` script runs this bin to write the discovery artifact, then runs `aventara-build` ([CLI reference](/docs/cli-reference#aventara-build)). Run it again whenever the Prisma schema changes (the scaffold also runs it on `postinstall`).
 
 | Flag | Meaning |
 |---|---|
 | `--schema <path>` | The `schema.prisma` file, or a Prisma 7 schema folder. |
 | `--client <dir>` | The generated Prisma client's root (your generator block's `output`). |
-| `--provider <name>` | `sqlite` or `postgresql`. |
+| `--provider <name>` | `sqlite` or `postgresql`. It must agree with the `provider` of the schema's `datasource` block (PSL's `postgres` counts as `postgresql`). A flag the block contradicts, or a block naming a provider the adapter does not support, is refused (exit 1) before `prisma generate` runs, and the refusal names the flag to pass. A `provider` that is not a string literal is not compared. |
 | `--driver <name>` | `@prisma/adapter-better-sqlite3`, `@prisma/adapter-pg` or `@prisma/adapter-d1`. |
-| `--out <file>` | Where to write the artifact module (a `.ts` file). It must not be inside `--client`. |
-| `--config <file>` | Optional: your Aventara configuration module, such as `src/aventara.config.ts` (its `aventaraConfig` export, or its default). The artifact then records which fields the configuration computes, so the types let the stages before compute leave exactly those out of a create. The scaffold passes it; without it, a computed required field stays required in the types, and startup warns `AVENTARA_STALE_GENERATED_TYPES` when the artifact and the configuration disagree. |
+| `--out <file>` | Where to write the artifact module (a `.ts` file). It must not be inside `--client`, whose files the next `prisma generate` clears, and must not name a directory; either is refused (exit 1) before Prisma runs. When the file system refuses the file (no permission, a part of the path that is a file, a full or read-only disk), the step says so in one sentence naming the file and why, and leaves no partial file behind. |
+| `--config <file>` | Optional: your Aventara configuration module, such as `src/aventara.config.ts`. The step neither reads nor runs it. With it, the artifact imports the computed fields from `computed-fields.generated.ts`, the file `aventara-build` writes beside the artifact, so the types let the stages before compute leave exactly those out of a create. The file must exist; a missing `--config` file is refused. The scaffold passes it. Without it, the artifact states no computed field and the stages before compute may leave any create field out, and startup warns `AVENTARA_STALE_GENERATED_TYPES` when the artifact and the configuration disagree. |
 | `-h`, `--help` | Print usage and exit 0. |
 
 It needs a Prisma 7 CLI and `typescript` (below 7) resolvable from your project.
@@ -519,6 +600,13 @@ It needs a Prisma 7 CLI and `typescript` (below 7) resolvable from your project.
 ```text
 aventara-prisma7-generate --schema prisma/schema.prisma --client src/generated/prisma --provider sqlite --driver @prisma/adapter-better-sqlite3 --out src/generated/aventara/discovery.artifact.ts --config src/aventara.config.ts
 resources: User, Category, Post
+```
+
+Refusals are one line on stderr:
+
+```text
+aventara-prisma7-generate: --provider postgresql contradicts the schema's datasource `db` (/home/you/app/prisma/schema.prisma:6), which names provider "sqlite"; pass --provider sqlite.
+aventara-prisma7-generate: the artifact file /app/src/generated/aventara/discovery.artifact.ts (--out) cannot be written: permission denied (EACCES).
 ```
 
 
@@ -536,6 +624,8 @@ Every mistake is thrown as one `AvConstructionError` with `stage` (`"configurati
 | `contract-compilation` | `COMPILER_UNKNOWN_RESOURCE`, `COMPILER_UNKNOWN_FIELD`, `COMPILER_UNAVAILABLE_OPERATION`, `COMPILER_UNAVAILABLE_CAPABILITY` | A name in `resources` or `exemptions` that does not exist, or an overlay exposing what the root hid. |
 | `contract-compilation` | `COMPILER_DANGLING_RELATION`, `COMPILER_MISSING_IDENTIFIER`, `COMPILER_HIDDEN_REQUIRED_FIELD` | Exposure that leaves a relation without its target, a unique operation without an identifier, or a create without a field it requires. |
 | `contract-compilation` | `COMPILER_INVALID_VALIDATOR`, `COMPILER_INVALID_JSON_SHAPE` | A validator or Json shape that does not fit its field. |
+
+A stale `prebuilt` file is not an error. It prints one warning, `AVENTARA_PREBUILT_STALE`, and the framework compiles at startup ([`prebuilt`](#prebuilt)).
 
 ### Startup safety checks
 

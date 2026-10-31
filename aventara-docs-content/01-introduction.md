@@ -54,7 +54,7 @@ Which package goes where, and which are dev or runtime dependencies, is on [Inst
 
 ## Status
 
-Aventara is a release candidate. The current release is `1.0.0-rc.2`, published under the `rc` dist-tag. Install with `@rc`, as the commands in these docs do, so you get the newest release candidate:
+Aventara is a release candidate. The current release is `1.0.0-rc.11`, published under the `rc` dist-tag. Install with `@rc`, as the commands in these docs do, so you get the newest release candidate:
 
 ```bash
 npx @aventara/cli@rc new my-api
@@ -77,12 +77,12 @@ The full table and notes are on [Installation](/docs/installation#requirements).
 
 | | Supported |
 |---|---|
-| Node.js | `^22.18.0 \|\| >=24.2.0` (on Node 22 use npm 11 or newer) |
+| Node.js | `^22.23.4 \|\| >=24.22.1` (on Node 22 use npm 11 or newer) |
 | NestJS | 12 |
-| ORM | Prisma `>=7.10 <8` (Prisma 7 only) |
+| ORM | Prisma `^7.10.1` (Prisma 7 only) |
 | Database | SQLite or PostgreSQL |
 | Package manager | npm or pnpm (yarn is not supported) |
-| TypeScript | Server: 6 (`<7`). Frontend client generator: `>=5.5.0`, TypeScript 7 included |
+| TypeScript | Server: 6 (`>=5.7.0 <7`). Frontend client generator: `>=5.7.0`, TypeScript 7 included |
 
 ## Where to go next
 

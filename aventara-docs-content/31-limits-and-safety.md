@@ -19,11 +19,13 @@ An API that accepts a query language needs ceilings, or one request can ask for 
 | `maxBooleanNodes` | `50` | Nodes in a `where` tree (`AND`/`OR`/`NOT` and conditions). | `422` `A2009` / `V1015` |
 | `maxTransactionOperations` | `20` | Steps in one transaction plan. | `422` `A2009` / `V1014` |
 | `maxJsonDepth` | `64` | Levels of nesting inside a Json field's value. | `422` `A2009` / `V1021` |
+| `maxAll` | `10` | Operations in one [Operation Set](/docs/operation-sets) (`POST /_all`). | `422` `A2009` / `V1014`, for the whole request |
+| `maxAllConcurrency` | `4` | Operations of one Operation Set running at once. | none: the rest wait their turn |
 
 All of them are in the contract you can read at `GET /api/_contract` under `limits`:
 
 ```json
-"limits": {"maxBooleanNodes":50,"maxJsonDepth":64,"maxListLimit":250,"maxNestingDepth":12,"maxRequestBytes":1048576,"maxTransactionOperations":20}
+"limits": {"maxAll":10,"maxAllConcurrency":4,"maxBooleanNodes":50,"maxJsonDepth":64,"maxListLimit":250,"maxNestingDepth":12,"maxRequestBytes":1048576,"maxTransactionOperations":20}
 ```
 
 ## Changing them
@@ -73,7 +75,25 @@ The value of a [Json field](/docs/json-fields) has its own limit, `maxJsonDepth`
 
 Rich-text documents fit well under 64. In a TipTap or ProseMirror document each node adds two levels (its object and its `content` array), so a paragraph inside a list nested five levels deep is around 30 levels. If you store deeper documents, raise `maxJsonDepth`. It does not affect `maxNestingDepth`.
 
-`maxRequestBytes` counts decoded bytes: a compressed body (`gzip`, `deflate`, `br`) is measured after inflation, so compression does not get around it. See [HTTP protocol](/docs/http-protocol) and [NestJS host](/docs/nestjs-host#requests).
+`maxRequestBytes` counts decoded bytes: a compressed body (`gzip`, `deflate`, `br`) is measured after inflation, so compression does not get around it. A [cached read](/docs/caching-reads)'s compressed `q` is measured the same way, once inflated. See [HTTP protocol](/docs/http-protocol) and [NestJS host](/docs/nestjs-host#requests).
+
+## Operation Sets
+
+Two limits bound `POST /_all`, the request that carries [several operations at once](/docs/operation-sets):
+
+- **`maxAll`** (default `10`) is how many operations one request may carry. More is refused whole, before anything runs: `422 A2009`, `V1014` at `["operations"]`. The generated client never sends more: it splits a larger group into several requests. Each operation is then held to every other limit on its own, as on its own route.
+- **`maxAllConcurrency`** (default `4`) is how many of one request's operations run at once. The others wait and start in key order. It keeps one request from taking the whole database pool, so you don't need a larger pool for `/_all`. It must be a whole number of at least `1`; `limits.maxAllConcurrency must be a whole number of at least 1` is refused at startup.
+
+```ts
+return {
+  api: "/api",
+  adapter: /* ... */,
+  limits: { maxAll: 20, maxAllConcurrency: 6 },
+  client: { limits: { maxAllConcurrency: 2 } },
+} as const;
+```
+
+Server code is different: `framework.serverClient.all` and Next's `avClient.all` run in process, take any number of calls (`maxAll` guards the HTTP route only), and start at most `maxAllConcurrency` of their `avLazy` calls at once.
 
 ## What is refused by default
 

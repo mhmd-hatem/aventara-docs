@@ -103,6 +103,19 @@ const users = await avClient.User.find.many({
 
 When the nested relation has a `where` and pagination, `count` is the total matching rows before `limit`/`offset`; `data` is the page. See [Counting](/docs/counting).
 
+### $defaults
+
+A `select` returns exactly what it lists. `"$defaults"` is an entry that stands for the default projection of that level (the scalar fields a call with no `select` returns), so you can add to the defaults without listing them all:
+
+```ts
+const post = await avClient.Post.find.first({
+  where: { id: 10 },
+  select: ["$defaults", "author"],        // every default field of Post, and its author
+});
+```
+
+It works at every nesting level, beside `"$count"`: `{ posts: { select: ["$defaults", "$count"] } }` returns each post's default fields and the count. Its main use is a [governed field](/docs/policies#governed-fields-and-defaults), one a [policy](/docs/policies) leaves out of every default projection: `select: ["$defaults", "email"]` is the defaults plus `email`. It is valid in `select` only. In `include` it is refused with `V1008`, because `include` already returns the default fields.
+
 ## orderBy
 
 ```ts
@@ -210,7 +223,7 @@ const users = await framework.application.User.find.many(
 
 Server-side calls settle like the generated client: they resolve the data and throw every failure as an `AvError` subclass (`AvNotFoundError`, `AvValidationError`, ...), exported from `@aventara/core`. Catch the class, or read `error.code`. See [Server-side usage](/docs/server-side-usage#errors).
 
-`AvExecutionOptions` has one member, `requestId`: the correlation id the operation runs under (it reaches pipelines and diagnostics). When omitted, one is generated. See [Server-side usage](/docs/server-side-usage).
+`AvExecutionOptions` has `requestId`, the correlation id the operation runs under (it reaches pipelines and diagnostics; when omitted, one is generated), `state` and `as` ([Server-side usage](/docs/server-side-usage#avexecutionoptions)). See [Server-side usage](/docs/server-side-usage).
 
 Pipelines run for both layers: the root's stages for every call, the `application` or `client` overlay's for their own origin.
 

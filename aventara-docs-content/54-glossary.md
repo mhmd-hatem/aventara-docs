@@ -35,6 +35,20 @@ section: about
 
 **Discovery artifact.** The file `aventara:prepare` writes (`src/generated/aventara/discovery.artifact.ts`) describing your Prisma schema to the adapter. Regenerate it whenever the schema changes.
 
+**Adapter description.** The adapter's passive facts, stated with no database client: the model, the driver's transaction capability, the referential actions and the computed fields. `describePrismaAdapter({ discovery, provider, driver })` returns it (the scaffold's `src/aventara.adapter.ts`). `aventara-build` compiles the Contracts from it, and `createPrismaAdapter({ ...description, client })` builds the adapter from it. See [Configuration](/docs/configuration#adapter).
+
+**Prebuilt Contracts.** The four Contracts compiled ahead of time by `aventara-build` into `contracts.generated.ts` (`aventaraContracts`), passed to `createFramework` as `prebuilt` so a serverless or edge cold start loads them instead of compiling them. A file that no longer matches the configuration, the model or the version is ignored whole, and the framework warns `AVENTARA_PREBUILT_STALE`. See [Deploying](/docs/deploying#build-time-contracts).
+
+**Resource tree.** Each layer's `resources` tree, assembled by `aventara-build` from every `defineResource` result in `src/resources/**/*.resource.ts` and written to `resources.generated.ts` as `aventaraResources`. See [Configuration](/docs/configuration#the-generated-resource-tree).
+
+**Policy.** The configuration's root `policy` key: a policy engine and a function that derives a request's principal. Core asks the engine which operations, rows and fields a caller may use, and refuses with `A4002`. See [Policies](/docs/policies).
+
+**Principal.** Who a request is made as, derived from `ctx.$state` by `policy.principal` (`null` for an anonymous caller), or named by `{ as }` on an application call.
+
+**Governed field.** A field or relation the policy engine lists in `governed`. It is left out of every default projection, and a caller names it in `select` (`["$defaults", "email"]`) to get it.
+
+**`$defaults`.** A `select` entry that stands for the level's default projection. See [Querying](/docs/querying#defaults).
+
 **Agent layer.** The layer an AI agent's calls run under (`agent` in the configuration), served over MCP. It narrows the view of the layer it `extends` (the client's by default) and compiles to the agent contract. See [Configuration](/docs/configuration#the-agent-layer-and-mcp).
 
 **api.** Where the protocol is mounted on the server: a mount path such as `/api` (`AvConfig.api`, read back as `framework.api`). Before rc.1 this key was `entrypoint`.

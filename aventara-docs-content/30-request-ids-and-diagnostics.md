@@ -76,9 +76,8 @@ Callers never see raw database errors, SQL, connection strings or stack traces. 
 ```ts
 import { createFramework, type AvDiagnostic } from "@aventara/core";
 
-return {
+export const aventaraConfig = {
   api: "/api",
-  adapter: /* ... */,
   diagnostics: (d: AvDiagnostic) => {
     console.error(
       JSON.stringify({
@@ -132,7 +131,7 @@ import { Logger } from '@nestjs/common';
 
 const logger = new Logger('Aventara');
 
-// inside aventaraConfig(), beside `exposed`:
+// inside aventaraConfig, beside `exposed`:
 diagnostics: (diagnostic: AvDiagnostic) => {
   const { error } = diagnostic;
   logger.error(
@@ -150,13 +149,13 @@ Error: audit service unreachable
 
 Replace it with your own reporter (an error tracker, structured logs) as above. The raw error can hold SQL, a connection string or row data, so send it only where secrets are allowed.
 
-The line carries the code, the operation (`Resource.family.variant`, or `a transaction`, with the plan step), the origin (`application` or `client`), the request id and the class name of the error. The one exception is `A3004` (a pipe returned invalid arguments): the line also names the pipe, the operation and the field, because that detail is kept off the wire and the log is where you read it ([Pipelines](/docs/pipelines#what-a-pipe-may-and-may-not-do)).
+The line carries the code, the operation (`Resource.family.variant`, or `a transaction`, with the plan step), the origin (`application`, `client` or `agent`), the request id and the class name of the error. The one exception is `A3004` (a pipe returned invalid arguments): the line also names the pipe, the operation and the field, because that detail is kept off the wire and the log is where you read it ([Pipelines](/docs/pipelines#what-a-pipe-may-and-may-not-do)).
 
 ### What the reporter receives
 
 | Member | Meaning |
 |---|---|
-| `kind` | `"operation"` or `"transaction"` (a plan-level failure). |
+| `kind` | `"operation"`, `"transaction"` (a plan-level failure) or `"mcp"` (a failure in the MCP endpoint itself, such as a `verify` that throws). |
 | `error` | The raw error, exactly as thrown. Server-side only: it is never projected onto the wire. |
 | `code` | The code the caller received (`A3000`, `A3001`, ...). |
 | `origin` | `"application"` (your own server code), `"client"` (a remote request) or `"agent"` (an AI agent over [MCP](/docs/mcp)). |
@@ -173,7 +172,7 @@ A failing transaction step reports with the plan's request id and the step's ide
 
 ### When it fires
 
-The reporter is for unplanned failures: a database error the framework cannot classify, an error thrown by your own pipeline code or compute stage (the caller gets `A3000`), an unexpected internal state. It does not fire for planned outcomes: a validation failure (`A2004`), a missing record (`A2003`), a unique-constraint conflict (`A2008`), or an `A4xxx` your guard raised on purpose. A deliberate `A3xxx` error you threw, though, is reported ([below](#what-else-reaches-it)).
+The reporter is for unplanned failures: a database error the framework cannot classify, an error thrown by your own pipeline code or compute stage (the caller gets `A3000`), an unexpected internal state. It does not fire for planned outcomes: a validation failure (`A2004`), a missing record (`A2003`), a unique-constraint conflict (`A2008`), or an `A4xxx` your guard raised on purpose. A deliberate `A3xxx` error you threw, though, is reported ([below](#what-else-reaches-it)). The one exception is an issue your own stage's `AvError` names at a path the caller never sent: the caller gets the code without it, and `diagnostics` is told of the dropped issue under the code your stage threw.
 
 A guard that throws an ordinary `Error("boom secret")`, for instance, answers `A3000` ("Internal framework error.", HTTP 500) and your reporter receives `code: "A3000"` with `error` set to the original `Error: boom secret`.
 

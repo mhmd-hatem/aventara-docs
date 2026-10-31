@@ -87,11 +87,13 @@ export const post = defineResource<Model>()("Post", {
 
 ```ts
 // src/aventara.config.ts
-return {
+import { aventaraResources } from "./generated/aventara/resources.generated.js";
+
+export const aventaraConfig = {
   api: "/api",
   exposed: true,
-  adapter,
-  resources: { ...user.root, ...post.root },
+  // aventara-build gathers user.root and post.root from src/resources/.
+  resources: aventaraResources.root,
   // Nobody may read or write the hash directly.
   exemptions: {
     resources: {
@@ -103,7 +105,7 @@ return {
 
 An added field must spell out `type`, `nullable` and `list`. `lifecycle: ["VIRTUAL"]` says it has no database column. The `type` is `{ scalar: "string" }` or another scalar, or `{ enum: "Role" }`. A field `definition` is root-only: an overlay can add compute stages to a field but never define it.
 
-Written inline in a configuration that a function returns `as const`, the same stages need their parameters annotated (`({ record }: { record: Readonly<Record<string, unknown>> }) => ...`), because nothing gives them a contextual type there.
+Written inline in a configuration that is an `as const` object, the same stages need their parameters annotated (`({ record }: { record: Readonly<Record<string, unknown>> }) => ...`), because nothing gives them a contextual type there.
 
 Written inline in `createFramework({ ... })`, the stages need no annotation, and a `compute.create` there takes its field out of the create types as it does in a `defineResource` block. A `create` or `update` stage's `field` and `data` are keyed by `string`; their values are `unknown`, as everywhere.
 
@@ -139,13 +141,13 @@ A virtual field is not in the database, so it cannot be filtered or ordered on, 
 {"code":"A2004","cause":{"issues":[{"code":"V1006","path":["arguments","data","displayName"],"message":"Field \"displayName\" is not writable during create."}]}}
 ```
 
-A configured field may also carry a `format` (one of zod's named string formats, such as `"url"`, `"email"` or `"uuid"`). It is a fact the contract carries, and the server checks the computed value against it before the value leaves.
+A configured field may also carry a `format` (one of zod's named string formats, such as `"url"`, `"email"` or `"uuid"`). It is a fact the contract carries, and the server checks the computed value against it before the value leaves: a value that breaks it is the server's error (`A3000`, the issue in your `diagnostics` sink). A relative path is not a `url`: compute an absolute one (`` `https://example.com/p/${record.slug}` ``) or leave `format` out.
 
 ### `dependsOn`
 
 A read stage may name the stored fields it needs. When a caller selects `displayName` but not `name` or `email`, the framework reads them for you, computes the value, and removes them again, so they do not leak into the response. This holds even when the caller cannot see those fields at all: with `name` hidden for remote callers, `{"select":["id","displayName"]}` still answers `{"id":1,"displayName":"ada"}`. A field hidden at the root can be a dependency too: it is read for the compute and never returned.
 
-`dependsOn` takes scalar fields the adapter stores on the same Resource; anything else stops startup with `COMPILER_INVALID_COMPUTE_DEPENDENCY`. Write the stage as a plain function when it needs nothing else: `read: ({ record }) => ...`.
+`dependsOn` takes scalar fields the adapter stores on the same Resource; anything else stops startup with `COMPILER_INVALID_COMPUTE_DEPENDENCY`. Write the stage as a plain function when it needs nothing else: `read: ({ record }) => ...`. A read stage with no `dependsOn` computes from the same inputs for every row, so its value usually belongs in response metadata or `ctx.$state` rather than a field.
 
 ## Recipe 2: a stored value computed on write
 
@@ -172,7 +174,7 @@ A stage receives one object:
 | `field` | the field's name | the same |
 | `value` | the value after pipes, or `undefined` when the caller did not send it (in a chain, the previous stage's result) | the stored value, or `undefined` for a virtual field |
 | `data` | the operation's data after pipes, frozen (for an upsert, one branch) | |
-| `record` | | the row as read |
+| `record` | | the row as read, as the stage's own frozen copy (writing into it throws: `A3000`) |
 | `ctx` | a read-only ctx ([below](#compute-reads-but-never-writes)) | the same |
 
 A stage may return a promise. An upsert has no compute phase of its own: its `create` branch is filled by `compute.create` and its `update` branch by `compute.update`, both before the one database call.
@@ -236,7 +238,7 @@ A client create gets `c-<slug>`; an application create gets `<slug>`. A stage ca
 - Compute stages run on the server for both layers and never appear in the contract. Only the resulting lifecycle (`COMPUTED_ON_READ`, `COMPUTED_ON_CREATE`, `COMPUTED_ON_UPDATE`) is visible.
 - A field with a `create` stage is not required on create, even when the database column has no default: the contract leaves it out of `createRequirements`, so callers may omit it. This is the way to fill a required field on the server. A [pipe](/docs/pipelines) cannot: a create missing a required field is refused by the framework's validation (`A2004`, `V1000`) before the first guard or pipe runs, unless a `create` stage fills that field, which keeps it optional until compute. It is also what lets a layer hide a required field and still create the Resource: without a `create` stage, that is refused at startup (`COMPILER_HIDDEN_REQUIRED_FIELD`).
 - A `create` stage on a required field must return a value whenever the caller did not send one. If it returns `undefined` and the field is still missing, the create fails before the database: the caller gets `500` `A3000`, and the `diagnostics` function gets an `AvComputedValueError` reading `compute.create on Post.slug returned undefined for a required field`. This holds for `create.one`, every record of `create.many`, an upsert's `create` branch and a nested create. A foreign-key field counts as missing only when the record writes neither the relation nor the key, and a nested create's key that the parent supplies is never missing. An `update` stage may return `undefined` freely: nothing is required of an update.
-- Guards, pipes and filters at a variant run before write compute, so their typed arguments let a create leave out the fields your `compute.create` stages fill, and only those ([Pipeline context](/docs/pipeline-context#typed-arguments)). The generate step reads which fields they are from your configuration's type, when `aventara:prepare` runs. After you add, move or remove a `create` or `update` stage, run `aventara:prepare` again; until you do, the server warns at startup that the generated types are stale.
+- Guards, pipes and filters at a variant run before write compute, so their typed arguments let a create leave out the fields your `compute.create` stages fill, and only those ([Pipeline context](/docs/pipeline-context#typed-arguments)). `aventara-build` reads which fields they are from your configuration's type when `aventara:prepare` runs, and writes them to `computed-fields.generated.ts`, which the discovery artifact imports. After you add, move or remove a `create` or `update` stage, run `aventara:prepare` again; until you do, the server warns at startup that the generated types are stale.
 
 ## See also
 

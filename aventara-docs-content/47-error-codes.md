@@ -133,15 +133,15 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 **Not found.** HTTP 404, thrown as `AvNotFoundError`.
 
-- Cause: A unique operation (find.unique, update.unique, delete.unique) matched no row, or a $connect names a record that does not exist. The operation fails, so no after hook runs.
+- Cause: A unique operation (find.unique, update.unique, delete.unique) matched no row, or a $connect names a record that does not exist. The operation fails, so no after hook runs. Under a policy, a row outside the caller's read scope is a miss too, and so is a single-row update or delete of a row the caller cannot read, so the answer does not reveal that the row exists. A row the caller can read but not change answers A4002.
 - Fix: Catch AvNotFoundError, or use a first-style operation, which answers A1001 with null. Check the $connect identifier.
 
 #### `A2004`
 
 **Validation failed.** HTTP 422, thrown as `AvValidationError`.
 
-- Cause: The arguments break a contract rule or a field validator. cause.issues lists each problem by V-code and path; a validator's issue also has check and params. The validators judge the values after the pipes and write compute, so a computed value they refuse is here too, at its field. A required create field left out is here (V1000). So is a value the database itself refused: too long for its column or out of its range (V1004), or holding a character it cannot store or a pattern it cannot read (V1001), with the issue at `["arguments"]` and its message saying what the database refused.
-- Fix: Fix the argument each issue's path points at, as its V-code says. A field the server must fill takes a compute.create stage. For a value the database refused, send one its column holds.
+- Cause: The arguments break a contract rule or a field validator. cause.issues lists each problem by V-code and path; a validator's issue also has check and params. The validators judge the values after the pipes and write compute, so a computed value they refuse is here too, at its field. A required create field left out is here (V1000). So is a value the database itself refused: too long for its column or its index, or out of its range (V1004), or holding a character it cannot store or a pattern it cannot read (V1001), with the issue at `["arguments"]`, or at the value where the adapter can place it (a bigint its driver cannot bind), and its message saying what the database refused. So is a record written through a relation that writes that relation, or a field holding its reference, back (V1012, at that field), where the adapter admits no such write.
+- Fix: Fix the argument each issue's path points at, as its V-code says. A field the server must fill takes a compute.create stage. For a value the database refused, send one its column holds. For a nested write that writes its relation back, leave that field out: the parent supplies it.
 
 #### `A2005`
 
@@ -233,7 +233,7 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 **Transaction error.** HTTP 500, thrown as `AvInternalError`.
 
-- Cause: Transaction infrastructure failed (commit or rollback), or a Resource transaction interceptor called next() twice or resolved without calling it.
+- Cause: Transaction infrastructure failed (commit or rollback, or the transaction expired or was closed under a step), or a Resource transaction interceptor called next() twice or resolved without calling it.
 - Fix: Read the diagnostics sink. Call next() exactly once in a transaction interceptor; retry an infrastructure failure.
 
 #### `A3003`
@@ -252,7 +252,7 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 ### Authentication and authorization (A4xxx)
 
-Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework itself never authenticates.
+Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework itself never authenticates. `A4002` is also what a configured policy answers when it refuses a request: see [Policies](/docs/policies).
 
 #### `A4000`
 
@@ -272,8 +272,8 @@ Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework i
 
 **Policy denied.** HTTP 403, thrown as `AvAuthError`.
 
-- Cause: A guard or hook threw new AvError("A4002", ...) with a policy reason of your own.
-- Fix: Read cause.message for the policy's reason.
+- Cause: The configuration's policy refused the request: its engine does not allow the operation, a field the request names, writes or returns, a row it reaches, a row it creates, or the row a change leaves (moved out of what the caller reads, or failing its grant's after condition, which rolls the write back); on a database without interactive transactions, a write the policy can only check after it runs; or a stage threw new AvError("A4002", ...).
+- Fix: Read cause.message, which names what the policy refused. Call as a principal the policy allows, leave the refused field or relation out (a governed one is named only where every row grants it), or change only rows the caller may change and still read afterwards.
 
 ## V-codes
 
@@ -322,7 +322,7 @@ Example: the second step sends a number as a title.
 
 **Invalid runtime/wire type.**
 
-- Cause: A value of the wrong type: a string where a number is expected, a negative limit, a non-integer id, null given to an operator with no null meaning (gt, contains, in), two directives in one scalar action object (`{ $increment: 1, $decrement: 2 }`), or a server-side value that is not plain data.
+- Cause: A value of the wrong type: a string where a number is expected, a negative limit, a non-integer id, null given to an operator with no null meaning (gt, contains, in), two directives in one scalar action object (`{ $increment: 1, $decrement: 2 }`), or a server-side value that is not plain data. Also a value that would make the call reach more rows: `undefined` in a filter, a unique selector or a cursor, an empty boolean node (`NOT: {}`, `AND: []`, `OR: []`) in the where of a write (update or delete many, count or first, a to-many $update or $delete).
 - Fix: Send the type the contract states at that path (the generated client's types say it).
 
 #### `V1002`
@@ -343,7 +343,7 @@ Example: the second step sends a number as a title.
 
 **Value outside accepted range.**
 
-- Cause: A number, length or size outside its range: a failed bound, length or size validator, a BigInt outside signed 64 bits, an AvZ.int() outside the safe integer range, or a transaction with no operations.
+- Cause: A number, length or size outside its range: a failed bound, length or size validator, a BigInt outside signed 64 bits, an AvZ.int() outside the safe integer range, or a transaction with no operations. Under A2004 it is also a value the database refused as too long or out of its range, a BigInt beyond what the data source's driver can bind among them (some bind at most ±(2^53 − 1)).
 - Fix: Send a value inside the range; check and params name the validator that failed.
 
 #### `V1005`
@@ -357,7 +357,7 @@ Example: the second step sends a number as a title.
 
 **Unsupported filter/order/mutation directive.**
 
-- Cause: An operator, directive or nested write the field does not offer (at any depth, inside not too), a mode it does not offer, or an operation that is not available (under A2002).
+- Cause: An operator, directive or nested write the field does not offer (at any depth, inside not too; a to-many $update's data takes only what a bulk write takes), a mode it does not offer, or an operation that is not available (under A2002).
 - Fix: Use what the contract lists for that field or Resource, or expose it through exemptions.
 
 #### `V1007`
@@ -399,8 +399,8 @@ Example: the second step sends a number as a title.
 
 **Invalid relation action/cardinality.**
 
-- Cause: A nested write that does not fit the relation (a list where one record is expected), a reference field set together with its own relation, or one record mixing reference fields and relation writes where the adapter cannot run both.
-- Fix: Write either the relation or its reference field, in the relation's cardinality.
+- Cause: A nested write that does not fit the relation (a list where one record is expected), a reference field set together with its own relation, one record mixing reference fields and relation writes where the adapter cannot run both, or a record written through a relation that writes that relation (or a field holding its reference) back, where the adapter admits no such write. Also a to-one $update or $upsert beside $connect, $connectOrCreate, $create, $set or $disconnect on the same relation: the row it would update is the newly linked one.
+- Fix: Write either the relation or its reference field, in the relation's cardinality. Relink a to-one relation in one write and update the linked row in another.
 
 #### `V1013`
 
@@ -543,14 +543,14 @@ When the configuration cannot be built into contracts, `createFramework` (and `A
 
 **A required configuration key is missing.**
 
-- Cause: A key that must be present is absent: api, adapter, or an overlay's exposed when the overlay sets exemptions.
+- Cause: A key that must be present is absent: api, adapter, or an overlay's exposed when the overlay sets exemptions, or policy.engine or policy.principal when policy is set.
 - Fix: Add the key at the diagnostic's path.
 
 #### `CONFIG_UNKNOWN_PROPERTY`
 
 **Unknown configuration key.**
 
-- Cause: A key the configuration does not define at that place: a typo, or a key written at the wrong level of the tree.
+- Cause: A key the configuration does not define at that place: a typo, or a key written at the wrong level of the tree. `policy` and `prebuilt` are root-only keys; in an overlay they read as unknown.
 - Fix: Remove it, or move it where it belongs (the configuration reference's "Where a key can go").
 
 #### `CONFIG_INVALID_TYPE`
@@ -564,7 +564,7 @@ When the configuration cannot be built into contracts, `createFramework` (and `A
 
 **A configuration value is not allowed.**
 
-- Cause: A malformed api or mcp path, a negative limit, an unknown transactionsStyle, a format that is not a named zod format, or forceTransaction under an effective transactionsStyle "none".
+- Cause: A malformed api or mcp path, a negative limit, an unknown transactionsStyle, a format that is not a named zod format, forceTransaction under an effective transactionsStyle "none", an after check on any action but update, or a policy engine's governed, paths or afterChecks naming a Resource, field or path the Core Contract does not have, or its unheld naming a Resource the data source's model does not have (the message names the Resource or the rule).
 - Fix: Use a value the message allows.
 
 #### `CONFIG_MOVED_PROPERTY`
@@ -596,8 +596,8 @@ When the configuration cannot be built into contracts, `createFramework` (and `A
 
 **Unknown Resource.**
 
-- Cause: A Resource name the adapter's model does not have, in resources or in exemptions.
-- Fix: Use the model's exact name. After a schema change run `npm run aventara:prepare`.
+- Cause: A Resource name the adapter's model does not have, in resources or in exemptions; or a client or agent entry for a Resource managed elsewhere, which those layers never have.
+- Fix: Use the model's exact name. After a schema change run `npm run aventara:prepare`. Configure a Resource managed elsewhere at the root or in application only.
 
 #### `COMPILER_UNKNOWN_FIELD`
 
@@ -687,8 +687,8 @@ When the configuration cannot be built into contracts, `createFramework` (and `A
 
 **Reserved Resource name.**
 
-- Cause: A model name starts with $, which is reserved for the framework's own names (ctx.$sql, $ref).
-- Fix: Rename the model; the table it maps to can keep its name.
+- Cause: A model name starts with $, which is reserved for the framework's own names (ctx.$sql, $ref), or is the name of a member beside the Resources: all on serverClient (and so on Next.js's avClient), and on a host that adds its own, one of those (on Next.js: tx and transaction on avClient, appTx and transaction on avApp).
+- Fix: Rename the model; the table it maps to can keep its name. A host member's name is also left free when the layer it belongs to hides the Resource.
 
 #### `COMPILER_MISSING_IDENTIFIER`
 
@@ -725,6 +725,24 @@ When the configuration cannot be built into contracts, `createFramework` (and `A
 - Cause: The finished client contract failed its own structural check: a framework defect.
 - Fix: Report it with the diagnostic's path and message.
 
+### Startup warnings
+
+Two conditions are not errors. The server starts and answers correctly. Each prints one warning through `process.emitWarning`, with its code as the warning's `code`.
+
+#### `AVENTARA_PREBUILT_STALE`
+
+**A prebuilt Contracts file was not used.** Printed once when the framework is created with `prebuilt` ([Deploying](/docs/deploying#build-time-contracts)).
+
+- Cause: The file was compiled by another `@aventara/core` version or protocol version, or from a different configuration or adapter model. The message names what changed, for example `prebuilt Contracts are stale and were not used: Resource Post changed since it was built. The Contracts were compiled at startup instead; regenerate the file with aventara-build.` A `policy` or other root key added where the framework is created, but not in the configuration `aventara-build` ran, reads as a change outside the Resources.
+- Fix: Run `aventara-build` (`npm run aventara:prepare`). Add `aventara-build --check` to CI to catch it before a deploy.
+
+#### `AVENTARA_STALE_GENERATED_TYPES`
+
+**The generated types are stale.** Printed at startup when the computed fields the discovery artifact was typed with differ from the configuration's `compute.create` and `compute.update` stages.
+
+- Cause: A compute stage was added, moved or removed since `aventara:prepare` last ran. The message lists each field that differs.
+- Fix: Run `npm run aventara:prepare`. The warning changes nothing at runtime.
+
 ### Example startup messages
 
 | Code | Example message |
@@ -751,4 +769,4 @@ More on each: [Configuration reference](/docs/config-reference#startup-diagnosti
 - [HTTP protocol](/docs/http-protocol): the envelope and the curl walkthrough.
 - [Troubleshooting](/docs/troubleshooting): the errors people hit first.
 - [Frontend client](/docs/client-errors) and [Client API reference](/docs/client-api-reference).
-- Guides: [Authentication and guards](/docs/authentication-and-guards), [Limits and safety](/docs/limits-and-safety), [Request IDs and diagnostics](/docs/request-ids-and-diagnostics)
+- Guides: [Authentication and guards](/docs/authentication-and-guards), [Policies](/docs/policies), [Limits and safety](/docs/limits-and-safety), [Request IDs and diagnostics](/docs/request-ids-and-diagnostics)

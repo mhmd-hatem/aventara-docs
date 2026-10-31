@@ -28,9 +28,8 @@ The root of your configuration is the core layer, and the starting point of the 
 
 ```ts
 // src/aventara.config.ts
-return {
+export const aventaraConfig = {
   api: "/api",
-  adapter: /* createPrismaAdapter(...) */,
 
   // client: remote callers only
   client: {

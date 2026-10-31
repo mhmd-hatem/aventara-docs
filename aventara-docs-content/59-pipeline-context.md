@@ -22,7 +22,7 @@ A Resource name can never start with `$` (a model named that way is refused at s
 | `ctx.$args` | The operation's arguments, frozen: as the caller sent them in a guard, as the pipes returned them in a pipe, and as the validators checked them in an interceptor, a hook or a filter. A stage registered on one operation (`operations.<family>.<variant>.pipelines`) sees them typed ([below](#typed-arguments)); elsewhere they are `unknown`. In a Resource transaction stage: the plan, `readonly AvTransactionStep[]`. Only a pipe changes the arguments, by returning new ones ([Read-only data](/docs/pipelines#read-only-data)). |
 | `ctx.$origin` | `"application"` (your server code, and ctx calls), `"client"` (a remote caller) or `"agent"` (an AI agent over MCP, see [the agent layer](/docs/configuration#the-agent-layer-and-mcp)). |
 | `ctx.$requestId` | The request's correlation id ([Request IDs](/docs/request-ids-and-diagnostics)). |
-| `ctx.$transport` | Remote requests only: `{ method: "POST", headers }`. Header names are lower-cased; repeated headers are joined with `", "`. |
+| `ctx.$transport` | Remote requests only: `{ method: "POST" \| "GET", headers }` (`"GET"` for a [cached read](/docs/caching-reads)). Header names are lower-cased; repeated headers are joined with `", "`. |
 | `ctx.$contract` | The active contract (application or client), as passive data. |
 | `ctx.$state` | The request's state: one object, shared by every stage of the request, that you read and write ([below](#request-state)). |
 | `ctx.$sql` | Run a SQL statement now, as a tagged template ([below](#ctxsql)). |
@@ -63,14 +63,14 @@ resources: {
 - A field whose value is `undefined` in the data a pipe returns counts as not sent, the same as leaving the key out: an optional field is omitted, an update leaves the field untouched, and a required create field is missing (`A3004`). The same holds for data you pass to `framework.application`, `framework.client`, `ctx` calls and transaction steps (a required field set to `undefined` answers `A2004` with `V1000`). Filters are different: `where: { id: undefined }` is refused, never read as "no filter".
 - The types come from your model with no configuration applied, in the application forms (`Date`, `bigint`, `AvDecimal`): arguments reach every stage validated, whatever the origin. A field you hid from one layer still appears in the type; the server refuses it at runtime.
 - In a transaction plan, a step's guards and pipes run before its `$ref` values are resolved, so a field that can take a reference is typed as the value or a `$ref` (`string | AvTransactionReference<string>` for `title`), and a field the caller may leave out also as `undefined`. Narrow it before you use it as a value, as the pipe above does.
-- These stages are typed from where they are written: inline in `createFramework({ ... })` or in a [`defineResource`](/docs/configuration#one-resource-per-file-defineresource) block. In a configuration that a function returns `as const` (the shape `aventara init` writes), an inline arrow has no contextual type and TypeScript reports `Parameter 'ctx' implicitly has an 'any' type` (TS7006). Move the stage into a `defineResource` block, or declare it with its stage type first ([Typing a stage](/docs/pipelines#typing-a-stage)).
+- These stages are typed from where they are written: inline in `createFramework({ ... })` or in a [`defineResource`](/docs/configuration#one-resource-per-file-defineresource) block. In a configuration that is an `as const` object (the shape `aventara init` writes), an inline arrow has no contextual type and TypeScript reports `Parameter 'ctx' implicitly has an 'any' type` (TS7006). Move the stage into a `defineResource` block, or declare it with its stage type first ([Typing a stage](/docs/pipelines#typing-a-stage)).
 - Guards, pipes and filters run before write compute, so a create in their arguments may lack the fields a `compute.create` stage fills: those are optional there (`args.data.slug` is `string | undefined` when `slug` is computed), and a pipe may return a create without them. Every other required field stays required. Hooks and interceptors run after compute and see every required field. This covers a create's `data`, an upsert's `create` and a nested create.
-- Which fields are computed is read from your configuration when `aventara:prepare` runs (the scaffold passes it `--config src/aventara.config.ts`), and counts the layers whose compute runs for the stage's requests. A root stage counts the root's, `application`'s, `client`'s and `agent`'s compute; a `client` stage the root's and its own (and the agent's when the agent extends `client`); an `application` stage the same with `application`; an `agent` stage the root's, its parent's and its own. Without `--config`, these stages may leave any create field out. When you change a compute stage, run `aventara:prepare` again; the server warns at startup until you do (`generated types are stale: run aventara:prepare`).
+- Which fields are computed is read from your configuration's type by `aventara-build`, which `aventara:prepare` runs after the adapter's generate step (the scaffold passes the generate step `--config src/aventara.config.ts`, and the discovery artifact imports the result), and counts the layers whose compute runs for the stage's requests. A root stage counts the root's, `application`'s, `client`'s and `agent`'s compute; a `client` stage the root's and its own (and the agent's when the agent extends `client`); an `application` stage the same with `application`; an `agent` stage the root's, its parent's and its own. Without `--config`, these stages may leave any create field out. When you change a compute stage, run `aventara:prepare` again; the server warns at startup until you do (`generated types are stale: run aventara:prepare`).
 - A stage on a layer, a Resource or a family runs for several operations (a family's also for a nested write's target), so its `ctx.$args` stays `unknown`. A pipe typed for any operation (`AvPipe`) still fits on one; the server holds its output to the arguments' rules (`A3004`).
 
 ## Request state
 
-`ctx.$state` is the one place a stage can write during a request. Every stage of the request gets the same object: a guard can put the signed-in user there, and the hooks, a nested write's guards, the Resource transaction stages and the ctx calls they make read it.
+`ctx.$state` is the one place a stage can write during a request. Every stage of the request gets the same object: a guard can put the signed-in user there for the pipes, hooks and later stages (a configured [policy](/docs/policies#where-the-principal-comes-from) does not see it: it reads `$state` before any guard runs, so fill the principal from the host's `state` option instead), and the hooks, a nested write's guards, the Resource transaction stages and the ctx calls they make read it.
 
 Declare what it holds once, anywhere in your project:
 
@@ -132,6 +132,7 @@ A ctx call behaves like this:
 - It is raw: it runs the framework's validation, [field pipes](/docs/pipelines#field-pipes-and-field-write-guards), [field validators](/docs/field-validators) and [compute](/docs/computed-fields), and no developer stage: no guards, pipes, hooks, interceptors or filters at any level, no field write guards, no nested-target guards and no Resource transaction stages. A hook's call therefore never runs the hook that made it.
 - It joins the current transaction when there is one: in a transaction step's interceptors and hooks, in a [forced operation](/docs/pipelines#forcetransaction)'s interceptors and hooks, in a Resource transaction stage, and inside `ctx.$transaction`. A step's guards and pipes run before the transaction opens, so their calls run on their own, as every call outside a transaction does. A ctx call to an operation that has `forceTransaction` is not wrapped in a transaction of its own.
 - It carries the request id and the `ctx.$state` of the stage that made it, and takes no per-call options.
+- It is not checked by the configuration's [policy](/docs/policies#who-is-checked), whatever the request that runs the stage was. A stage's ctx call is server code.
 
 ### Typing ctx calls
 
@@ -228,27 +229,24 @@ const publishOrderEvents: AvTransactionAfterHook<Model> = async (results, ctx) =
   }
 };
 
-export async function aventaraConfig(prisma: PrismaService) {
-  return {
-    api: "/api",
-    adapter: /* ... */,
-    resources: {
-      Order: {
-        operations: { create: { forceTransaction: true } },
-        transactions: { pipelines: { hooks: { after: [publishOrderEvents] } } },
+export const aventaraConfig = {
+  api: "/api",
+  resources: {
+    Order: {
+      operations: { create: { forceTransaction: true } },
+      transactions: { pipelines: { hooks: { after: [publishOrderEvents] } } },
+    },
+  },
+  client: {
+    exposed: true,
+    exemptions: {
+      resources: {
+        OutboxEvent: true,                                   // never reachable from outside
+        Order: { operations: { create: true } },             // orders are created by server code
       },
     },
-    client: {
-      exposed: true,
-      exemptions: {
-        resources: {
-          OutboxEvent: true,                                   // never reachable from outside
-          Order: { operations: { create: true } },             // orders are created by server code
-        },
-      },
-    },
-  } as const;
-}
+  },
+} as const;
 ```
 
 Your checkout service creates the order through the application layer, and the order and its event commit together or not at all:

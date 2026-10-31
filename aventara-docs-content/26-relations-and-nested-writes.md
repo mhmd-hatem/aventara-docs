@@ -83,6 +83,7 @@ Inside `data` of a `create` or `update`, a relation field takes directives. You 
 
 - Not together with the same relation: setting `authorId` and `author: { $connect: … }` in one record names the reference twice and is refused before the database is asked: `422` `A2004` with a `V1012` issue at the relation, `Set "authorId" or "author", not both.` It holds for required and optional relations, for `create`, `update` and `upsert`, for nested writes at any depth and for each step of a transaction. Either one alone is fine.
 - Not beside another relation's write (Prisma): a record that writes one relation through its field and another relation directly, such as `authorId` beside `category: { $connect: … }`, is refused with `V1012`: `Use relation fields only, or reference fields only, in one record: "authorId" is a reference field and "category" is a relation.` Write all the record's relations as relations, or all through their fields. A field beside a relation that holds no reference on that side (`mentorId` beside `posts: { $create: … }` on an author) is accepted.
+- Not back along the relation it is written through: in a `Post` created in `User.posts`, `author` and `authorId` are what the parent supplies. Writing either is refused before the database: `422` `A2004`, `V1012` at that field (`Relation "author" is the relation this Post is written through, from its other end ("User.posts"): the write it sits in supplies it.`). The same holds in `$connectOrCreate`, `$update` and `$upsert`, at any depth, and it is a type error in typed calls. A self-relation's other edge stays writable.
 
 ### Required relations and fields
 
@@ -110,11 +111,13 @@ A field a [`compute.create`](/docs/computed-fields) stage fills is not required 
 | `$create` | Create related records and link them. | yes | yes |
 | `$connect` | Link existing records, by identifier. | yes | yes |
 | `$connectOrCreate` | Link if found, otherwise create. | yes | yes |
-| `$update` | Update the related record(s); on a to-many, every record matching a `where` (required). | | yes |
+| `$update` | Update the related record(s); on a to-many, every record matching a `where` (required); its `data` takes what `update.many`'s does: no relation writes on Prisma. | | yes |
 | `$upsert` | Update the match, otherwise create. | | yes |
 | `$delete` | Delete the related record(s); on a to-many, those matching a `where` (required). | | optional to-one, to-many |
 | `$disconnect` | Unlink without deleting: `true` on an optional to-one, identifiers on a to-many. | | optional to-one, to-many |
 | `$set` | Make the relation exactly this set. | | to-many |
+
+Where an adapter's relation takes plain fields only in a nested write's `where`, as a to-many relation does with the Prisma 7 adapter, the `where` of `$update` and `$delete` is typed `AvScalarWhereInput`: each scalar field's filter and `AND`/`OR`/`NOT`, with no relation filter at any depth. A relation that advertises no directive for a write takes `AvNoAdvertisedMember`, which accepts `{}` and refuses every key. Both are exported from `@aventara/core`.
 
 The directives a relation accepts are in the contract (`capabilities.create` / `update`), and exposure can narrow them. Directives are only valid in writes: in a `where` they answer `V1006`.
 
@@ -210,6 +213,7 @@ await avClient.User.upsert.unique({
 | A reference field and its own relation in one record (`authorId` with `author: { $connect: … }`) | `AvValidationError`, `A2004` / `V1012`: `Set "authorId" or "author", not both.` |
 | One relation written through its reference field and another written directly, on Prisma (`authorId` with `category: { $connect: … }`) | `AvValidationError`, `A2004` / `V1012`: `Use relation fields only, or reference fields only, in one record: …` |
 | A directive the contract does not offer on that relation | `AvValidationError`, `A2004` / `V1006` |
+| A relation write in the `data` of a to-many `$update` | `AvValidationError`, `A2004` / `V1006` (the data is a bulk write) |
 | A relation filter in the `where` of a to-many nested `$update` or `$delete` (at any depth, under `AND`, `OR` or `NOT` too) | `AvValidationError`, `A2004` / `V1006` (below) |
 
 On a required relation, a directive that would leave a child with no parent (for example `$set` that drops a `Post` from its `User`) is refused by the database and answers `AvConflictError`, `409` `A2008` ("The operation conflicts with the current state of the resource."). Nothing is written. This applies to `User.update.unique` with `posts: { $disconnect: [{ id: 1 }] }` or `posts: { $set: [] }` where `Post.authorId` is required.
@@ -231,7 +235,7 @@ await avClient.User.update.unique({
 //   message: 'Relation filter "category" is not available here: a nested $update or $delete filter on this relation takes scalar fields only.' }
 ```
 
-The refusal covers any depth and the `AND`, `OR` and `NOT` wrappers: `{ AND: [{ NOT: { comments: { some: { text: "x" } } } }] }` is refused at `["arguments","data","posts","$update","where","AND",0,"NOT","comments"]`. Filter the nested rows by their own fields (`{ title: "Nested" }`, `{ id: 3 }`), or find the ids first and name them. A to-one relation's nested `$update` keeps relation filters. The limit belongs to the adapter and is stated in the contract, so a client generated before it was declared must be regenerated.
+The refusal covers any depth and the `AND`, `OR` and `NOT` wrappers: `{ AND: [{ NOT: { comments: { some: { text: "x" } } } }] }` is refused at `["arguments","data","posts","$update","where","AND",0,"NOT","comments"]`. When the directive holds an array, the path names the entry: the same filter in the second `$update` entry is refused at `["arguments","data","posts","$update",1,"where","category"]`. Every to-many directive's array (`$create`, `$connect`, `$connectOrCreate`, `$update`, `$delete`, `$upsert`, `$set`, `$disconnect`) is addressed this way. Filter the nested rows by their own fields (`{ title: "Nested" }`, `{ id: 3 }`), or find the ids first and name them. A to-one relation's nested `$update` keeps relation filters. The limit belongs to the adapter and is stated in the contract, so a client generated before it was declared must be regenerated.
 
 ## Scalar directives
 

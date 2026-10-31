@@ -67,13 +67,10 @@ npm run aventara:prepare
 
 ## 3. The configuration
 
-`src/aventara.config.ts`:
+`src/aventara.config.ts` (the scaffold's `src/aventara.adapter.ts` already holds the adapter, so the configuration has none):
 
 ```ts
 import { AvError, type AvGuard } from "@aventara/core";
-import { createPrismaAdapter } from "@aventara/prisma7-adapter";
-import { discovery } from "./generated/aventara/discovery.artifact.js";
-import type { PrismaService } from "./prisma.service.js";
 
 // Remote callers must send an Authorization header to write.
 const requireSignIn: AvGuard = (ctx) => {
@@ -83,37 +80,29 @@ const requireSignIn: AvGuard = (ctx) => {
   return true;
 };
 
-export async function aventaraConfig(prisma: PrismaService) {
-  return {
-    api: "/api",
+export const aventaraConfig = {
+  api: "/api",
+  exposed: true,
+  client: {
     exposed: true,
-    adapter: await createPrismaAdapter({
-      client: prisma,
-      discovery,
-      provider: "sqlite",
-      driver: "@prisma/adapter-better-sqlite3",
-    }),
-    client: {
-      exposed: true,
-      exemptions: {
-        resources: {
-          User: {
-            fields: {
-              // write-only: can be set on create/update, never read, filtered or ordered
-              passwordHash: ["select", "filter", "order"],
-              // not in the client layer at all
-              internalNotes: true,
-            },
-            operations: { delete: ["first", "count"] },
+    exemptions: {
+      resources: {
+        User: {
+          fields: {
+            // write-only: can be set on create/update, never read, filtered or ordered
+            passwordHash: ["select", "filter", "order"],
+            // not in the client layer at all
+            internalNotes: true,
           },
-          Post: { operations: { delete: ["count"] } },
+          operations: { delete: ["first", "count"] },
         },
+        Post: { operations: { delete: ["count"] } },
       },
-      limits: { maxListLimit: 50 },
-      pipelines: { guards: [requireSignIn] },
     },
-  } as const;
-}
+    limits: { maxListLimit: 50 },
+    pipelines: { guards: [requireSignIn] },
+  },
+} as const;
 ```
 
 What each part does, all for remote callers (the `client` layer), leaving server-side code untouched:
@@ -135,7 +124,7 @@ PORT=3000 npm run start:dev
 ```
 
 ```text
-Aventara mounted 42 operations at /api (+ GET /api/_contract, POST /api/_transactions)
+Aventara mounted 42 operations at /api (+ GET /api/_contract, POST /api/_transactions, POST /api/_all)
 ```
 
 A browser frontend on another origin needs CORS. The scaffold's `src/main.ts` already enables it for the origins in `CORS_ORIGINS` (`http://localhost:5173,http://localhost:3001` in `.env`), so a Vite frontend works as it is; add your own origin to that list when you deploy ([Deploying](/docs/deploying#cors-and-browsers)).

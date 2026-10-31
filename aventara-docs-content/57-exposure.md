@@ -18,16 +18,13 @@ A project made by `aventara new` or `aventara init` starts with `exposed: true` 
 
 ```ts
 // src/aventara.config.ts
-export async function aventaraConfig(prisma: PrismaService) {
-  return {
-    api: '/api',
-    // Everything the adapter offers is exposed. List what to hide under
-    // `exemptions`, or set `exposed: false` and list what to expose instead.
-    // See: https://aventara-framework.vercel.app/docs/exposure
-    exposed: true,
-    adapter: await createPrismaAdapter({ /* ... */ }),
-  } as const;
-}
+export const aventaraConfig = {
+  api: '/api',
+  // Everything the adapter offers is exposed. List what to hide under
+  // `exemptions`, or set `exposed: false` and list what to expose instead.
+  // See: https://aventara.razor34.dev/framework/docs/exposure
+  exposed: true,
+} as const;
 ```
 
 ## The two styles
@@ -90,9 +87,8 @@ Exemptions only work with what is there. Plain assignment comes with the `create
 ## Hiding things: the Omit style
 
 ```ts
-return {
+export const aventaraConfig = {
   api: "/api",
-  adapter: /* ... */,
   // Root: exposed defaults to true, so these are hidden from every origin.
   exemptions: {
     resources: {
@@ -191,15 +187,14 @@ Under `exposed: false`, an object that grants nothing (`{}`, `{ select: false }`
 
   The root is therefore the union of what both origins need. Something only the server may reach is exposed at the root and hidden in the `client` overlay.
 
-  TypeScript catches it first. A Resource, field, operation or capability that an overlay under `exposed: false` names after the root hid it is typed as a sentence that says so. When the configuration comes from a function, as the scaffold's `aventaraConfig()` handed to `AventaraModule.forRootAsync` does, TypeScript reports a chain of types from `useFactory` down to the key, and the chain ends with that sentence:
+  TypeScript catches it first. A Resource, field, operation or capability that an overlay under `exposed: false` names after the root hid it is typed as a sentence that says so. When the configuration is built in a function and handed to `AventaraModule.forRootAsync`, as the scaffold's `aventaraConfig` is (spread into `useFactory`'s result), TypeScript reports a chain of types from `useFactory` down to the key, and the chain ends with that sentence:
 
   ```text
   The types of 'client.exemptions.resources.User.fields.internalNotes' are incompatible between these types.
-    Type 'readonly ["select"]' is not assignable to type 'readonly ["Error: client cannot expose 'User.internalNotes': hidden by root"]'.
-      Type '"select"' is not assignable to type '"Error: client cannot expose 'User.internalNotes': hidden by root"'.
+    Property '"Error: client cannot expose 'User.internalNotes': hidden by root"' is missing in type 'readonly ["select"]' but required in type '{ readonly "Error: client cannot expose 'User.internalNotes': hidden by root": true; }'.
   ```
 
-  The agent layer's sentence names the layer it extends: `Error: agent cannot expose 'Post.body': hidden by client`. In a configuration written inline in `createFramework({ ... })`, the error sits on the entry itself and reads `Type 'string' is not assignable to type 'never'` for a list. An entry written `true` reads `Type 'true' is not assignable to type 'never'` wherever the configuration comes from.
+  The agent layer's sentence names the layer it extends: `Error: agent cannot expose 'Post.body': hidden by client`. In a configuration written inline in `createFramework({ ... })` or `AventaraModule.forRoot`, the error sits on the entry itself and its last line names the same sentence: `Property '"Error: client cannot expose 'User.internalNotes': hidden by root"' is missing in type '["select"]' but required in type '{ readonly "Error: client cannot expose 'User.internalNotes': hidden by root": true; }'`. An entry written `true` names it too: through `aventaraConfig` the chain ends at `Type 'boolean' is not assignable to type 'readonly ["Error: client cannot expose 'Comment': hidden by root"]'`, and inline the error on the entry carries it: `Type 'true' is not assignable to type 'true & (readonly ["Error: client cannot expose 'Comment': hidden by root"] & …`.
 - An overlay with no exposure keys, or with `exposed: true` alone, has the root's view.
 - An overlay with `exposed: false` alone exposes nothing.
 - An overlay that sets `exemptions` without `exposed` is refused (`CONFIG_REQUIRED` at `client.exposed`: `client.exposed is required when client.exemptions is set: true makes the exemptions hide, false makes them the only entries exposed`).

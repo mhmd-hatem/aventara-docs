@@ -26,6 +26,7 @@ What a host hands the protocol. `path` is relative to the `api` mount path (`/_c
 type AvProtocolRequest = {
   readonly method: string;
   readonly path: string;
+  readonly query?: string;   // the URL's query without its "?", as received; read only by a cached read's GET
   readonly headers: Readonly<Record<string, string | readonly string[] | undefined>>;
   readonly body:
     | { readonly kind: "raw"; readonly content: string | Uint8Array }   // the protocol enforces size, content type and JSON
@@ -33,7 +34,7 @@ type AvProtocolRequest = {
 };
 ```
 
-Header names are matched case-insensitively. A query string is not part of `path`.
+Header names are matched case-insensitively. A query string is not part of `path`: pass it as `query`. Only a [cached read](/docs/caching-reads)'s `GET` reads it (`q` and `v`); every other route ignores it. `""` is the same as no query.
 
 ### AvProtocolResponse
 
@@ -45,7 +46,7 @@ type AvProtocolResponse = {
 };
 ```
 
-Every framework response carries `Content-Type: application/json` (not on `304`) and `Aventara-Request-Id`. A `405` adds `Allow`. A contract response adds `ETag` and `Cache-Control: no-cache`.
+Every framework response carries `Content-Type: application/json` (not on `304`) and `Aventara-Request-Id` (not on a public cached read). A `405` adds `Allow`. A contract response adds `ETag` and `Cache-Control: no-cache`. Every answer to a `GET` adds `X-Content-Type-Options: nosniff`; a cached read's adds its caching headers ([HTTP protocol](/docs/http-protocol#cached-reads)).
 
 ## AvProtocol.bind(framework, options?)
 
@@ -61,6 +62,8 @@ type AvProtocolBinding = {
   surface():                 readonly SurfaceRoute[];
   handleOperation(request):  Promise<AvProtocolResponse>;
   handleTransaction(request): Promise<AvProtocolResponse>;
+  handleAll(request, options?: { state?; signal?: AbortSignal }):
+    Promise<AvProtocolResponse | { status: 200; headers: Record<string, string>; body: AsyncIterable<string> }>;
   encodeContract(request):   AvProtocolResponse;
   answerAbsent(request):     AvProtocolResponse | undefined;
   decodeOperation(request):  DecodedOperation;
@@ -73,12 +76,13 @@ type AvProtocolBinding = {
 
 | Member | Use it to | Notes |
 |---|---|---|
-| `surface()` | List the routes to mount. | Each entry is `{ kind: "operation", method: "POST", path: "/_resources/<Resource>/<family>/<variant>", resource, family, variant }`, then `{ kind: "contract", method: "GET", path: "/_contract" }`, then `{ kind: "transactions", method: "POST", path: "/_transactions" }` only when the client contract is `interactive`. Only advertised operations appear, so a hidden Resource has no route. Paths are relative to the `api` mount path. Frozen. |
-| `handleOperation(request)` | Decode, execute and encode one operation request. | Resolves to a response; never rejects. |
+| `surface()` | List the routes to mount. | Each entry is `{ kind: "operation", method: "POST", path: "/_resources/<Resource>/<family>/<variant>", resource, family, variant }` (a read with a `cache` stage has a second one with `method: "GET"`, right after it), then `{ kind: "contract", method: "GET", path: "/_contract" }`, then `{ kind: "transactions", method: "POST", path: "/_transactions" }` only when the client contract is `interactive`, and `{ kind: "all", method: "POST", path: "/_all" }` whenever an operation is advertised. Only advertised operations appear, so a hidden Resource has no route. Paths are relative to the `api` mount path. Frozen. |
+| `handleOperation(request)` | Decode, execute and encode one operation request, a cached read's `GET` included. | Resolves to a response; never rejects. |
 | `handleTransaction(request)` | The same for `/_transactions`. | |
+| `handleAll(request, { signal })` | The same for `/_all` ([Operation Sets](/docs/http-protocol#operation-sets)). | `body` is a string, or, when the request sent `Accept: application/x-ndjson`, an async iterable of lines: write each as it comes. Abort `signal` when the client disconnects: operations not yet started never start. |
 | `encodeContract(request)` | Answer `GET /_contract`. | Synchronous. Handles `If-None-Match`: a matching ETag answers `304` with no body. |
 | `answerAbsent(request)` | Answer any other path under the protocol's `_` namespace (`400 A2000` for an unknown `/_*` path, `405` with `Allow` for a wrong method on a protocol route). | Returns `undefined` for a path outside the namespace; that one is yours to answer. |
-| `decodeOperation(request)` / `decodeTransaction(request)` | Decode without executing. | `{ ok: true, request, requestId } \| { ok: false, response, requestId }`. For hosts that run their own steps between decoding and execution. |
+| `decodeOperation(request)` / `decodeTransaction(request)` | Decode a `POST` without executing (a `GET` is `405` here; a cached read goes to `handleOperation`). | `{ ok: true, request, requestId } \| { ok: false, response, requestId }`. For hosts that run their own steps between decoding and execution. `request` is an `AvClientOperationRequest \| AvAgentOperationRequest` (`AvClientTransactionRequest \| AvAgentTransactionRequest` for `decodeTransaction`), exported from `@aventara/core`; pass it to `framework.execute` / `framework.executeTransaction`. |
 | `encodeOperation(response, requestId, decoded?)` / `encodeTransaction(response, requestId)` | Encode an `AvOperationResponse` / `AvTransactionResponse` you obtained yourself (for example from `framework.execute`). | |
 | `failure(code, requestId?, allow?)` | Build a complete response for a transport-level failure your host detects itself. | Codes: `"A2000"`, `"A2010"`, `"A2011"` and `"A2012"` (which requires `allow`, the permitted methods). |
 
@@ -86,7 +90,7 @@ Verified, in process:
 
 ```ts
 const protocol = AvProtocol.bind(framework);
-protocol.surface().length;          // 47 = 45 operations + _contract + _transactions
+protocol.surface().length;          // 48 = 45 operations + _contract + _transactions + _all
 await protocol.handleOperation({
   method: "POST",
   path: "/_resources/User/find/count",
@@ -96,7 +100,7 @@ await protocol.handleOperation({
 // { status: 200, headers: { "Content-Type": "application/json", "Aventara-Request-Id": "26253298-..." }, body: '{"data":10,"code":"A1000","cause":null}' }
 
 protocol.encodeContract({ method: "GET", path: "/_contract", headers: { "if-none-match": `"${hash}"` }, body: { kind: "raw", content: "" } });
-// { status: 304, headers: { ETag: '"sha256:..."', "Cache-Control": "no-cache", "Aventara-Request-Id": "..." }, body: "" }
+// { status: 304, headers: { ETag: '"sha256:..."', "Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff", "Aventara-Request-Id": "..." }, body: "" }
 
 protocol.answerAbsent({ method: "POST", path: "/_nope", headers: {}, body: { kind: "raw", content: "" } });
 // { status: 400, ... body: '{"data":null,"code":"A2000","cause":{"message":"The request is malformed and cannot be interpreted."}}' }

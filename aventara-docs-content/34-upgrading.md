@@ -1,13 +1,280 @@
 ---
 title: Upgrading
-description: Move from 1.0.0-rc.1 to 1.0.0-rc.2, from 1.0.0-rc.0 to 1.0.0-rc.1 (the new configuration shape, Av names, the $ ctx members) and from earlier pilots step by step, and the general flow for upgrading Aventara packages.
+description: Move from 1.0.0-rc.8 to 1.0.0-rc.11 (Node and Prisma floors, stricter policy checks, grouped client calls, regenerate clients), from 1.0.0-rc.4 to 1.0.0-rc.8 (rebuild after a discovery change, policy additions, request type names), from 1.0.0-rc.3 to 1.0.0-rc.4 (build-time Contracts, the policy seam), from 1.0.0-rc.2 to 1.0.0-rc.3, from 1.0.0-rc.1 to 1.0.0-rc.2, from 1.0.0-rc.0 to 1.0.0-rc.1 (the new configuration shape, Av names, the $ ctx members) and from earlier pilots step by step, and the general flow for upgrading Aventara packages.
 order: 34
 section: guides
 ---
 
 # Upgrading
 
-Aventara `1.0.0-rc.2` is the third release candidate; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
+Aventara `1.0.0-rc.11` is the ninth published release candidate (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were tagged but never published, and rc.9 and rc.10 sit between rc.8 and it), and the next release follows it; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.11` from `1.0.0-rc.8`, the move to `1.0.0-rc.8` from `1.0.0-rc.4`, the move to `1.0.0-rc.4` from `1.0.0-rc.3`, the move to `1.0.0-rc.3` from `1.0.0-rc.2`, to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
+
+## From 1.0.0-rc.8 to 1.0.0-rc.11
+
+`1.0.0-rc.9` and `1.0.0-rc.10` were published between them, so this one step covers all three releases. Before 1.0 the API does not keep backward compatibility, so the breaking changes are listed plainly in step 3. Most projects change a version number, regenerate and rebuild.
+
+### 1. Check Node and Prisma
+
+- Node must be `^22.23.4` or `>=24.22.1` (the Node security releases of 2026-10-20). The `aventara` and `aventara-build` bins refuse an older Node in one sentence naming that range.
+- The Prisma 7 adapter needs Prisma `^7.10.1` (`prisma`, `@prisma/client` and the driver adapters). Raise yours first.
+
+### 2. Install the new versions
+
+```bash
+npm install --save-exact @aventara/core@1.0.0-rc.11 @aventara/nest@1.0.0-rc.11 @aventara/prisma7-adapter@1.0.0-rc.11 @aventara/build@1.0.0-rc.11
+# add @aventara/mcp@1.0.0-rc.11 and @aventara/testing@1.0.0-rc.11 to the command if you use them
+```
+
+One command moves every `@aventara/*` package together, as in earlier steps. Move the frontend's `@aventara/client` to the same version, and run `npx @aventara/cli@1.0.0-rc.11 skill` to refresh the agent skill.
+
+Then regenerate and rebuild: `npm run aventara:prepare` on the server, and `avclient generate` in each frontend. **Every ClientContract hash changes**, because its limits now carry `maxAll` and `maxAllConcurrency`. A client generated against rc.8 answers `409 A2005` until you regenerate it.
+
+### 3. Breaking changes
+
+| Change | What to do |
+| --- | --- |
+| A to-one `$update` or `$upsert` beside `$connect`, `$connectOrCreate`, `$create`, `$set` or `$disconnect` on the same relation is refused (`A2004`, `V1012`) | Split it into two writes: relink in one, update the linked row in the other. A to-many operand is unaffected. |
+| A reference field written as a value (`authorId: "u2"`) is held to the target's read scope, and a row a write names to link that is not there answers `A4002` where the target has a scope (it answered `A2008` or `A2003`) | Only matters with a policy. Handle `A4002` where you handled those codes. Without a scope the codes are unchanged. |
+| A Resource named `all` is refused at construction (`COMPILER_RESERVED_RESOURCE_NAME`) | Rename the model, or keep it out of the Client Contract. |
+| The calls an `avClient` makes in one tick are grouped into one `POST /_all` | Nothing to change: each call still resolves or throws on its own. Pass `grouping: false` (per call, or `new AvClient({ grouping: false })`) to send calls one by one. A call with `headers` or a `requestId` already goes alone. |
+| `avLazy` keeps no answer across requests on a server | Nothing to change unless you relied on a module-scope `avLazy` sharing its answer. In a Next.js app import `avLazy` from `@/aventara/universal` for one answer per React render. |
+| New limit keys `limits.maxAll` (default 10) and `limits.maxAllConcurrency` (default 4) | Nothing to change. Set them at the root or per layer to move them. They are in the ClientContract, so the hash moves. |
+| A `client.resources` or `agent.resources` entry for a Resource marked `managedElsewhere` is refused (`COMPILER_UNKNOWN_RESOURCE`) | Configure it at the root or in `application`. |
+| `access` together with `policy`, or the module's `state` option beside `access`, is refused | Use one of them. |
+| `mcp.authorization.servers` entries with a query, a fragment, an empty path segment or port 0 are refused, and `http://localhost` is refused | Write a loopback server as `http://127.0.0.1:4000`. Use https outside development. |
+| An MCP endpoint without `authorization` answers `403` unless the `Host` header is loopback | Call it as `127.0.0.1`, `localhost` or `[::1]`, or configure `authorization`. |
+| `Bytes[]` columns no longer offer `equals`, `hasEvery` and `hasSome` | Use `has` or `isEmpty`. |
+
+### 4. Docs moved
+
+The docs are at https://aventara.razor34.dev/framework. The error catalog's `docs` links, `ERRORS.md` and the links in the agent skill point there after you upgrade. Update any bookmark or link of your own.
+
+### 5. New and optional
+
+- Cached reads: add a `cache({ for, maxAge })` stage to opt a `find` in. Nothing is cached until you do. See [Caching reads](/docs/caching-reads).
+- `avLazy(() => call)` makes a call only when it is first awaited (calls still run when made, as before). `framework.serverClient.all` and `avClient.all` on the server, `framework.serverClient` for application-value calls, `access` providers, `managedElsewhere` and the Next.js host are new. Each is optional; see the [Changelog](/docs/changelog) for rc.9, rc.10 and rc.11.
+
+## From 1.0.0-rc.4 to 1.0.0-rc.8
+
+`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published, so this is the step from rc.4 to the next release. It holds everything planned for them, plus the fixes their checks found: typed policy engines compile in projects that emit declarations, and so do helpers that read the Core Contract (`framework.contracts.core`) and helpers that take or return a call's arguments.
+
+Nothing in your configuration has to change. Two things do need a rebuild, and the construction error reads differently. A Framework without a `policy` serves the same Contracts and the same hashes as rc.4, so a client generated against rc.4 keeps working.
+
+### 1. Install the new versions
+
+```bash
+npm install --save-exact @aventara/core@1.0.0-rc.8 @aventara/nest@1.0.0-rc.8 @aventara/prisma7-adapter@1.0.0-rc.8 @aventara/build@1.0.0-rc.8
+# add @aventara/mcp@1.0.0-rc.8 and @aventara/testing@1.0.0-rc.8 to the command if you use them
+```
+
+One command moves every `@aventara/*` package together. `@aventara/build` stays in `devDependencies`: npm updates a package in the section where it already is. Installing the packages in two commands makes npm print a peer-dependency warning (`ERESOLVE`), because `@aventara/build` needs the same version of `@aventara/core`.
+
+Move the frontend's `@aventara/client` to the same version, and run `npx @aventara/cli@1.0.0-rc.8 skill` to refresh the agent skill.
+
+### 2. Regenerate the discovery artifact and rebuild the prebuilt Contracts
+
+Discovery now records, on the end of a relation that holds the reference, which fields of the target its reference fields name. The artifact's model hash changes, and so does the fingerprint of a prebuilt Contracts file. Run your generate step and `aventara-build` again (`npm run aventara:prepare` in the scaffold; `pnpm run aventara:prepare` with pnpm, `yarn aventara:prepare` with yarn). Until you do, the prebuilt file reads as stale (`AVENTARA_PREBUILT_STALE`) and the Contracts compile at startup.
+
+### 3. The construction error message names the first problem
+
+`AvConstructionError.message` used to be the stage's sentence alone. It now adds the first diagnostic and how many more there are:
+
+```text
+// before
+Aventara framework configuration validation failed
+
+// now
+Aventara framework configuration validation failed: CONFIG_INVALID_TYPE at adapter.execute: adapter.execute must be a function (+2 more)
+```
+
+`stage` and `diagnostics` are unchanged. Code that compares `error.message` to the old sentence should compare `error.stage` or read `error.diagnostics` instead.
+
+### 4. Names that moved
+
+These matter only if your code imports a name from `@aventara/core/internal`, which is not public API. The request types of `framework.execute` and `framework.executeTransaction` left it, and are exported from `@aventara/core` under new names:
+
+| Was, in `@aventara/core/internal` | Now, in `@aventara/core` |
+|---|---|
+| `FrameworkOperationRequest` | `AvOperationRequest` |
+| `FrameworkApplicationOperationRequest` | `AvApplicationOperationRequest` |
+| `FrameworkClientOperationRequest` | `AvClientOperationRequest` |
+| `FrameworkAgentOperationRequest` | `AvAgentOperationRequest` |
+| `FrameworkTransactionRequest` | `AvTransactionRequest` |
+| `FrameworkApplicationTransactionRequest` | `AvApplicationTransactionRequest` |
+| `FrameworkClientTransactionRequest` | `AvClientTransactionRequest` |
+| `FrameworkAgentTransactionRequest` | `AvAgentTransactionRequest` |
+| `ClientProtocolIdentity` (a remote request's `protocol`) | `AvRequestProtocol` |
+
+Change the import; the shapes are the same. The old names are gone from `@aventara/core/internal`. New names that the declarations of your helpers can now write: `AvScalarFilterOperands`, `AvScalarWhereInput`, `AvNoAdvertisedMember`, `AvSqlStatementBuilder` and `AvSqlStatementValue`. See [Server-side usage](/docs/server-side-usage#a-helper-that-takes-or-returns-arguments).
+
+### 5. The discovery artifact's `referenceFields`
+
+This matters only if your code reads the discovery artifact (`src/generated/aventara/discovery.artifact.ts`). In `referentialActions.<Resource>.owningEdges[]`, the fields of the Resource itself that hold the reference are now called `referenceFields`; they were called `references`. A model's relation fields already use `references` for the target's fields, so the same word meant two lists in one file. Code that read `owningEdges[i].references` reads `owningEdges[i].referenceFields`.
+
+Regenerate the artifact (`npm run aventara:prepare`; `pnpm run aventara:prepare` with pnpm, `yarn aventara:prepare` with yarn). The artifact changes only in those keys: the model hash and the prebuilt Contracts file are the same as before the rename.
+
+### 6. Policy additions
+
+These matter only if you write a [policy engine](/docs/policies).
+
+- `fieldsOf({ access: "write" })` also gets `action: "create" | "update"`, so an engine can lock a field on update and still let a create write it. An engine that ignores it keeps working.
+- An engine can read a relation's `references` from the discovery model or `framework.contracts.core` and ask one `exists` about the row a create points at. The served Contracts never carry `references`.
+- `policy.principal` may be `async`. A rejected promise answers `A3000`, as a throw does.
+- A cursor on a row the caller cannot read now answers as a cursor on a missing row. On the Prisma adapter a scoped cursor costs one extra lookup.
+- A unique update with a nested write on a row the caller can read but not change answers `A4002`. It answered `A2003` before; a row the caller cannot read still does.
+- The `exists` questions an engine is asked select the Resource's primary identifier, never another unique field such as a governed `email`.
+
+## From 1.0.0-rc.3 to 1.0.0-rc.4
+
+This step adds a build step, `aventara-build`, and reshapes the scaffold's configuration so it can run without a database client. It also adds the [policy seam](/docs/policies), which does nothing until you configure `policy`. Without `policy`, the Contracts and their hashes are the ones rc.3 produced, so a client generated against rc.3 keeps working.
+
+### 1. Install the new versions
+
+```bash
+npm install --save-exact @aventara/core@1.0.0-rc.4 @aventara/nest@1.0.0-rc.4 @aventara/prisma7-adapter@1.0.0-rc.4
+npm install --save-dev --save-exact @aventara/build@1.0.0-rc.4
+# add @aventara/mcp@1.0.0-rc.4 and @aventara/testing@1.0.0-rc.4 to the first command if you use them
+```
+
+`@aventara/build` is a new package, a dev dependency, and its version must match `@aventara/core`'s. It needs `typescript` `>=5.7.0 <7`. Move the frontend's `@aventara/client` to the same version, and run `npx @aventara/cli@1.0.0-rc.4 skill` to refresh the agent skill.
+
+### 2. Add `aventara-build` to `aventara:prepare`
+
+The discovery artifact now imports the computed fields from `computed-fields.generated.ts`, a file `aventara-build` writes. A project that passes `--config` to the generate step (every project made by rc.2 or rc.3's `aventara`) must run `aventara-build` after it, or the artifact imports a file that does not exist. In `package.json`:
+
+```json
+"aventara:prepare": "aventara-prisma7-generate --schema prisma/schema.prisma --client src/generated/prisma --provider sqlite --driver @prisma/adapter-better-sqlite3 --out src/generated/aventara/discovery.artifact.ts --config src/aventara.config.ts && aventara-build"
+```
+
+The generate step no longer reads your configuration. `--config` only names the file whose sibling the artifact imports from.
+
+### 3. Make the configuration a plain value
+
+`aventara-build` runs `src/aventara.config.ts` and `src/aventara.adapter.ts` without a database client, so the configuration cannot build the adapter. Move the adapter out. Before:
+
+```ts
+// src/aventara.config.ts
+export async function aventaraConfig(prisma: PrismaService) {
+  return {
+    api: "/api",
+    exposed: true,
+    adapter: await createPrismaAdapter({
+      client: prisma,
+      discovery,
+      provider: "sqlite",
+      driver: "@prisma/adapter-better-sqlite3",
+    }),
+  } as const;
+}
+```
+
+After, in three files:
+
+```ts
+// src/aventara.config.ts
+export const aventaraConfig = {
+  api: "/api",
+  exposed: true,
+} as const;
+```
+
+```ts
+// src/aventara.adapter.ts
+import { describePrismaAdapter } from "@aventara/prisma7-adapter";
+import { discovery } from "./generated/aventara/discovery.artifact.js";
+
+export default describePrismaAdapter({
+  discovery,
+  provider: "sqlite",
+  driver: "@prisma/adapter-better-sqlite3",
+});
+```
+
+```ts
+// src/app.module.ts
+AventaraModule.forRootAsync({
+  imports: [PrismaModule],
+  inject: [PrismaService],
+  useFactory: async (prisma: PrismaService) => ({
+    config: {
+      ...aventaraConfig,
+      adapter: await createPrismaAdapter({ ...adapter, client: prisma }),
+    },
+  }),
+}),
+```
+
+`import adapter from "./aventara.adapter.js"` goes at the top of `app.module.ts`. Wherever else you called `aventaraConfig(prisma)` (a `buildFramework`, a custom host, a script), spread `aventaraConfig` and add the adapter the same way. The Nest server still compiles its Contracts at startup, so it passes no `prebuilt`. Keep the configuration's top level free of side effects: `aventara-build` runs it.
+
+### 4. Let the build gather your Resources (optional)
+
+If your Resources are `defineResource` results in `src/resources/<name>.resource.ts`, delete the hand-written spreads and take the generated tree: `resources: aventaraResources.root`, and `client: { resources: aventaraResources.client }` where some Resource has a client block ([Configuration](/docs/configuration#the-generated-resource-tree)). Two files that define the same Resource now stop the build; spread by hand, the later one silently won.
+
+### 5. Run it
+
+```bash
+npm run aventara:prepare      # pnpm: pnpm run aventara:prepare
+```
+
+It writes `resources.generated.ts`, `computed-fields.generated.ts` and `contracts.generated.ts` beside the discovery artifact, in `src/generated/aventara/`, which `.gitignore` already covers. Serverless and edge entries can pass the last one as `prebuilt` ([Deploying](/docs/deploying#build-time-contracts)); add `npx aventara-build --check` to CI.
+
+### 6. What else changed
+
+- `select` takes `"$defaults"` as an entry: `select: ["$defaults", "email"]` is the default projection plus `email` ([Querying](/docs/querying)).
+- A service method can return `framework.application.Post.find.many` (or any other façade node) without a return type, and the declaration file writes a short reference instead of the whole Contract view ([Server-side usage](/docs/server-side-usage)). An annotation you wrote keeps working.
+- `readConfigComputedFields`, `AvPrismaConfigReaderError` and `ConfigComputedFieldsReading` are gone from `@aventara/prisma7-adapter/generate`. Only code that imported them from there is affected.
+- `A4002` now also answers a refusal by a configured policy. A project with no `policy` sees no change.
+- With a `policy`, `A2003` also answers a unique read of a row outside the caller's read scope and a single-row update or delete of a row the caller cannot read: the caller cannot tell it from a row that does not exist. A row the caller can read but not change answers `A4002`. A project with no `policy` sees no change.
+
+## From 1.0.0-rc.2 to 1.0.0-rc.3
+
+Fixes only: no configuration key moves, nothing is renamed, and the contract's hash does not change, so a client generated against rc.2 keeps working. A few answers change, and code that matched the old ones needs a look.
+
+### 1. Install the new versions
+
+```bash
+npm install --save-exact @aventara/core@1.0.0-rc.3 @aventara/nest@1.0.0-rc.3 @aventara/prisma7-adapter@1.0.0-rc.3
+# add @aventara/mcp@1.0.0-rc.3 and @aventara/testing@1.0.0-rc.3 to the same command if you use them
+npm run aventara:prepare      # pnpm: pnpm run aventara:prepare
+npx @aventara/cli@1.0.0-rc.3 skill
+```
+
+If you use `@aventara/mcp` or `@aventara/testing`, put them in the same `npm install` command: `@aventara/nest` asks for the matching `@aventara/mcp`, so installing them one after the other fails with `ERESOLVE`. Move the frontend's `@aventara/client` to `1.0.0-rc.3` as well. `aventara skill` refreshes the agent skill's error reference, which describes `A2004`, `V1001` and `V1004` as rc.3 answers them.
+
+### 2. Empty `NOT`, `AND` and `OR` in a write's `where`
+
+In `update.many`, `update.count`, `update.first`, `delete.count`, `delete.first` and a to-many `$update` or `$delete`, an empty boolean node is now refused with `422` `A2004` and a `V1001` issue at the node, and nothing runs. That covers `NOT: {}`, `AND: {}`, `AND: []`, `OR: []` and an `AND` or `OR` entry that is `{}`, at any depth. In rc.2 the ORM read such a node as no condition, so `delete.count({ where: { NOT: {} } })` deleted every row.
+
+Look for `where` objects you build from optional parts, such as `{ AND: filters }` where `filters` may be empty. Leave the key out when there is nothing to put in it:
+
+```ts
+const filters: { published: boolean }[] = []; // conditions collected from the request
+const where = filters.length > 0 ? { AND: filters } : {};
+```
+
+A `where` that is `{}` itself still means every row, so write that when every row is what you mean. Reads are unchanged and still accept empty nodes, and a to-one relation's `{ author: {} }` still matches the rows that have a related row. See [Filtering](/docs/filtering-sorting-paging#and-or-not).
+
+### 3. A unique value too long for its index
+
+On PostgreSQL, a `@unique` value too long for its index is now answered `422` `A2004` with one `V1004` issue at `["arguments"]`; in rc.2 it was `500` `A3001`. If your error handling matched `A3001` to catch this case, match `A2004` with a `V1004` issue instead, the same answer a value too long for its column already gave. The message for a value too long now reads `The database refused this value: it is longer than the database can hold for its column.`; update any test that compared the old text.
+
+### 4. Issue paths inside a directive's array
+
+An issue inside one entry of a to-many directive's array now names the entry's index: `["arguments","data","posts","$update",1,"data","category"]`, where rc.2 gave `["arguments","data","posts","$update","data","category"]`. This holds for `$create`, `$connect`, `$connectOrCreate`, `$update`, `$delete`, `$upsert`, `$set` and `$disconnect`. Code that matches issue paths, for example to show an error next to a form row, should expect the number after the directive. A directive given one object rather than an array keeps its issue at the directive.
+
+### 5. `--provider` must match the datasource
+
+`aventara-prisma7-generate` now compares `--provider` with the `provider` in the schema's `datasource` block and refuses a mismatch before `prisma generate` runs, so neither the Prisma client nor the artifact is written:
+
+```text
+aventara-prisma7-generate: --provider postgresql contradicts the schema's datasource `db` (/home/you/app/prisma/schema.prisma:6), which names provider "sqlite"; pass --provider sqlite.
+```
+
+If `aventara:prepare` fails this way after the upgrade, set `--provider` in the script in `package.json` to the provider the schema names (PSL's `postgres` counts as `postgresql`). In rc.2 a wrong flag was accepted and wrote the wrong provider into the artifact and the wrong filter modes into the contract.
+
+### 6. A computed value for a hidden field
+
+When a `compute.create` or `compute.update` stage writes to a field the caller's layer hides, the value is now judged by the field's validators and Json shape as the server defines them, and a refusal answers `500` `A3000`, with an `AvComputedValueError` in your `diagnostics` sink and nothing of the hidden field in the answer. In rc.2 a hidden field's own validators answered the caller `422` `A2004` at the hidden field's path, and a hidden Json field's shape was not checked. A layer that shows the field still answers `A2004` at it. If a client handled that `A2004`, the fix is now on the server: make the compute stage return a value the field accepts. See [Field validators](/docs/field-validators#where-they-run).
 
 ## From 1.0.0-rc.1 to 1.0.0-rc.2
 
@@ -17,10 +284,11 @@ A smaller step: no configuration key moves and nothing is renamed. The contract'
 
 ```bash
 npm install --save-exact @aventara/core@1.0.0-rc.2 @aventara/nest@1.0.0-rc.2 @aventara/prisma7-adapter@1.0.0-rc.2
+# add @aventara/mcp@1.0.0-rc.2 and @aventara/testing@1.0.0-rc.2 to the same command if you use them
 npm run aventara:prepare      # pnpm: pnpm run aventara:prepare
 ```
 
-If you use `@aventara/mcp` or `@aventara/testing`, move them to `1.0.0-rc.2` as well, and the frontend's `@aventara/client` with them.
+If you use `@aventara/mcp` or `@aventara/testing`, put them in the same `npm install` command, or npm refuses with `ERESOLVE`. Move the frontend's `@aventara/client` to `1.0.0-rc.2` as well.
 
 ### 2. Smaller declarations
 
@@ -53,7 +321,7 @@ A `compute.create` stage that returns `undefined` for a field the database requi
 
 ### 3d. Filter `mode` and operand types
 
-A filter's `mode` now takes `"default"`, `"sensitive"` or `"insensitive"`, and each field offers only the modes its database can honor (`filterModes` in the contract). With Prisma 7 on PostgreSQL nothing you wrote changes; on SQLite, a `mode: "insensitive"` that reached the ORM before is now refused with `A2004` / `V1006`. Wrong-typed operands (`isEmpty: 3`, `path: "a.b"`) are refused with `V1001`. Run `aventara:prepare` and regenerate the client so the types list each field's modes. See [Filtering](/docs/filtering-sorting-paging#case-mode).
+A filter's `mode` now takes `"default"`, `"sensitive"` or `"insensitive"`, and each field offers only the modes its database can honor (`filterModes` in the contract). With Prisma 7 on PostgreSQL nothing you wrote changes; on SQLite, a `mode: "insensitive"` on a `Json` field, which reached the ORM and was ignored before, is now refused with `A2004` / `V1006` (on a string field rc.1 already refused it; only the message changed). Wrong-typed operands (`isEmpty: 3`, `path: "a.b"`) are refused with `V1001`. Run `aventara:prepare` and regenerate the client so the types list each field's modes. See [Filtering](/docs/filtering-sorting-paging#case-mode).
 
 ### 3e. `not`, `mode` and `path` in filters
 
@@ -61,6 +329,11 @@ A filter's `mode` now takes `"default"`, `"sensitive"` or `"insensitive"`, and e
 - Each filter object stands alone. Rewrite `{ mode: "insensitive", not: { contains: "x" } }` as `{ not: { contains: "x", mode: "insensitive" } }`, and move a `path` next to a `not` inside it. A bare `{ mode }` or `{ path }` is refused with `V1001`.
 - Run `aventara:prepare` and regenerate the client: the contract carries the new filter lists.
 - A value the database refuses (out of range, a NUL character in PostgreSQL text, too long for its column) is answered `422` `A2004` with the database's reason; in rc.1 it was `500` `A3001`.
+- A relation write inside the `data` of a to-many nested `$update` is answered `422` `A2004` / `V1006`; in rc.1 it was `500` `A3001`. Its `data` takes what `update.many`'s does.
+- A step that meets an expired or closed transaction answers `500` `A3002`; in rc.1 it was `500` `A3001`.
+- A nested write that writes back along the relation it sits in (`author` or `authorId` in a `Post` created in `User.posts`) is refused before the database with `422` `A2004` / `V1012`; in rc.1 it was `500` `A3001`. Relation fields in the contract now name their other end (`inverse`) and their reference fields (`referenceFields`), so the contract hash changes: run `aventara:prepare` and regenerate the client.
+- A `compute.read` that writes into its `record` answers `A3000`; the record is the stage's own frozen copy.
+- A computed value is checked against every `format` its field declares (`email`, `url`, ...), not only `uuid`; one that breaks it answers `A3000`. A relative path computed into a `format: "url"` field now fails: compute an absolute URL or drop the `format`.
 
 ### 4. MCP
 
@@ -74,7 +347,15 @@ A `compute.create` or `compute.update` value is now judged by the field's valida
 
 ### 6. A clearer type error for a widening overlay
 
-A `client` (or `agent`) layer under `exposed: false` that names what its parent hid was already a type error. When the configuration comes from a function, the error now ends with a sentence such as `Error: client cannot expose 'User.internalNotes': hidden by root` instead of `not assignable to type 'never'`. See [Exposure](/docs/exposure#layers-overlays-only-narrow).
+A `client` (or `agent`) layer under `exposed: false` that names what its parent hid was already a type error. When the configuration comes from a function, the error now ends with a sentence such as `Error: client cannot expose 'User.internalNotes': hidden by root` instead of `not assignable to type 'never'`. A list written inline in `createFramework` still read `Type 'string' is not assignable to type 'never'` in rc.2; from rc.3 it names the sentence too, and both forms end at a line such as `Property '"Error: client cannot expose 'User.internalNotes': hidden by root"' is missing in type 'readonly ["select"]'`. See [Exposure](/docs/exposure#layers-overlays-only-narrow).
+
+### 7. TypeScript 5.7 or later
+
+The server and the client generator now need TypeScript 5.7 or later (below 7 on the server). Under 5.5 and 5.6 a variant's stages written inline in `createFramework` do not type their arguments. Upgrade `typescript` before upgrading Aventara.
+
+### 8. The agent skill
+
+rc.2 adds an agent skill for AI coding agents (`.claude/skills/aventara/` and a section in `AGENTS.md`). A project set up before gets it by running `npx @aventara/cli@1.0.0-rc.2 skill` in the project; run it again after each upgrade. See [AI agents](/docs/ai-agents).
 
 ## From 1.0.0-rc.0 to 1.0.0-rc.1
 
@@ -149,7 +430,7 @@ Each old key is a `CONFIG_MOVED_PROPERTY` at startup. `createFramework` (or `Ave
 
 ```ts
 // error.name === "AvConstructionError"
-// error.message === "Aventara framework configuration validation failed"
+// error.message === "Aventara framework configuration validation failed: CONFIG_MOVED_PROPERTY at restrictions: restrictions moved in rc.1: use exposed + exemptions (+1 more)"
 {
   stage: "configuration",
   diagnostics: [
@@ -542,7 +823,7 @@ For an unchanged schema and configuration, nothing in your server code changes. 
 |---|---|
 | Frontend config | `avclient init` wrote `framework.client.mts`, which loads in CommonJS and ESM projects alike. In pilot.0 the file was `framework.client.ts`, which a CommonJS project could not load (`Cannot use import statement outside a module`). From pilot.2 the loader reads `.ts` in every project again, and `init` writes `framework.client.ts`; with two config files present, generation is refused. |
 | TypeScript | The frontend accepts TypeScript `>=5.5`, including 7. Under 7 the post-generate check is a syntax and shape check, with a warning. `@aventara/cli` and the Prisma adapter still need TypeScript `<7` on the server. |
-| Startup | Nest logs one line: `Aventara mounted <N> operations at /api (+ GET /api/_contract, POST /api/_transactions)`. |
+| Startup | Nest logs one line: `Aventara mounted <N> operations at /api (+ GET /api/_contract, POST /api/_transactions, POST /api/_all)`. |
 | Errors | A request missing identity headers answers `400 A2000` naming the missing headers (`The Aventara-Protocol-Version and Aventara-Contract-Hash headers are missing.`). |
 | CLI | The next-step instructions print the right runner (`npx` or `pnpm dlx`) and `@pilot`; `--help` works on `aventara new\|init` and `avclient init\|generate`. |
 
@@ -578,7 +859,7 @@ If you have a CommonJS frontend that could not load `framework.client.ts` under 
 
 1. Read what changed. The [changelog](/docs/changelog) lists each release; look for entries under your packages. Each package also ships its own `CHANGELOG.md` in `node_modules/@aventara/<package>/`. A pilot release may change APIs; a release candidate changes them only to fix what testing finds.
 2. Upgrade the server packages together. `@aventara/core`, `@aventara/nest` and `@aventara/prisma7-adapter` are released at the same version; install the same exact version of all three. The scaffold pins them exactly for this reason.
-3. Regenerate the discovery artifact. `npm run aventara:prepare`. It runs on a plain `npm install` via `postinstall`, but not on `npm install <package>`, so run it yourself after upgrading packages by name. At startup the server checks the artifact against itself and against the installed Prisma major, and the Prisma adapter compares the models and field names recorded in the artifact with the live Prisma client. It refuses to start, with a message naming `npm run aventara:prepare`, when a model or field was added, removed or renamed since the artifact was written, or when the artifact was written by an older Aventara version. It does not detect a change that keeps every model and field name (a field's type, default or attribute changed), so regenerate after any schema change and run `aventara:prepare` in the same build as your schema and Prisma client, never from a stale checkout.
+3. Regenerate the discovery artifact. `npm run aventara:prepare`. It runs on a plain `npm install` via `postinstall`, but not on `npm install <package>`, so run it yourself after upgrading packages by name. At startup the server checks the artifact against itself and against the installed Prisma major (read from the installed `@prisma/client`'s `package.json`; where it cannot be read, the server starts and warns `AVENTARA_PRISMA_VERSION_UNCHECKED`), and the Prisma adapter compares the models and field names recorded in the artifact with the live Prisma client. It refuses to start, with a message naming `npm run aventara:prepare`, when a model or field was added, removed or renamed since the artifact was written, or when the artifact was written by an older Aventara version. It does not detect a change that keeps every model and field name (a field's type, default or attribute changed), so regenerate after any schema change and run `aventara:prepare` in the same build as your schema and Prisma client, never from a stale checkout.
 4. Rebuild and test. `npm run build`, your test suite, and a look at the startup log.
 5. Deploy the server. If its contract changed, the hash changed.
 6. Upgrade and regenerate the frontend. `@aventara/client` is a development dependency, pinned exactly: bump it with `--save-exact` (a plain `npm install -D @aventara/client@rc` turns the pin into a caret range), then `npm run avclient:generate`. Commit the diff: if the output is byte-identical, the contract did not change.
@@ -586,7 +867,7 @@ If you have a CommonJS frontend that could not load `framework.client.ts` under 
 
 ### Prisma
 
-Aventara's Prisma adapter supports Prisma `>=7.10 <8` (its `peerDependencies`). A Prisma 6 or 8 project needs a different adapter package: Prisma vocabulary stays inside the adapter, and each major has its own. Upgrade Prisma itself the way Prisma documents, then `npm run aventara:prepare`.
+Aventara's Prisma adapter supports Prisma `^7.10.1` (its `peerDependencies`). A Prisma 6 or 8 project needs a different adapter package: Prisma vocabulary stays inside the adapter, and each major has its own. Upgrade Prisma itself the way Prisma documents, then `npm run aventara:prepare`.
 
 ### What changes the contract hash
 

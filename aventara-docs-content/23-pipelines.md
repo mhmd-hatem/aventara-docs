@@ -50,9 +50,8 @@ A stage's place in the configuration is its whole scope. There is no "which Reso
 | Resource transactions | `resources.<R>.transactions.pipelines` | once per transaction with a top-level step on R |
 
 ```ts
-return {
+export const aventaraConfig = {
   api: "/api",
-  adapter: /* ... */,
   // Layer: every operation of both origins.
   pipelines: { interceptors: [traceInterceptor], filters: [domainErrorFilter] },
 
@@ -82,6 +81,8 @@ return {
 } as const;
 ```
 
+One more key fits in `pipelines` on reads: `cache`, written `cache({ for: "user", maxAge: 60 })`. It is not a function that runs but a promise about who may share the answer, and it lets the browser or a CDN keep it. Unlike the other stages it does not add up: the most specific level wins. See [Caching reads](/docs/caching-reads).
+
 Registering a stage on an operation does not expose it. What exists is decided by [exposure](/docs/exposure); a stage on an operation a layer does not expose never runs for that origin.
 
 ## Which requests a pipeline sees
@@ -98,7 +99,7 @@ The stage kinds are norms. The framework does not check what a callback does: an
 Every operation runs its stages in one order:
 
 ```text
-framework validation (with required fields) -> guards -> pipes -> write compute -> re-check (validators) -> interceptors (before) -> hooks.before -> operation -> hooks.after -> interceptors (after) -> filters
+framework validation (with required fields) -> policy admission (when a policy is configured) -> guards -> pipes -> write compute -> re-check (validators) -> policy write check (when a policy is configured) -> interceptors (before) -> hooks.before -> operation -> hooks.after -> interceptors (after) -> filters
 ```
 
 In full, with every level listed root first, then the operation's overlay:
@@ -106,6 +107,8 @@ In full, with every level listed root first, then the operation's overlay:
 ```text
 validate the arguments against the contract: types, unknown fields, structure, and every
                           required create field (less those a compute.create fills), top level and nested
+-> policy admission      only when a policy is configured: may this action run, on which rows and
+                          fields; runs before any guard, so a guard cannot supply its principal
 -> guards                 layer -> Resource -> family -> variant, then each sent field's write guards,
                           then each nested target's Resource and family guards and field write guards
 -> pipes                  layer -> Resource -> family -> variant, then each sent field's field pipes
@@ -115,6 +118,8 @@ validate the arguments against the contract: types, unknown fields, structure, a
 -> re-check               Aventara's own checks on what the pipes and compute produced
                           (A3004, or A3000 for a computed value); then the validators on every
                           value, computed ones included (A2004); then nested targets'
+-> policy write check     only when a policy is configured: the checks on what a write is about to
+                          write (see Policies)
    (a refusal so far runs no interceptor and no hook)
 -> interceptors enter     every level, outer to inner
 -> hooks.before           every level, outer to inner
@@ -196,7 +201,7 @@ Once a stage has nothing left to change, it reads frozen data:
 - The validators check what the pipes and write compute produced, and that is exactly what the adapter writes. No later stage can change it.
 - Interceptors, hooks and filters get the validated arguments, frozen. An `after` hook gets a frozen copy of the result; an interceptor may still return a different result after `next()`, and the framework checks it against the contract like any result. What your code receives from a call is never frozen.
 - Writing to frozen data throws a `TypeError` (ES modules run in strict mode), which answers `A3000` unless you catch it.
-- `Date` and `Uint8Array` values cannot be frozen. After validation each stage gets its own copy, so changing one in place changes only that copy.
+- `Date` and `Uint8Array` values cannot be frozen, so every stage gets its own copy, guards and pipes included; changing one in place changes nothing a later stage sees, what is written or what the caller receives.
 
 ```ts
 // In rc.0 a pipe could change args in place. Now it returns new arguments.
@@ -256,7 +261,7 @@ When a `create`, `update` or `upsert` reaches another Resource through a relatio
 
 ## Transactions
 
-Each step of a [transaction plan](/docs/transactions) runs its own operation stages. Before the transaction opens, every step in order runs its guards, its pipes and its validators. A pipe sees a `$ref` value as the reference it is, unresolved, and the validators check only the literal values that no write compute changes. If any step is refused there, nothing is opened. Then, inside the database transaction, each step resolves its `$ref`s, runs the field pipes and write compute on the values it resolved, has the validators judge every value, and runs its interceptors and hooks around its adapter call. An error thrown there in step 2 rolls back step 1 too.
+Each step of a [transaction plan](/docs/transactions) runs its own operation stages. Before the transaction opens, every step in order runs its guards, its pipes and its validators. A pipe sees a `$ref` value as the reference it is, unresolved, and may move it (wrap the caller's `where` in an `AND` with its own scope, copy a data value into another field): it is resolved where the pipe put it, held to the rules a `$ref` written there is held to; one placed where no `$ref` may stand is the server's `A3004`. The validators check only the literal values that no write compute changes. If any step is refused there, nothing is opened. Then, inside the database transaction, each step resolves its `$ref`s, runs the field pipes and write compute on the values it resolved, has the validators judge every value, and runs its interceptors and hooks around its adapter call. An error thrown there in step 2 rolls back step 1 too.
 
 A step's guards and pipes run outside the transaction, so their `ctx` calls do not join it. The interceptors' and hooks' calls do.
 
@@ -272,7 +277,7 @@ validate the whole plan
 -> every touched Resource's interceptors enter, then every touched Resource's hooks.before
      -> the steps, in order, each: resolve $refs -> field pipes of the resolved values -> write compute -> validators on every value
         -> interceptors -> hooks.before -> the adapter call -> hooks.after -> interceptors
-   every touched Resource's hooks.after (they see every step's result), then the interceptors unwind
+   every touched Resource's hooks.after, the last touched Resource's first (they see every step's result), then the interceptors unwind
 -> COMMIT
 
 On an exception: the step's own filters, inner to outer; if none handles it, the touched Resources'
@@ -381,23 +386,20 @@ const onlyPublished: AvPipe = function onlyPublished(args) {
   return { ...a, where: { AND: [a.where ?? {}, { publishedAt: { not: null } }] } };
 };
 
-export async function aventaraConfig(prisma: PrismaService) {
-  return {
-    api: "/api",
-    adapter: /* ... */,
-    pipelines: { hooks: { after: [audit] }, interceptors: [timing] },
-    resources: {
-      User: {
-        pipelines: { filters: [friendlyConflict] },
-        fields: { email: { pipelines: { pipes: [(value: unknown) => (typeof value === "string" ? value.trim().toLowerCase() : value)] } } },
-      },
+export const aventaraConfig = {
+  api: "/api",
+  pipelines: { hooks: { after: [audit] }, interceptors: [timing] },
+  resources: {
+    User: {
+      pipelines: { filters: [friendlyConflict] },
+      fields: { email: { pipelines: { pipes: [(value: unknown) => (typeof value === "string" ? value.trim().toLowerCase() : value)] } } },
     },
-    client: {
-      // Remote callers only ever see published posts.
-      resources: { Post: { operations: { find: { pipelines: { pipes: [onlyPublished] } } } } },
-    },
-  } as const;
-}
+  },
+  client: {
+    // Remote callers only ever see published posts.
+    resources: { Post: { operations: { find: { pipelines: { pipes: [onlyPublished] } } } } },
+  },
+} as const;
 ```
 
 Results:
@@ -484,18 +486,15 @@ const requireSignIn: AvGuard = (ctx) => {
   return true;
 };
 
-export async function aventaraConfig(prisma: PrismaService) {
-  return {
-    api: "/api",
-    adapter: /* ... */,
-    client: { pipelines: { guards: [requireSignIn] } },
-  } as const;
-}
+export const aventaraConfig = {
+  api: "/api",
+  client: { pipelines: { guards: [requireSignIn] } },
+} as const;
 ```
 
 Inline, a stage registered on one operation (`operations.<family>.<variant>.pipelines`) gets that operation's arguments typed: `ctx.$args` read-only, a pipe's arguments and return checked ([Typed arguments](/docs/pipeline-context#typed-arguments)). The exported types leave them `unknown`.
 
-An inline arrow in a configuration that a function returns `as const` has no contextual type, and TypeScript reports `Parameter 'ctx' implicitly has an 'any' type`. Annotate it, or declare it with the stage type first, as above. A stage that calls other Resources through `ctx` needs your model as the type argument (`AvAfterHook<Model>`); see [Typing ctx calls](/docs/pipeline-context#typing-ctx-calls). Inline in `createFramework({ ... })` and in a [`defineResource`](/docs/configuration#one-resource-per-file-defineresource) block, stages are typed from where they are written.
+An inline arrow in a configuration that is an `as const` object (the scaffold's `aventaraConfig`) has no contextual type, and TypeScript reports `Parameter 'ctx' implicitly has an 'any' type`. Annotate it, or declare it with the stage type first, as above. A stage that calls other Resources through `ctx` needs your model as the type argument (`AvAfterHook<Model>`); see [Typing ctx calls](/docs/pipeline-context#typing-ctx-calls). Inline in `createFramework({ ... })` and in a [`defineResource`](/docs/configuration#one-resource-per-file-defineresource) block, stages are typed from where they are written.
 
 ## See also
 
