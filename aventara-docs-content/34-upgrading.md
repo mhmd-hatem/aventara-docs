@@ -1,13 +1,42 @@
 ---
 title: Upgrading
-description: Move from 1.0.0-rc.8 to 1.0.0-rc.11 (Node and Prisma floors, stricter policy checks, grouped client calls, regenerate clients), from 1.0.0-rc.4 to 1.0.0-rc.8 (rebuild after a discovery change, policy additions, request type names), from 1.0.0-rc.3 to 1.0.0-rc.4 (build-time Contracts, the policy seam), from 1.0.0-rc.2 to 1.0.0-rc.3, from 1.0.0-rc.1 to 1.0.0-rc.2, from 1.0.0-rc.0 to 1.0.0-rc.1 (the new configuration shape, Av names, the $ ctx members) and from earlier pilots step by step, and the general flow for upgrading Aventara packages.
+description: Move from 1.0.0-rc.11 to 1.0.0-rc.12 (lookup keys need filter, the scaffold's String ids), from 1.0.0-rc.8 to 1.0.0-rc.11 (Node and Prisma floors, stricter policy checks, grouped client calls, regenerate clients), from 1.0.0-rc.4 to 1.0.0-rc.8 (rebuild after a discovery change, policy additions, request type names), from 1.0.0-rc.3 to 1.0.0-rc.4 (build-time Contracts, the policy seam), from 1.0.0-rc.2 to 1.0.0-rc.3, from 1.0.0-rc.1 to 1.0.0-rc.2, from 1.0.0-rc.0 to 1.0.0-rc.1 (the new configuration shape, Av names, the $ ctx members) and from earlier pilots step by step, and the general flow for upgrading Aventara packages.
 order: 34
 section: guides
 ---
 
 # Upgrading
 
-Aventara `1.0.0-rc.11` is the ninth published release candidate (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were tagged but never published, and rc.9 and rc.10 sit between rc.8 and it), and the next release follows it; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.11` from `1.0.0-rc.8`, the move to `1.0.0-rc.8` from `1.0.0-rc.4`, the move to `1.0.0-rc.4` from `1.0.0-rc.3`, the move to `1.0.0-rc.3` from `1.0.0-rc.2`, to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
+Aventara `1.0.0-rc.12` is the tenth published release candidate (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were tagged but never published, and rc.9 and rc.10 sit between rc.8 and rc.11), and the next release follows it; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.12` from `1.0.0-rc.11`, the move to `1.0.0-rc.11` from `1.0.0-rc.8`, the move to `1.0.0-rc.8` from `1.0.0-rc.4`, the move to `1.0.0-rc.4` from `1.0.0-rc.3`, the move to `1.0.0-rc.3` from `1.0.0-rc.2`, to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
+
+## From 1.0.0-rc.11 to 1.0.0-rc.12
+
+Before 1.0 the API does not keep backward compatibility, so the breaking change is listed plainly in step 2. Most projects change a version number, regenerate and rebuild.
+
+### 1. Install the new versions
+
+```bash
+npm install --save-exact @aventara/core@1.0.0-rc.12 @aventara/nest@1.0.0-rc.12 @aventara/prisma7-adapter@1.0.0-rc.12 @aventara/build@1.0.0-rc.12
+# add @aventara/mcp@1.0.0-rc.12 and @aventara/testing@1.0.0-rc.12 to the command if you use them
+```
+
+Move the frontend's `@aventara/client` to the same version, and run `npx @aventara/cli@1.0.0-rc.12 skill` to refresh the agent skill. Then run `npm run aventara:prepare` on the server and `avclient generate` in each frontend.
+
+### 2. Breaking changes
+
+| Change | What to do |
+| --- | --- |
+| A unique field (`id` included) that a layer may not filter on is no longer a lookup key in that layer. That is a Pick that lists it without `"filter"`, a write-only field, or one with `filter` exempted. `find.unique`, `update.unique`, `upsert.unique`, `delete.unique` and a nested `$connect` or `$connectOrCreate` by it are refused (`V1007`), and the generated client no longer offers them | Give the field `"filter"` in that layer where callers look records up by it: `id: ["select", "filter"]`, not `id: ["select"]`. |
+| A layer that keeps a `.unique` operation but has no filterable identifier left fails at startup with `COMPILER_MISSING_IDENTIFIER` | Add `"filter"` to the identifier field, or exempt the `.unique` operations in that layer. |
+
+### 3. Scaffold changes
+
+These change only what `aventara new` and `aventara init` write. An existing project keeps its files.
+
+- The starter `User` model's id is `String @id @default(cuid())` instead of an `Int` autoincrement. A project scaffolded before keeps its schema.
+- Prisma, `@prisma/client` and the driver adapter are written at the adapter's range `^7.10.1`, so the first install takes the newest Prisma 7 and never Prisma 8.
+- `aventara init` adds `.env` to `.gitignore` whenever it writes to `.env`. If you ran `init` over an existing project before, check that your `.gitignore` lists `.env`.
+- `@aventara/nest` is built and tested against NestJS 12.3.2. Its peer range stays `^12.0.0`, so nothing has to change.
 
 ## From 1.0.0-rc.8 to 1.0.0-rc.11
 

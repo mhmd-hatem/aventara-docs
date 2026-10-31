@@ -7,7 +7,7 @@ section: about
 
 # Roadmap
 
-Aventara is a release candidate (`1.0.0-rc.11`). It works end to end today. Until 1.0 the public API can still change, breaking changes included; each change is listed in the Changelog with its upgrade steps. This page lists what we are aiming at, in the order we expect to get there. It has no dates.
+Aventara is a release candidate (`1.0.0-rc.12`). It works end to end today. Until 1.0 the public API can still change, breaking changes included; each change is listed in the Changelog with its upgrade steps. This page lists what we are aiming at, in the order we expect to get there. It has no dates.
 
 ## Today
 

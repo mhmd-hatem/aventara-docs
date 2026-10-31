@@ -130,7 +130,7 @@ export const tillAccess = {
 const framework = await createFramework({ api: "/api", adapter, access: tillAccess });
 ```
 
-Every stage reads the cashier as `ctx.$state.me`, typed by the `AvState` declaration.
+Every stage reads the cashier as `ctx.$state.me`, typed by the `AvState` declaration. A PIN has few digits, so `cashierByPin` must limit attempts: count failures per till (or per cashier) and lock out after a few, or anyone on the network can try every PIN.
 
 The host calls `state` once per request:
 
