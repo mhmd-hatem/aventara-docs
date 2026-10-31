@@ -14,7 +14,7 @@ Access goes into an Aventara app. Create one with the Aventara CLI, then add Acc
 | | Supported |
 |---|---|
 | Node.js | `^22.23.4 \|\| >=24.22.1` |
-| Aventara framework | `1.0.0-rc.11`: tested on it. `1.0.0-rc.10` or later works. |
+| Aventara framework | `1.0.0-rc.12`: tested on it. `1.0.0-rc.10` or later works. |
 | Better Auth | `~1.7.12`: 1.7.12 or any later 1.7 patch. Tested on 1.7.14. |
 | Package type | ESM (`"type": "module"`) |
 

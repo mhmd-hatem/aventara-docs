@@ -280,7 +280,7 @@ lock and revoking work as they do in a browser. The sample above shows the serve
 ## Tables and codes
 
 The kiosk's tables are `accessKioskDevice`, `accessKioskPin`, `accessKioskLockout` and `accessKioskRetiredSecret`, and
-Better Auth's `session` gains `kioskDeviceId`, `kioskSeenAt` and `kioskPin`. `npx auth@~1.7.12 generate` writes them.
+Better Auth's `session` gains `kioskDeviceId`, `kioskSeenAt` and `kioskPin`. `npx auth@~1.7.12 generate --yes` writes them.
 They stay closed to every request, and a credential's or a PIN's hash is a sealed column.
 
 | Code | Status | When |

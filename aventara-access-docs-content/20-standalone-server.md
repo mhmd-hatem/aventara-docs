@@ -35,10 +35,9 @@ build step, and serves it until `SIGTERM` or `SIGINT`, on `127.0.0.1` unless `--
 - Without `--migrate`, a database Better Auth migrates itself (a `pg` Pool, a MySQL pool, SQLite) is checked before the
   server listens. One that lacks a table, column or index the options need stops it with exit `1` and the list of what
   is missing.
-- A database behind an ORM's adapter (Prisma, Drizzle) is the ORM's to migrate: run `npx auth@~1.7.12 generate`, then the
+- A database behind an ORM's adapter (Prisma, Drizzle) is the ORM's to migrate: run `npx auth@~1.7.12 generate --yes`, then the
   ORM's migration. It is served as it is, and `--migrate` refuses it with exit `2`.
-- Better Auth's rate limit is on, whatever `NODE_ENV` says, unless the configuration sets
-  `betterAuth.rateLimit.enabled`.
+- Better Auth limits rates when `NODE_ENV=production`; run `avaccess serve` with it set.
 - `GET /health` answers `200 {"status":"ok"}`.
 - `SIGTERM` drains the server and ends it with exit `0`.
 
@@ -50,6 +49,7 @@ imports (here `pg`), with its lockfile:
 ```dockerfile
 FROM node:24-slim
 WORKDIR /srv/access
+ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts
 COPY access.config.ts ./

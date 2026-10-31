@@ -141,7 +141,7 @@ Access closes Better Auth's tables to every request until you open them ([Better
 
 ## 6. Mount the routes and wire the engine
 
-Mount Better Auth's handler before Nest's body parser:
+Mount Better Auth's handler after the scaffold's CORS block and before Nest's body parser, with each request's client address set first:
 
 ```ts
 // src/main.ts
@@ -150,6 +150,7 @@ import { NestFactory } from "@nestjs/core";
 import { toNodeHandler } from "better-auth/node";
 import { access } from "./access.js";
 import { AppModule } from "./app.module.js";
+import { clientAddressed } from "./client-address.js";
 
 async function bootstrap() {
 	const app = await NestFactory.create(AppModule);
@@ -165,17 +166,88 @@ async function bootstrap() {
 	// { rateLimit } from 'express-rate-limit', pick your limits and uncomment below.
 	// See: https://aventara.razor34.dev/framework/docs/limits-and-safety#rate-limiting
 	// app.use(rateLimit({ windowMs: 60_000, limit: 100 }));
+	// Access's routes, under /api/auth: after CORS, before Nest's body parser
+	// (listen() adds it), each request with its client's address.
 	const auth = toNodeHandler(access);
 	app.use(
-		(request: IncomingMessage, response: ServerResponse, next: () => void) =>
-			request.url?.startsWith("/api/auth/") ? auth(request, response) : next(),
+		(request: IncomingMessage, response: ServerResponse, next: () => void) => {
+			if (!request.url?.startsWith("/api/auth/")) {
+				return next();
+			}
+			clientAddressed(request);
+			return auth(request, response);
+		},
 	);
 	await app.listen(process.env.PORT ?? 3000);
 }
 await bootstrap();
 ```
 
-This is the whole `main.ts`: the CORS and rate-limit lines the scaffold wrote come first, then the mount, so copy the block as it is. Now hand `access` to the framework in `src/app.module.ts`: import it, and add it to the `config` beside `adapter`:
+This is the whole `main.ts`: the CORS and rate-limit lines the scaffold wrote come first, then the mount, so copy the block as it is. `clientAddressed` gives each request its client's address, where Better Auth's rate limit reads it. Without it, in production every client shares one bucket per route (three wrong sign-ins lock everyone out), and a client's own `X-Forwarded-For` buys it a fresh one. Create it beside `main.ts`:
+
+```ts
+// src/client-address.ts
+import type { IncomingMessage } from "node:http";
+import { BlockList, isIP } from "node:net";
+import type { BetterAuthOptions } from "better-auth";
+import { access } from "./access.js";
+
+const options: BetterAuthOptions = access.options;
+const ip = options.advanced?.ipAddress;
+/** Where Better Auth reads the client's address: its first `ipAddressHeaders`, `x-forwarded-for` by default. */
+const headers = (ip?.ipAddressHeaders ?? ["x-forwarded-for"]).map((header) =>
+	header.toLowerCase(),
+);
+/** Better Auth's `trustedProxies`: the proxies whose forwarded headers are kept. */
+const proxies = new BlockList();
+for (const entry of ip?.trustedProxies ?? []) {
+	const [address = "", prefix] = entry.split("/");
+	const family = isIP(address);
+	const type = family === 4 ? "ipv4" : "ipv6";
+	if (family !== 0 && prefix === undefined) {
+		proxies.addAddress(address, type);
+	} else if (family !== 0 && /^\d+$/.test(prefix ?? "")) {
+		proxies.addSubnet(address, Number(prefix), type);
+	}
+}
+
+/**
+ * Gives a request its client's address, as `serve` does: the socket's, in the header
+ * Better Auth reads. A client's own `X-Forwarded-For` (and `-Proto`, `-Host`) is
+ * dropped first, unless the socket is a proxy `trustedProxies` lists: then the
+ * proxy's headers are kept, and Better Auth reads the client from them.
+ */
+export function clientAddressed(request: IncomingMessage): void {
+	if (ip?.disableIpTracking === true) {
+		return;
+	}
+	// An IPv4 client on a dual-stack socket reads as ::ffff:203.0.113.7.
+	const socket = request.socket.remoteAddress?.replace(
+		/^::ffff:(?=\d{1,3}(?:\.\d{1,3}){3}$)/i,
+		"",
+	);
+	const family = socket === undefined ? 0 : isIP(socket);
+	const proxy =
+		socket !== undefined &&
+		family !== 0 &&
+		proxies.check(socket, family === 4 ? "ipv4" : "ipv6");
+	if (!proxy) {
+		for (const header of headers) {
+			delete request.headers[header];
+		}
+		delete request.headers["x-forwarded-proto"];
+		delete request.headers["x-forwarded-host"];
+	}
+	const first = headers[0];
+	if (socket !== undefined && first !== undefined && !(first in request.headers)) {
+		request.headers[first] = socket;
+	}
+}
+```
+
+Behind a proxy, list the proxy in `betterAuth.advanced.ipAddress.trustedProxies` ([Hosts](/docs/hosts#nestjs)).
+
+Now hand `access` to the framework in `src/app.module.ts`: import it, and add it to the `config` beside `adapter`:
 
 ```ts
 import { access } from './access.js';
@@ -196,6 +268,8 @@ Leave `policy` out of `aventaraConfig`. Access brings the engine and each reques
 ```sh
 npm run start:dev
 ```
+
+In production, run with `NODE_ENV=production`: Better Auth's rate limit, and Access's limit on `access.client`'s calls, are on only under it, and the scaffold's `start:prod` does not set it.
 
 Sign up, sign in, and trade the session for a token. Send an `Origin` header that matches your base URL:
 

@@ -89,7 +89,8 @@ Each call is counted in two buckets, and refused when either is full:
   passed. A success clears the count.
 
 A refused call throws Better Auth's own `429` (`TOO_MANY_REQUESTS`, with `X-Retry-After`), and the audit log records a
-`sign-in-failed` with reason `rate-limited`. Behind a proxy, set `trustedProxies`, or calls whose address cannot be read
+`sign-in-failed` with reason `rate-limited`. Give the server the client's address, as the
+[NestJS mount](/docs/hosts#nestjs) does, and behind a proxy set `trustedProxies`, or calls whose address cannot be read
 share one bucket per route.
 
 ## Over MCP

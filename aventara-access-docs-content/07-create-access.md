@@ -50,6 +50,8 @@ export const access = createAccess({
 			...(claims.banned === undefined ? {} : { banned: claims.banned }),
 		},
 	}),
+	// The rules read User, one of Better Auth's tables: open it explicitly.
+	resources: { users: true },
 });
 
 export default access;
@@ -147,7 +149,7 @@ that defines one of `jwt()`'s endpoints. Every other Better Auth plugin passes t
 |---|---|
 | `access.handler` | Better Auth's request handler, `(Request) => Promise<Response>`, with Access's routes |
 | `access.api` | Better Auth's server API, as `auth.api` |
-| `access.options` | The options Better Auth runs with: your block plus the installed plugins |
+| `access.options` | The options Better Auth runs with: your block plus the installed plugins. Your block's plain data (its plain objects and arrays) is a frozen copy taken when `createAccess` ran, so changing it in your block afterwards does not reach Better Auth. Plugin objects, functions and class instances (the adapter, a database client or pool) are kept as you gave them and not frozen |
 | `access.$Infer` | Types only: `Session`, `Me` (the principal) and `Claims` |
 | `access.policy` | The policy engine. It is built on first read. |
 | `access.state({ headers })` | The request's state, `{ readonly me }`. `me` is a copy of the plain data `principal` returned (its plain objects and arrays, all the way down), frozen, and the state holds it read-only, so no code that runs during the request can replace or change the principal the policy decides for. A class instance, `Map`, `Set`, `Date`, typed array or getter is kept as you returned it and is not frozen: return plain data for the fields the rules read. Your own objects are never frozen. Under an OAuth access token, return a plain object: a `Map` or `Set` principal is not supported there, and a class instance loses its `#private` fields |
@@ -183,7 +185,7 @@ origins your app is served from.
 ## Better Auth's tables
 
 Better Auth's tables go into your schema the way Better Auth's docs say. With Prisma,
-`npx auth@~1.7.12 generate --config src/access.ts` writes Better Auth's models (and Access's own tables, when `audit` or
+`npx auth@~1.7.12 generate --config src/access.ts --yes` writes Better Auth's models (and Access's own tables, when `audit` or
 `registry` is on) into `prisma/schema.prisma`. It reads the module's default export. Then migrate with Prisma and run
 `aventara:prepare` again. Its first run may print a Babel note that an identifier such as `AvComputedFields` "is not
 declared in Babel's scope tracker": a type the discovery artifact re-exports, and harmless.

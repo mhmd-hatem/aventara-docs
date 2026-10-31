@@ -155,8 +155,8 @@ app decided:
 
 - `requireEmailVerificationOnInvitation` must be `true`. Better Auth's advisory
   [GHSA-fmh4-wcc4-5jm3](https://github.com/better-auth/better-auth/security/advisories/GHSA-fmh4-wcc4-5jm3) lets a
-  user whose email is not verified accept an invitation sent to that email without it. Better Auth has not fixed it
-  as of 1.7.14.
+  user whose email is not verified accept an invitation sent to that email without it. Better Auth has no fixed
+  version, and `npm audit` reports 1.7.14 as clean because the advisory database's entry is out of date.
 - `allowUserToCreateOrganization` must be `false`, or a function that decides who may.
 - With `dynamicAccessControl` on, `roles` may map only the plugin's static roles.
 
@@ -219,7 +219,31 @@ const rules = definePolicies(model, { namespace: "campaign" }).grants(({ grant }
 export const auth = betterAuth({
 	database: new Pool({ connectionString: process.env.DATABASE_URL }),
 	emailAndPassword: { enabled: true },
-	plugins: [aventaraAccess({ policies: { rules, claims: {} }, registry: { enabled: true } })],
+	plugins: [
+		aventaraAccess({
+			policies: { rules, claims: {} },
+			registry: { enabled: true },
+			// Off Better Auth's Prisma adapter, name the Resource of each of its tables, or
+			// null for one the rules' schema does not have: here, none of them.
+			resources: {
+				authTables: {
+					user: null,
+					session: null,
+					account: null,
+					verification: null,
+					jwks: null,
+					accessNamespace: null,
+					accessKey: null,
+					accessPolicyRevision: null,
+					accessGuardrailRevision: null,
+					accessHead: null,
+					accessPushLog: null,
+					accessResourceOwner: null,
+					accessBeacon: null,
+				},
+			},
+		}),
+	],
 });
 
 /** The framework's `access` option, and the registry's operator API as `access.registry`. */
@@ -239,8 +263,9 @@ export const access = accessOf(auth);
   and `hooks` are not checked. One whose endpoint can match a registry route, by name, path or parameters
   (`/:a/v1/key`), is refused. Install only plugins you trust with the keys.
 - Better Auth's rate limit reads the client's address from `X-Forwarded-For` unless `advanced.ipAddress.trustedProxies`
-  names your proxy, so a caller that sends its own header is counted afresh each time. Behind a proxy, set
-  `trustedProxies`.
+  names your proxy, so a caller that sends its own header is counted afresh each time. Set the client's address on
+  your mount, as `clientAddressed` does on the [NestJS mount](/docs/hosts#nestjs), and behind a proxy set
+  `trustedProxies`. Run production with `NODE_ENV=production`: Better Auth limits rates only under it.
 - The hub's tokens are one org token: one trust domain. A token any service sees works at every service that checks
   the hub's key set until it expires. Where services must not trust each other's callers, use
   [one audience per service](/docs/agents-mcp#one-audience-per-service).
