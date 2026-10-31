@@ -13,6 +13,15 @@ Run `aventara init` inside an existing NestJS 12 project:
 npx @aventara/cli@rc init
 ```
 
+To start a NestJS 12 project for it, use the Nest CLI version `aventara new` pins:
+
+```bash
+npx -y @nestjs/cli@12.0.8 new my-api        # npm
+pnpm dlx @nestjs/cli@12.0.8 new my-api      # pnpm
+```
+
+`aventara new` runs this for you and then `init`, so use it instead unless you want to set up the Nest project yourself first.
+
 It refuses, in one sentence and before writing anything, when there is no `package.json`, the project is on another Nest major, TypeScript 7 is installed (the server side needs TypeScript below 7, and `init` says so; a TypeScript 7 *frontend* is fine), only a yarn lockfile exists, or the project is already initialized. ESM and CommonJS projects are both supported.
 
 ## No ORM yet

@@ -52,7 +52,7 @@ A normal NestJS 12 project, plus:
 | `prisma/schema.prisma` | Your schema, with a starter `User` model. Yours to edit. |
 | `prisma.config.ts` | Prisma configuration; loads `.env` for you. |
 | `src/prisma.service.ts` | `PrismaService` (the Prisma client with its driver adapter) and `PrismaModule`. |
-| `src/aventara.config.ts` | Your Aventara configuration, a plain value with no adapter in it: the `api` mount path `/api` and `exposed: true`, plus the exemptions, pipelines and per-Resource settings you add. Yours to edit. |
+| `src/aventara.config.ts` | Your Aventara configuration, a plain value with no adapter in it: the `api` mount path `/api`, the `resources` tree and a `diagnostics` logger, plus the exemptions, pipelines and per-Resource settings you add. Yours to edit. |
 | `src/aventara.adapter.ts` | The adapter's description: `describePrismaAdapter({ discovery, provider, driver })`. `app.module.ts` builds the adapter from it and the Prisma client. |
 | `src/app.module.ts` | Edited once to import `PrismaModule` and `AventaraModule.forRootAsync(...)`. |
 | `src/main.ts` | Edited once to enable CORS for the origins in `CORS_ORIGINS`, and to hold a commented-out rate limiter (below). |
@@ -75,7 +75,7 @@ datasource db {
 }
 
 model User {
-  id    Int     @id @default(autoincrement())
+  id    String  @id @default(cuid())
   email String  @unique
   name  String?
 }
@@ -104,7 +104,6 @@ export const aventaraConfig = {
   // Everything the adapter offers is exposed. List what to hide under
   // `exemptions`, or set `exposed: false` and list what to expose instead.
   // See: https://aventara.razor34.dev/framework/docs/exposure
-  exposed: true,
   // Every Resource you define with defineResource() in its own file under
   // src/resources/ (named <name>.resource.ts), gathered by aventara-build in
   // the aventara:prepare script: a new Resource file needs no line here. When
@@ -303,7 +302,7 @@ const ada = await avClient.User.create.one({
   data: { email: "ada@example.com", name: "Ada" },
   select: ["id", "email"],
 });
-// { id: 1, email: "ada@example.com" }
+// { id: "cmhb3k7q00000a8f2x9d1e4tz", email: "ada@example.com" }   (a cuid)
 
 const users = await avClient.User.find.many({
   where: { email: { contains: "example.com" } },
@@ -328,7 +327,7 @@ enum Role {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
+  id           String   @id @default(cuid())
   email        String   @unique
   name         String?
   role         Role     @default(USER)
@@ -337,12 +336,12 @@ model User {
 }
 
 model Post {
-  id        Int     @id @default(autoincrement())
+  id        String  @id @default(cuid())
   title     String
   views     Int     @default(0)
   published Boolean @default(false)
   author    User    @relation(fields: [authorId], references: [id])
-  authorId  Int
+  authorId  String
 }
 ```
 
@@ -377,7 +376,7 @@ const grace = await avClient.User.create.one({
   data: { email: "grace@example.com", name: "Grace", passwordHash: "hash-from-your-auth-code" },
   select: ["id", "email", "role"],
 });
-// { id: 2, email: "grace@example.com", role: "USER" }   (Ada from step 4 is id 1)
+// { id: "cmhb3k9w20001a8f2c6p0v7qm", email: "grace@example.com", role: "USER" }
 
 await avClient.Post.create.one({
   data: { title: "Hello", published: true, author: { $connect: { id: grace.id } } },
@@ -389,14 +388,14 @@ const posts = await avClient.Post.find.many({
   orderBy: { id: "desc" },
   limit: 10,
 });
-// [{ id: 1, title: "Hello", author: { id: 2, name: "Grace" } }]
+// [{ id: "cmhb3kb1x0002a8f2j5n8r0wy", title: "Hello", author: { id: "cmhb3k9w20001a8f2c6p0v7qm", name: "Grace" } }]
 
 const users = await avClient.User.find.many({
   select: ["id", { posts: { select: ["id", "title", "$count"] } }],
 });
 // [
-//   { id: 1, posts: { data: [], count: 0 } },
-//   { id: 2, posts: { data: [{ id: 1, title: "Hello" }], count: 1 } },
+//   { id: "cmhb3k7q00000a8f2x9d1e4tz", posts: { data: [], count: 0 } },
+//   { id: "cmhb3k9w20001a8f2c6p0v7qm", posts: { data: [{ id: "cmhb3kb1x0002a8f2j5n8r0wy", title: "Hello" }], count: 1 } },
 // ]
 
 await avClient.Post.update.many({ where: { published: true }, data: { views: { $increment: 1 } } });

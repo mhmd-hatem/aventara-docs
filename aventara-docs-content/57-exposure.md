@@ -14,16 +14,37 @@ Every layer of the configuration (the root, `application` and `client`) says wha
 
 So under `exposed: true` the exemptions are what you hide (an Omit), and under `exposed: false` they are the only things you expose (a Pick). Exposure decides which Resources, operations, fields, field capabilities and single operators or directives end up in each [contract](/docs/contract-layers). It only takes away from what the adapter offers, and never adds an operation or a capability the adapter lacks.
 
-A project made by `aventara new` or `aventara init` starts with `exposed: true` and no exemptions, so everything Prisma offers is exposed:
+A project made by `aventara new` or `aventara init` sets no `exposed` and no exemptions. `exposed` defaults to `true`, so everything Prisma offers is exposed:
 
 ```ts
 // src/aventara.config.ts
+import type { AvDiagnostic } from '@aventara/core';
+import { Logger } from '@nestjs/common';
+import { aventaraResources } from './generated/aventara/resources.generated.js';
+
+const logger = new Logger('Aventara');
+
 export const aventaraConfig = {
   api: '/api',
   // Everything the adapter offers is exposed. List what to hide under
   // `exemptions`, or set `exposed: false` and list what to expose instead.
   // See: https://aventara.razor34.dev/framework/docs/exposure
-  exposed: true,
+  // Every Resource you define with defineResource() in its own file under
+  // src/resources/ (named <name>.resource.ts), gathered by aventara-build in
+  // the aventara:prepare script: a new Resource file needs no line here. When
+  // a Resource gives a layer a block, that layer takes its tree once, e.g.
+  //   client: { resources: aventaraResources.client },
+  resources: aventaraResources.root,
+  // When something fails inside the server, the caller gets a plain 500 and
+  // Aventara logs one line naming the request. This logs the error itself,
+  // with its stack, through Nest's logger.
+  diagnostics: (diagnostic: AvDiagnostic) => {
+    const { error } = diagnostic;
+    logger.error(
+      `${diagnostic.code} (request ${diagnostic.requestId}): raw error`,
+      (error instanceof Error && error.stack) || String(error),
+    );
+  },
 } as const;
 ```
 

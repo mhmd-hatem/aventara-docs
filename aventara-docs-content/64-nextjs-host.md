@@ -275,9 +275,10 @@ A Server Action, with a transaction:
 ```ts
 // src/app/posts/actions.ts
 "use server";
+import type { Post } from "@/aventara/client";
 import { avClient } from "@/aventara/server";
 
-export async function publish(id: number) {
+export async function publish(id: Post["id"]) {
   const publish = avClient.tx.Post.update.unique({
     where: { id },
     data: { published: true, publishedAt: new Date() },
@@ -297,9 +298,9 @@ Transactions keep their layer. `avClient.tx` builds client-layer handles and `av
 // src/app/posts/new-post.tsx
 "use client";
 import { useState } from "react";
-import { avClient } from "@/aventara/client";
+import { avClient, type User } from "@/aventara/client";
 
-export function NewPost({ authorId }: { readonly authorId: number }) {
+export function NewPost({ authorId }: { readonly authorId: User["id"] }) {
   const [title, setTitle] = useState("");
   return (
     <form
