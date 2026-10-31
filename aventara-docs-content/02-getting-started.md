@@ -52,7 +52,7 @@ A normal NestJS 12 project, plus:
 | `prisma/schema.prisma` | Your schema, with a starter `User` model. Yours to edit. |
 | `prisma.config.ts` | Prisma configuration; loads `.env` for you. |
 | `src/prisma.service.ts` | `PrismaService` (the Prisma client with its driver adapter) and `PrismaModule`. |
-| `src/aventara.config.ts` | Your Aventara configuration, a plain value with no adapter in it: the `api` mount path `/api` and `exposed: true`, plus the exemptions, pipelines and per-Resource settings you add. Yours to edit. |
+| `src/aventara.config.ts` | Your Aventara configuration, a plain value with no adapter in it: the `api` mount path `/api`, the `resources` tree and a `diagnostics` logger, plus the exemptions, pipelines and per-Resource settings you add. Yours to edit. |
 | `src/aventara.adapter.ts` | The adapter's description: `describePrismaAdapter({ discovery, provider, driver })`. `app.module.ts` builds the adapter from it and the Prisma client. |
 | `src/app.module.ts` | Edited once to import `PrismaModule` and `AventaraModule.forRootAsync(...)`. |
 | `src/main.ts` | Edited once to enable CORS for the origins in `CORS_ORIGINS`, and to hold a commented-out rate limiter (below). |
@@ -104,7 +104,6 @@ export const aventaraConfig = {
   // Everything the adapter offers is exposed. List what to hide under
   // `exemptions`, or set `exposed: false` and list what to expose instead.
   // See: https://aventara.razor34.dev/framework/docs/exposure
-  exposed: true,
   // Every Resource you define with defineResource() in its own file under
   // src/resources/ (named <name>.resource.ts), gathered by aventara-build in
   // the aventara:prepare script: a new Resource file needs no line here. When

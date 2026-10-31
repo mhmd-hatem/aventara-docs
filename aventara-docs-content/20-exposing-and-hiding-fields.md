@@ -13,7 +13,7 @@ The examples use this schema (the `User` model of a project created with `aventa
 
 ```prisma
 model User {
-  id           Int      @id @default(autoincrement())
+  id           String   @id @default(cuid())
   email        String   @unique
   name         String?
   passwordHash String   @default("")
@@ -108,7 +108,7 @@ It is the same answer as for a field that never existed: a remote caller cannot 
 
 ```ts
 const users = await this.framework.application.User.find.many({ select: ["id", "email", "settings"] });
-// [{ id: 1, email: "ada@example.com", settings: null }]
+// [{ id: "cmhb3k7q00000a8f2x9d1e4tz", email: "ada@example.com", settings: null }]
 ```
 
 Through `framework.client` (the same rules as a remote caller) the same call does not compile: `Type '"settings"' is not assignable to type 'AvProjectionEntry<...>'`. See [Server-side usage](/docs/server-side-usage).

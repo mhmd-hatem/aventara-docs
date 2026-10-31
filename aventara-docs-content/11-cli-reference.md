@@ -9,7 +9,7 @@ section: reference
 
 Two commands: `aventara` scaffolds the server, on NestJS or Next.js; `avclient` sets up a separate frontend and generates its typed client. Both are run once through `npx` (or installed globally); neither is a runtime dependency of your application.
 
-The examples use the `@rc` tag, which points to the newest release candidate (`1.0.0-rc.11`).
+The examples use the `@rc` tag, which points to the newest release candidate (`1.0.0-rc.12`).
 
 ```bash
 npx @aventara/cli@rc <command>        # or: npm i -g @aventara/cli@rc

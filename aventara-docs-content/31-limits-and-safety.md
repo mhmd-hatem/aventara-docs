@@ -190,7 +190,7 @@ On Fastify, the equivalent is `@fastify/rate-limit`, registered on the Fastify i
 
 The limits and the validation layer are only a minimum. Beyond them:
 
-- Authenticate. Nothing is public except what your guards allow. See [Authentication and guards](/docs/authentication-and-guards).
+- Authenticate and narrow exposure. By default everything the adapter offers is exposed and no guard runs, so with no guard anyone who can reach the server can call every exposed operation, bulk updates and deletes (`update.many`, `update.count`, `delete.count`) included. Before you serve untrusted callers, add a guard ([Authentication and guards](/docs/authentication-and-guards)) and hide what they should not reach ([Exposure](/docs/exposure)).
 - Remove what callers should not have. Hide fields, make fields write-only, switch off operations: [Exposure](/docs/exposure), [Exposing and hiding fields](/docs/exposing-and-hiding-fields).
 - Tighten the client layer. Defaults suit a trusted frontend. For a public API, lower `maxListLimit` and `maxNestingDepth` under `client`.
 - Rate-limit, and put a proxy in front. Add a [rate limiter](#rate-limiting). TLS and request timeouts belong to your platform; Aventara's `maxRequestBytes` complements, but does not replace, a proxy's body limit.
