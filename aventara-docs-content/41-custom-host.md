@@ -7,9 +7,11 @@ section: hosting
 
 # Custom host
 
-NestJS is one host. `@aventara/core/protocol` is the same HTTP protocol as passive data and pure functions: it mounts nothing and imports no HTTP library, so any server can host a framework by translating requests into the protocol's request shape and responses back out. The Nest host works this way.
+NestJS and Next.js are hosts. `@aventara/core/protocol` is the same HTTP protocol as passive data and pure functions: it mounts nothing and imports no HTTP library, so any server can host a framework by translating requests into the protocol's request shape and responses back out. The Nest host works this way.
 
-You build the framework with `createFramework(config)` (the same `aventaraConfig` you use with Nest) and bind it once.
+You build the framework with `createFramework(config)` (the same `aventaraConfig` you use with Nest, plus the adapter) and bind it once.
+
+A framework you built this way can also be handed to a ready-made host instead of being bound by hand: `AventaraModule.forRoot({ framework })` in NestJS, and `Aventara({ framework })` in Next.js, which serves it from one catch-all route file and also gives you `avClient` and `avApp` on that same framework. Neither builds it again. See [Next.js host](/docs/nextjs-host#a-framework-you-built).
 
 ```ts
 import { createFramework } from "@aventara/core";
@@ -23,11 +25,13 @@ const protocol = AvProtocol.bind(framework);
 
 | Member | What it does |
 |---|---|
-| `protocol.surface()` | The routes to mount: `{ kind: "operation" \| "contract" \| "transactions", method, path }` with `path` relative to the `api` mount path (`/_contract`, `/_resources/User/find/many`, `/_transactions`). Only advertised operations appear; `transactions` only when interactive. |
-| `protocol.handleOperation(request)` | Decode, execute and encode one operation. Resolves to a response; never rejects. |
+| `protocol.surface()` | The routes to mount: `{ kind: "operation" \| "contract" \| "transactions" \| "all", method, path }` with `path` relative to the `api` mount path (`/_contract`, `/_resources/User/find/many`, `/_transactions`). Only advertised operations appear; `transactions` only when transactions are interactive; `all` (`POST /_all`) whenever at least one operation is advertised. A read with a [`cache` stage](/docs/caching-reads) has a second `operation` entry, `method: "GET"`, at the same path, right after its `POST`. |
+| `protocol.handleOperation(request)` | Decode, execute and encode one operation, a cached read's `GET` included. Resolves to a response; never rejects. |
 | `protocol.handleTransaction(request)` | The same for `/_transactions`. |
-| `protocol.encodeContract(request)` | The `GET /_contract` answer: `ETag`, `Cache-Control: no-cache`, and `304` handling. Synchronous. |
+| `protocol.handleAll(request, { signal })` | The same for `/_all`. Resolves to `{ status, headers, body }`; `body` is a string, or, when the caller sent `Accept: application/x-ndjson`, an async iterable of lines to write as each operation settles. Abort `signal` when the client leaves. |
+| `protocol.encodeContract(request)` | The `GET /_contract` answer: `ETag`, `Cache-Control: no-cache`, `X-Content-Type-Options: nosniff`, and `304` handling. Synchronous. |
 | `protocol.answerAbsent(request)` | The protocol's answer for any other path in its `_` namespace (404, 405 with `Allow`, 400), or `undefined` for a path outside it, which is yours to answer. |
+| `protocol.decodeOperation(request)` / `protocol.decodeTransaction(request)` | Decode a `POST` without executing, for a host that runs its own steps in between (a `GET` is `405` here: send it to `handleOperation`). Resolves to `{ ok: true, request, requestId }` or `{ ok: false, response, requestId }`. A decoded `request` is an `AvClientOperationRequest` or `AvAgentOperationRequest` (`AvClientTransactionRequest` or `AvAgentTransactionRequest` for a transaction), the request `framework.execute` / `framework.executeTransaction` take. All are exported from `@aventara/core`. |
 | `protocol.failure(code, requestId?)` | A transport-level failure (`A2000`, `A2010`, `A2011`) as a complete response, for hosts that read the body themselves. |
 | `AvProtocol.headers`, `AvProtocol.httpStatus` | The header names and the code to status table, as data. |
 
@@ -37,13 +41,14 @@ A request is:
 {
   method: string;
   path: string;          // relative to the `api` mount path, e.g. "/_contract"
+  query?: string;        // the URL's query without its "?", as received; read only by a cached read's GET
   headers: Record<string, string | readonly string[] | undefined>;   // Node's req.headers fits
   body: { kind: "raw"; content: string | Uint8Array }   // the protocol checks size, type and JSON
       | { kind: "parsed"; value: unknown };             // your parser already did
 }
 ```
 
-A response is `{ status: number; headers: Record<string, string>; body: string }`, the body a JSON string (empty for `304`).
+A response is `{ status: number; headers: Record<string, string>; body: string }`, the body a JSON string (empty for `304`). `handleAll` may instead answer `body` as an async iterable of lines: write each one as it arrives (the examples below do).
 
 Use `kind: "raw"` unless you have a reason not to: the protocol then enforces `maxRequestBytes`, the content type, `Content-Encoding` and JSON syntax with its own codes.
 
@@ -54,12 +59,17 @@ Both examples below import this, built from the scaffold's own Prisma service an
 ```ts
 // src/custom/framework.ts
 import { createFramework } from "@aventara/core";
-import { PrismaService } from "../prisma.service.js";
+import { createPrismaAdapter } from "@aventara/prisma7-adapter";
+import adapter from "../aventara.adapter.js";
 import { aventaraConfig } from "../aventara.config.js";
+import { PrismaService } from "../prisma.service.js";
 
 export async function buildFramework() {
   const prisma = new PrismaService();
-  return createFramework(await aventaraConfig(prisma));
+  return createFramework({
+    ...aventaraConfig,
+    adapter: await createPrismaAdapter({ ...adapter, client: prisma }),
+  });
 }
 ```
 
@@ -78,6 +88,7 @@ const base = framework.api;             // "/api"
 const toRequest = (req: Request, path: string): AvProtocolRequest => ({
   method: req.method,
   path,                                        // relative to the `api` mount path
+  query: req.originalUrl.split("?")[1] ?? "",  // a cached read's arguments travel here
   headers: req.headers,
   body: { kind: "raw", content: Buffer.isBuffer(req.body) ? req.body : "" },
 });
@@ -97,6 +108,21 @@ for (const route of protocol.surface()) {
     app.get(url, (req, res) => send(res, protocol.encodeContract(toRequest(req, rel(req)))));
   } else if (route.kind === "transactions") {
     app.post(url, raw, async (req, res) => send(res, await protocol.handleTransaction(toRequest(req, rel(req)))));
+  } else if (route.kind === "all") {
+    // One JSON body; with `Accept: application/x-ndjson`, one line per operation as it settles.
+    app.post(url, raw, async (req, res) => {
+      const gone = new AbortController();          // the client left: operations not yet started never start
+      res.on("close", () => gone.abort());
+      const { status, headers, body } = await protocol.handleAll(toRequest(req, rel(req)), { signal: gone.signal });
+      res.status(status).set(headers);
+      if (typeof body === "string") return res.send(body);
+      res.flushHeaders();
+      for await (const line of body) res.write(line);
+      res.end();
+    });
+  } else if (route.method === "GET") {
+    // A read with a `cache` stage: also served as a GET, its arguments in the query.
+    app.get(url, async (req, res) => send(res, await protocol.handleOperation(toRequest(req, rel(req)))));
   } else {
     app.post(url, raw, async (req, res) => send(res, await protocol.handleOperation(toRequest(req, rel(req)))));
   }
@@ -148,6 +174,7 @@ const base = framework.api;
 const maxBytes = framework.contracts.client.limits.maxRequestBytes;
 
 // "POST /_resources/User/find/many" -> "operation", "GET /_contract" -> "contract", ...
+// A read with a `cache` stage also has "GET /_resources/<R>/find/<variant>" -> "operation".
 const routes = new Map<string, string>(protocol.surface().map((r) => [`${r.method} ${r.path}`, r.kind]));
 
 const send = (res: ServerResponse, r: AvProtocolResponse) => {
@@ -181,6 +208,7 @@ createServer(async (req, res) => {
   const request = {
     method: req.method ?? "GET",
     path,
+    query: url.search.slice(1),                   // a cached read's arguments travel here
     headers: req.headers,
     body: { kind: "raw", content: req.method === "POST" ? await readBody(req) : "" },
   } as const;
@@ -192,6 +220,17 @@ createServer(async (req, res) => {
       return send(res, await protocol.handleTransaction(request));
     case "operation":
       return send(res, await protocol.handleOperation(request));
+    case "all": {
+      // One JSON body; with `Accept: application/x-ndjson`, one line per operation as it settles.
+      const gone = new AbortController();          // the client left: operations not yet started never start
+      res.on("close", () => gone.abort());
+      const { status, headers, body } = await protocol.handleAll(request, { signal: gone.signal });
+      res.writeHead(status, headers);
+      if (typeof body === "string") return void res.end(body);
+      res.flushHeaders();
+      for await (const line of body) res.write(line);
+      return void res.end();
+    }
     default: {
       // Not a route we mount: the protocol answers its own "_" namespace; the rest is ours.
       const answer = protocol.answerAbsent(request);
@@ -202,16 +241,19 @@ createServer(async (req, res) => {
 }).listen(Number(process.env.PORT ?? 3000), () => console.log("listening"));
 ```
 
-Same behaviours as the Express host, verified with the generated client and `curl`: operations, transactions, the contract with `ETag`/`304`, `405` with `Allow`, and `413` for an oversized body.
+Same behaviours as the Express host, verified with the generated client and `curl`: operations, `/_all` (one JSON body or streamed lines), transactions, the contract with `ETag`/`304`, `405` with `Allow`, and `413` for an oversized body.
 
 ## Rules for a host
 
-- Mount from `surface()`, not from a hand-written list: only advertised operations are routable. Mount every entry ([below](#a-route-the-host-left-out)).
+- Mount from `surface()`, not from a hand-written list: only advertised operations are routable. Mount every entry, with its own method ([below](#a-route-the-host-left-out)): a cached read's `GET` too.
+- Pass the URL's query as `query`: a cached read's arguments travel in it.
+- Write a streamed `/_all` answer line by line, and don't let your server or a proxy buffer it. Abort the `signal` you gave `handleAll` when the client disconnects, so operations not yet started never start.
 - Never parse the body yourself unless you must; pass it raw.
 - Authentication is still an Aventara [pipeline](/docs/configuration#pipelines): pass all request headers through (`headers`), and a guard reads `ctx.$transport.headers`. A custom host has no Nest guards to bypass.
 - Your own routes may live beside the `api` mount path, but not under its `_` namespace.
 - CORS, compression, TLS and logging are your server's job.
-- The request id is the client's `Aventara-Request-Id` or one the protocol mints; the response always carries it.
+- The request id is the client's `Aventara-Request-Id` or one the protocol mints; the response carries it, except a public cached read's answer, which a CDN shares between callers.
+- Write the protocol's headers as they are. A cached read's `Cache-Control`, `Vary` and `ETag` are what make it cacheable; a server that adds its own `ETag` or answers `304` itself must keep the protocol's.
 
 ## A route the host left out
 
@@ -224,6 +266,10 @@ If your host mounts only some of `protocol.surface()`, a request for a route it 
 ```
 
 A route your ClientContract does not offer (an operation exposure removed, a transaction when transactions are off) is still answered `404` without a report. `@aventara/nest` mounts every route, so Nest applications never see this ([Request IDs and diagnostics](/docs/request-ids-and-diagnostics#what-else-reaches-it)).
+
+## Two copies of `@aventara/core`
+
+A bundler can load `@aventara/core` more than once in one process: Next.js gives each server layer its own copy, and a duplicate install, a monorepo, Vite SSR or a test runner's module isolation do the same. Copies of one major version recognize each other's values and errors: an `AvDecimal` made by one copy is an `AvDecimal` to every other (`instanceof` included, and the protocol encodes it), every `AvError` subclass passes `instanceof` across copies, and a framework's `diagnostics` sink receives reports raised through another copy. Copies of different majors do not. Loading one copy is still the simplest setup; in Next.js that is `serverExternalPackages` ([Next.js host](/docs/nextjs-host#serverexternalpackages)).
 
 ## Hold your host to the corpus
 

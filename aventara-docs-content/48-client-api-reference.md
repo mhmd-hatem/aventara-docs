@@ -86,6 +86,7 @@ Never edit them: output is deterministic (two runs over one contract write the s
 |---|---|---|
 | `default` | `AvClient` instance | The client of the deployment the tree was generated from: `import avClient from "./api/AvClient"` (spelled per project; see [Importing the client](/docs/client-setup#importing-the-client)). |
 | `AvClient` | class | `new AvClient(options?)`. |
+| `avLazy` | function | `avLazy(() => call)`: makes the call on its first `then`, `catch` or `finally`, once. See [Operation Sets](/docs/operation-sets#calls-run-when-you-make-them). |
 | `AvClientOptions` | type | See below. |
 | `AvCallOptions` | type | See below. |
 | `AvFetch` | type | The platform's `fetch` type. |
@@ -104,6 +105,7 @@ class AvClient {
   constructor(options?: AvClientOptions);
   readonly tx: /* deferred operations, only when transactions are interactive */;
   readonly transaction: /* only when transactions are interactive */;
+  all(calls: { [key: string]: Promise<unknown> }, options?: { settle?: boolean; signal?: AbortSignal }): Promise</* one value per key */>;
   // plus one property per Resource:
   readonly [Resource]: { [family]: { [variant]: (args?, options?: AvCallOptions) => Promise<Result> } };
 }
@@ -111,7 +113,11 @@ class AvClient {
 
 Only what the client contract advertises exists, in the type and at runtime: one property per Resource, one per family, one per advertised variant. A call is `avClient.<Resource>.<family>.<variant>(args, options?)`.
 
-A Resource whose name collides with a client member (`tx`, `transaction`, `then`, `constructor`, names of `Object.prototype`) is reached as `<name>Model`, with one warning at generation; its wire name is unchanged.
+`all(calls, options?)` awaits an object of calls (or `avLazy` thenables) together and resolves one typed value per key. Strict by default: the first failure rejects it and aborts its other calls. With `settle: true` each key is `{ status: "fulfilled", value }` or `{ status: "rejected", reason }`. Its `signal` aborts every call in it. See [Several operations in one round trip](/docs/operation-sets).
+
+A call runs when it is made, and the calls made in one tick go out as one `POST /_all`, except a call with `headers`, a `requestId` or `grouping: false`, a transaction, and a [cached read](/docs/caching-reads), which goes out as a `GET`.
+
+A Resource whose name collides with a client member (`all`, `tx`, `transaction`, `then`, `constructor`, names of `Object.prototype`) is reached as `<name>Model`, with one warning at generation; its wire name is unchanged.
 
 A call resolves to the data (record, list, count; `null` for a first-style miss, `A1001`). Every other outcome throws.
 
@@ -123,6 +129,7 @@ Values are application values: `bigint`, `Date`, `Uint8Array`, the client's `AvD
 |---|---|---|---|
 | `entrypoint` | `string` | the entrypoint the client was generated from | Another deployment that serves exactly the same client contract (tests, SSR). Re-binds nothing: the hash still decides whether it accepts you. |
 | `fetch` | `AvFetch` | the platform's `fetch`, read when a call is made | A custom fetch: authentication, tests, retries. |
+| `grouping` | `boolean` | `true` | `false` sends every call of this client on its own route, never in a `POST /_all`. |
 
 If no `fetch` is available a call throws `No fetch is available here; pass one: new AvClient({ fetch })`. Importing the client never fails.
 
@@ -139,7 +146,8 @@ The last argument of every call. Never sent in the body.
 
 | Option | Type | Meaning |
 |---|---|---|
-| `signal` | `AbortSignal` | Aborts the request; the call rejects with what `fetch` rejected with (`AbortError`). |
+| `signal` | `AbortSignal` | Aborts this call only, with the signal's reason (an `AbortError`). Before it is sent, it is never sent; in a sent `/_all`, the other calls go on. |
+| `grouping` | `boolean` | `false` sends this call on its own route, never in a `POST /_all`. |
 | `headers` | `Record<string, string>` | Extra request headers. The framework's own identity headers are refused: `The "Aventara-Contract-Hash" header is the framework's own; a request cannot set it` (a `TypeError`). |
 | `requestId` | `string` | Sent as `Aventara-Request-Id`; wins over the same header in `headers`. The empty string means absent. |
 

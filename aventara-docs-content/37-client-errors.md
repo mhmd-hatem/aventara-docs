@@ -33,7 +33,7 @@ All are exported from `AvClient.ts`. Every class except `AvTransportError` exten
 | `AvValidationError` | `A2004`, `A2007`, `A2009` | The request breaks a contract rule: unknown field, wrong type, field not selectable, bad `$ref`, limit exceeded, or a [field validator](/docs/field-validators), which the client checks before it sends. `cause.issues` lists the problems. |
 | `AvNotFoundError` | `A2003` | A `unique` operation matched nothing, or a `$connect` names a record that does not exist. |
 | `AvConflictError` | `A2008`, `A2013`, `A2014` | A uniqueness or reference constraint (`A2008`), a concurrent modification (`A2013`) or a stale selection (`A2014`). The last two may succeed if retried. |
-| `AvAuthError` | `A4000`, `A4001`, `A4002` | A pipeline guard refused: unauthenticated, forbidden, policy denied. |
+| `AvAuthError` | `A4000`, `A4001`, `A4002` | A pipeline guard or the configuration's [policy](/docs/policies) refused: unauthenticated, forbidden, policy denied. |
 | `AvContractMismatchError` | `A2005` | The generated client is stale. Regenerate. |
 | `AvProtocolError` | `A2000`, `A2001`, `A2002`, `A2006`, `A2010`, `A2011`, `A2012` | The request could not be understood or routed. Rare with a generated client. |
 | `AvInternalError` | `A3000` to `A3004` | An unexpected server or adapter failure. |

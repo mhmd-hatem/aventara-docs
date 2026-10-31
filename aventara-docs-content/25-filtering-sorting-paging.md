@@ -84,7 +84,7 @@ await avClient.Post.find.many({ where: { views: { contains: "x" } } });
 
 ### `undefined` in a filter
 
-A filter never leaves a value out. `undefined` anywhere in a `where` (at any depth, in `AND`/`OR`/`NOT`, a relation filter or an operator such as `equals`), in a unique selector or in a `cursor` is refused with `A2004` and `V1001` at that path, and so is a `where`, `cursor`, `limit` or `offset` key whose value is `undefined` (`V1007` for the `where` of a `.unique` variant, `V1009` for a `cursor`). The generated client refuses it before sending, so the request never reaches the server; server-side calls refuse it the same way. Without this, `where: { id: user?.id }` with no user would match every row. Leave the `where` key out when you mean every row.
+A filter never leaves a value out. `undefined` anywhere in a `where` (at any depth, in `AND`/`OR`/`NOT`, a relation filter or an operator such as `equals`), in a unique selector or in a `cursor` is refused with `A2004` and `V1001` at that path (a server-side call says `Value must not be undefined: it would be left out, and the request would reach more rows.`; the generated client says the same, `sent as JSON it would be left out`), and so is a `where`, `cursor`, `limit` or `offset` key whose value is `undefined` (`V1007` for the `where` of a `.unique` variant, `V1009` for a `cursor`). The generated client refuses it before sending, so the request never reaches the server; server-side calls refuse it the same way. Without this, `where: { id: user?.id }` with no user would match every row. Leave the `where` key out when you mean every row.
 
 ```ts
 await avClient.Post.update.many({ where: { id: undefined }, data: { views: 0 } });
@@ -170,13 +170,28 @@ await avClient.Post.find.many({
 // [ { id: 3, title: 'Compilers', views: 42 }, { id: 6, title: 'Enigma', views: 100 } ]
 ```
 
-Empty conditions keep the ORM's meaning, which can surprise: with Prisma 7, `NOT: {}` and `NOT: { AND: [] }` are no condition and match every row, `OR: []` matches nothing at the top level, and `{ AND: [{ OR: [] }] }` matches every row. So `delete.count({ where: { NOT: {} } })` deletes everything. Build `where` objects so an empty list or object never stands for "nothing".
+In a read, empty conditions keep the ORM's meaning, which can surprise: with Prisma 7, `NOT: {}` and `NOT: { AND: [] }` are no condition and match every row, `OR: []` matches nothing at the top level, and `{ AND: [{ OR: [] }] }` matches every row. Build `where` objects so an empty list or object never stands for "nothing".
+
+A write refuses them, because there an empty node would change more rows than you asked for. In the `where` of `update.many`, `update.count`, `update.first`, `delete.count` and `delete.first`, and of a to-many `$update` or `$delete`, an empty `NOT: {}`, `AND: {}` or `AND: []`, `OR: []`, or an `AND`/`OR` entry `{}`, at any depth, is refused with `A2004` and a `V1001` issue at that node, and nothing runs:
+
+```ts
+await avClient.Post.delete.count({ where: { NOT: {} } });
+// AvValidationError A2004, nothing deleted: { path: ["arguments","where","NOT"], code: "V1001" }
+```
+
+The issue's message is `A boolean node must hold a condition here: an empty one matches every row, and the write would reach more rows.`
+
+A `where` that is `{}` itself still means every row, and so does leaving `where` out.
 
 A `where` tree has a limit on its nodes (`maxBooleanNodes`, 50 by default): over it the call fails with `A2009` / `V1015`. See [Limits and safety](/docs/limits-and-safety).
 
+### Filter types
+
+`@aventara/core` exports the types of a `where`, so a helper can name them: `AvWhereInput` for a whole `where`, and `AvScalarFilterOperands` for one field's operators (`equals`, `contains`, `not`, ...), which a `not` holds again. [Server-side usage](/docs/server-side-usage#a-helper-that-takes-or-returns-arguments) shows how to use them in a helper.
+
 ### Filtering through relations
 
-A to-one relation takes a nested `where` directly, or `null` for "has none". An empty nested `where`, such as `{ author: {} }`, matches the rows that have one, and its `NOT` the rows that have none. A to-many relation takes `some`, `every` or `none`.
+A to-one relation takes a nested `where` directly, or `null` for "has none". An empty nested `where`, such as `{ author: {} }`, matches the rows that have one, and its `NOT` the rows that have none. That is a real condition, so a write takes it too. A to-many relation takes `some`, `every` or `none`.
 
 ```ts
 await avClient.Post.find.many({ where: { author: { name: { contains: "Grace" } } }, select: ["id", "title"] });

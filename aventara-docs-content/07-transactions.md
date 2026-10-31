@@ -65,7 +65,7 @@ try {
 await avClient.User.find.first({ where: { email: "rb@example.com" } });   // null: step 0 was rolled back
 ```
 
-When a step fails, the error carries that step's own code (for example `A2008` or `A2003`). `A3002` is reserved for transaction infrastructure failures (commit or rollback problems, or a transaction interceptor that broke the plan).
+When a step fails, the error carries that step's own code (for example `A2008` or `A2003`). `A3002` is reserved for transaction infrastructure failures (commit or rollback problems, a transaction that expired under a step, or a transaction interceptor that broke the plan).
 
 ### Cascade refusal
 
@@ -124,6 +124,7 @@ const [created, rows] = await framework.transaction([post, job]);
 - The SQL text is static: a table or column name cannot come from a value. A plain string call is refused (`A2004` / `V1001`).
 - A later step cannot `$ref` a SQL step's rows (`A2007` / `V1010`). The rows still appear in the result.
 - No guard, pipe, hook, interceptor or filter runs around a SQL step, and it touches no Resource's transaction stages. A SQL error is answered as the adapter classifies it: with Prisma 7, a uniqueness or reference violation is `A2008`, anything else `A3001`.
+- `framework.appTx.$sql` is typed `AvSqlStatementBuilder`, and the values it binds are `AvSqlStatementValue`, both exported from `@aventara/core`. A method that returns `framework.appTx.$sql` needs no return type annotation.
 - It exists only on `framework.appTx`. `clientTx` has none, the client contract carries nothing of it, and `/_transactions` cannot express it. An adapter that cannot run SQL statements refuses a plan with one (`A2002`); the Prisma 7 adapter runs them.
 
 A stage that needs SQL inside its own operation's transaction uses `ctx.$sql`, the same template run at once ([The pipeline context](/docs/pipeline-context#ctxsql)). Outside a transaction `ctx.$sql` is a plain statement: no transaction is opened around it, and `transactionsStyle: "none"` does not affect it.

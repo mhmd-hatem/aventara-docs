@@ -1,296 +1,255 @@
+import { ProductMark } from "@/components/product-mark";
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight,
   ArrowUpRight,
-  Braces,
   Check,
-  Code2,
   Database,
-  Layers3,
+  Braces,
   ShieldCheck,
+  Fingerprint,
+  Layers3,
 } from "lucide-react";
-import { LandingNav, SchemaShowcase } from "@/components/landing-interactions";
+import { ProductHeader } from "@/components/product-header";
+import { SiteFooter } from "@/components/site-footer";
+import { SchemaShowcase } from "@/components/landing-interactions";
 import { Architecture } from "@/components/architecture";
-import { Logo } from "@/components/logo";
-import { Button } from "@/components/ui/button";
+import { CopyButton } from "@/components/code-block";
+import { products } from "@/lib/products";
+import { productTheme } from "@/lib/product-theme";
 import "./landing.css";
-
 export const metadata: Metadata = {
-  title: { absolute: "Aventara — Coming soon" },
+  title: { absolute: "Aventara — Your schema is the API." },
   description:
-    "A connected stack. Room to create. Aventara is being rebuilt, with a new release and documentation coming soon.",
+    "From your Prisma schema to a typed API and frontend client. Add schema-typed, per-row and per-field authorization with Aventara Access.",
+  alternates: { canonical: "/" },
 };
-
 export default function Home() {
   return (
-    <div className="landing">
+    <div className="unified-home">
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <LandingNav />
+      <ProductHeader />
       <main id="main-content" tabIndex={-1}>
-        <section className="landing-hero" aria-labelledby="landing-title">
-          <div className="landing-mesh" aria-hidden="true">
-            <svg viewBox="0 0 1440 800" preserveAspectRatio="xMidYMid slice">
-              {Array.from({ length: 14 }, (_, i) => (
-                <path
-                  key={i}
-                  d={`M ${-160 + i * 105} 810 C ${220 + i * 32} 430, ${660 + i * 19} 860, ${1540} ${75 + i * 44}`}
-                />
-              ))}
-            </svg>
-          </div>
-          <div className="landing-hero-copy">
-            <a className="landing-release" href="#coming-soon">
-              <span className="pilot-dot" /> Coming soon
-              <span className="release-divider" /> A new chapter for Aventara
-              <ArrowUpRight size={13} />
-            </a>
-            <h1 id="landing-title">
-              Build the idea.
+        <section className="unified-hero" aria-labelledby="hero-title">
+          <div className="unified-hero-grid" aria-hidden="true" />
+          <div className="unified-hero-copy">
+            <span className="unified-eyebrow">
+              <span className="pilot-dot" /> THE AVENTARA STACK{" "}
+              <span>/ RELEASE CANDIDATE</span>
+            </span>
+            <h1 id="hero-title">
+              Your schema.
               <br />
-              <span>
-                Connect
-                <br className="landing-title-break" /> the rest.
+              <span>Your API.</span>
+              <span className="hero-period" aria-hidden="true">
+                ↗
               </span>
             </h1>
             <p>
-              Your Prisma schema. A typed API. A connected frontend. Aventara
-              brings the layers together, so you can build what makes your app
-              yours.
+              From a Prisma schema and one configuration object to a typed HTTP
+              API and a typed frontend client. Keep your data model. Skip the
+              controllers.
             </p>
-            <div className="landing-actions">
-              <Button asChild>
-                <a href="#how-it-works">
-                  Explore the vision <ArrowRight size={17} />
-                </a>
-              </Button>
-              <a className="landing-text-link" href="#coming-soon">
-                What’s next <span>↓</span>
-              </a>
+            <div className="unified-hero-actions">
+              <Link className="button button-primary" href="/framework">
+                Framework docs <ArrowRight size={17} />
+              </Link>
+              <Link className="button button-secondary" href="/access">
+                Access docs <ArrowRight size={17} />
+              </Link>
             </div>
-            <p className="landing-rebuild-note">
-              Aventara is being rebuilt. The next release and its docs are
-              coming soon.
-            </p>
-            <span className="landing-hero-note">
-              Made for TypeScript. Built around your schema.
-            </span>
+            <div className="hero-foundations">
+              <span>
+                <Braces size={15} /> TypeScript
+              </span>
+              <span>
+                <Database size={15} /> Prisma
+              </span>
+              <span>
+                <Layers3 size={15} /> NestJS / Next.js
+              </span>
+            </div>
           </div>
           <SchemaShowcase />
-          <div className="landing-hero-bottom">
-            <span>LESS GLUE CODE. MORE POSSIBILITY.</span>
-            <a href="#how-it-works">
-              Explore the connection <ArrowRight size={14} />
+          <div className="hero-baseline">
+            <span>LESS REPETITION. MORE APPLICATION.</span>
+            <a href="#products">
+              Find your starting point <span>↓</span>
             </a>
           </div>
         </section>
-        <section className="landing-stack" aria-label="The foundation">
-          <p>
-            A familiar stack.
-            <br />
-            <strong>A different starting point.</strong>
-          </p>
-          <span>
-            <Braces /> TypeScript
-          </span>
-          <span>
-            <Database /> Prisma
-          </span>
-          <span>
-            <Layers3 /> NestJS
-          </span>
-          <span className="stack-databases">
-            PostgreSQL <i /> SQLite
-          </span>
-        </section>
         <section
-          className="landing-connection landing-section"
-          id="how-it-works"
-          aria-labelledby="connection-title"
+          className="unified-products unified-section"
+          id="products"
+          aria-labelledby="products-title"
         >
-          <div className="landing-section-heading">
-            <span className="landing-kicker">01 / THE BIG IDEA</span>
-            <h2 id="connection-title">
-              One schema.
+          <div className="unified-section-heading">
+            <span className="unified-eyebrow">01 / THE BUILDING BLOCKS</span>
+            <h2 id="products-title">
+              A shared foundation.
               <br />
-              <span>Every layer, in agreement.</span>
+              <span>Clear responsibilities.</span>
             </h2>
             <p>
-              Describe your data once. Give your server and frontend a shared
-              understanding of what’s possible.
+              The framework builds your API. Access adds authorization when you
+              need it. Start with the part your application needs.
             </p>
           </div>
-          <div className="landing-connection-body">
+          <div className="product-card-grid">
+            {products.map((p, i) => (
+              <article key={p.id} className={`product-card ${p.accent}`}>
+                <div className="product-card-top">
+                  <ProductMark product={p} />
+                  <span className="product-release">
+                    {p.currentVersion}
+                    <span>Release candidate</span>
+                  </span>
+                  <span className="product-number">0{i + 1}</span>
+                </div>
+                <h3>
+                  <Link href={`/${p.id}`}>
+                    {p.name}
+                    <ArrowUpRight size={28} />
+                  </Link>
+                </h3>
+                <p>{p.description}</p>
+                <ul>
+                  {p.features.map((f) => (
+                    <li key={f}>
+                      <Check size={15} />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                {p.install && (
+                  <div className="product-install">
+                    <code>{p.install}</code>
+                    <CopyButton value={p.install} />
+                  </div>
+                )}
+                <Link className="product-card-link" href={`/${p.id}`}>
+                  Explore {p.name}
+                  <ArrowRight size={18} />
+                </Link>
+              </article>
+            ))}
+          </div>
+        </section>
+        <section
+          className="unified-system unified-section"
+          id="connected"
+          aria-labelledby="system-title"
+        >
+          <div className="unified-section-heading">
+            <span className="unified-eyebrow">02 / ONE SOURCE OF TRUTH</span>
+            <h2 id="system-title">
+              Keep the shape.
+              <br />
+              <span>Connect the layers.</span>
+            </h2>
+            <p>
+              Your schema and configuration compile into contracts: the
+              resources, fields and operations your API supports. Your host
+              serves that contract. Your frontend gets a client generated from
+              it.
+            </p>
+          </div>
+          <div className="unified-system-diagram">
             <Architecture />
-            <div className="landing-steps">
-              <div>
-                <span>01</span>
-                <section>
-                  <h3>Start with what you know.</h3>
-                  <p>
-                    Your Prisma models become resources. Your configuration
-                    decides what the API exposes.
-                  </p>
-                </section>
-              </div>
-              <div>
-                <span>02</span>
-                <section>
-                  <h3>Let the contract connect it.</h3>
-                  <p>
-                    Aventara compiles the shape of your API. NestJS serves it
-                    through a consistent HTTP protocol.
-                  </p>
-                </section>
-              </div>
-              <div>
-                <span>03</span>
-                <section>
-                  <h3>Bring the types with you.</h3>
-                  <p>
-                    Generate a TypeScript client from that contract. Your
-                    queries and their results stay connected.
-                  </p>
-                </section>
-              </div>
-              <a className="landing-text-link" href="#possibilities">
-                Made for your ideas <ArrowRight size={16} />
-              </a>
+            <div className="system-footnote">
+              <span>YOUR ORM STAYS YOURS</span>
+              <p>
+                Aventara extends Prisma. Your schema, Prisma client and
+                migrations remain in your application.
+              </p>
+              <Link href="/framework/docs/concepts">
+                Understand the contracts <ArrowUpRight size={16} />
+              </Link>
             </div>
           </div>
         </section>
         <section
-          className="landing-details landing-section"
-          id="possibilities"
-          aria-labelledby="details-title"
+          className="unified-access unified-section"
+          aria-labelledby="access-title"
         >
-          <div className="landing-section-heading">
-            <span className="landing-kicker">02 / ROOM TO MAKE IT YOURS</span>
-            <h2 id="details-title">
-              Connected by default.
+          <div className="unified-section-heading">
+            <span className="unified-eyebrow">
+              03 / A PLACE FOR EVERY DECISION
+            </span>
+            <h2 id="access-title">
+              Identity meets
               <br />
-              <span>Yours by design.</span>
+              <span>permission.</span>
             </h2>
+            <p>
+              Access is optional. Better Auth signs users in and issues
+              credentials. Access decides what those users may do. The framework
+              enforces the decision and runs the operation.
+            </p>
           </div>
-          <div className="landing-detail-grid">
-            <article className="landing-feature landing-feature-contract">
-              <span className="landing-feature-icon">
-                <ShieldCheck size={23} />
-              </span>
-              <h3>
-                Your API.
-                <br />
-                Your boundaries.
-              </h3>
-              <p>
-                Keep private fields private. Restrict operations. Add guards and
-                hooks where your application needs them.
-              </p>
-              <div
-                className="landing-field-preview"
-                aria-label="Example of field restrictions"
-              >
-                <div>
-                  <span>id</span>
-                  <span>
-                    <Check size={12} /> readable
-                  </span>
-                </div>
-                <div>
-                  <span>email</span>
-                  <span>
-                    <Check size={12} /> readable
-                  </span>
-                </div>
-                <div>
-                  <span>passwordHash</span>
-                  <span className="field-hidden">hidden from client</span>
-                </div>
-              </div>
+          <div className="responsibility-flow">
+            <article>
+              <Fingerprint />
+              <span>01 / IDENTITY</span>
+              <h3>Better Auth</h3>
+              <p>Who is making the request?</p>
+              <small>Sessions · tokens · sign-in</small>
             </article>
-            <article className="landing-feature landing-feature-client">
-              <span className="landing-feature-icon">
-                <Code2 size={23} />
-              </span>
-              <h3>
-                A client that fits
-                <br />
-                your frontend.
-              </h3>
-              <p>
-                Generated TypeScript you own. Use it in your app with no
-                Aventara runtime dependency in the generated client.
-              </p>
-              <div className="landing-client-preview" aria-hidden="true">
-                <span className="client-file">
-                  <Code2 size={20} /> AvClient.ts <span>TS</span>
-                </span>
-                <div>
-                  <span>React</span>
-                  <span>Vue</span>
-                  <span>Svelte</span>
-                  <span>Your stack</span>
-                </div>
-              </div>
+            <ArrowRight className="flow-arrow" />
+            <article className="responsibility-access">
+              <ShieldCheck />
+              <span>02 / AUTHORIZATION</span>
+              <h3>Access</h3>
+              <p>Which rows and fields may they use?</p>
+              <small>Typed rules · grants · denies</small>
+            </article>
+            <ArrowRight className="flow-arrow" />
+            <article>
+              <Database />
+              <span>03 / EXECUTION</span>
+              <h3>Framework</h3>
+              <p>Validate and run the operation.</p>
+              <small>Contracts · pipelines · your data</small>
             </article>
           </div>
-          <div className="landing-fineprint">
-            <span>
-              <Braces size={16} /> Typed queries & results
-            </span>
-            <span>
-              <Layers3 size={16} /> Transactions & nested writes
-            </span>
-            <span>
-              <ShieldCheck size={16} /> Guards & pipelines
-            </span>
-            <a href="#coming-soon">
-              The next chapter <ArrowRight size={15} />
-            </a>
-          </div>
+          <Link
+            className="unified-inline-link"
+            href="/access/docs/introduction"
+          >
+            See how Access fits <ArrowRight size={16} />
+          </Link>
         </section>
-        <section
-          className="landing-invitation"
-          id="coming-soon"
-          aria-labelledby="invitation-title"
-        >
-          <div className="landing-invitation-mark" aria-hidden="true">
-            <Logo icon />
-          </div>
-          <span className="landing-kicker">A NEW CHAPTER IS TAKING SHAPE</span>
-          <h2 id="invitation-title">
-            Worth building.
-            <br />
-            <span>Worth the wait.</span>
+        <section className="unified-start unified-section">
+          <span className="unified-eyebrow">BUILD SOMETHING THAT IS YOURS</span>
+          <h2>
+            A schema is a<br />
+            <span>good place to start.</span>
           </h2>
-          <p>
-            We’re reworking Aventara from the foundation up. The framework and
-            its documentation will return together.
-          </p>
-          <div className="landing-coming-status">
-            <span className="pilot-dot" /> Coming soon
+          <div className="unified-hero-actions">
+            <Link
+              className="button button-primary"
+              href="/framework/docs/getting-started"
+            >
+              Build your first API <ArrowRight size={17} />
+            </Link>
+            <Link
+              className="button authorization-cta"
+              style={productTheme(products.find((p) => p.id === "access")!)}
+              href="/access/docs/getting-started"
+            >
+              Add authorization <ArrowRight size={16} />
+            </Link>
           </div>
-          <a className="landing-text-link" href="#main-content">
-            Back to the vision <ArrowUpRight size={16} />
-          </a>
+          <p>
+            Both products are release candidates. APIs may change before a
+            stable release. Pin versions and read the upgrade guidance.
+          </p>
         </section>
       </main>
-      <footer className="landing-footer">
-        <div>
-          <Link href="/" aria-label="Aventara home">
-            <Logo />
-          </Link>
-          <p>A connected stack. Room to create.</p>
-        </div>
-        <nav aria-label="Footer">
-          <a href="#how-it-works">The vision</a>
-          <a href="#possibilities">Possibilities</a>
-          <a href="#coming-soon">Coming soon</a>
-        </nav>
-        <span>AVENTARA / IN DEVELOPMENT</span>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

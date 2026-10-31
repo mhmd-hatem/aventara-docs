@@ -1,37 +1,23 @@
-import { pages } from "@/lib/navigation";
-import { AVENTARA_VERSION } from "@/lib/release";
-import { source } from "@/lib/source";
-
-const overview = `> Aventara is a contract-driven TypeScript API framework. A Prisma schema and Aventara configuration produce contracts, a typed HTTP API, and a generated frontend client.
-
-Documentation for ${AVENTARA_VERSION}. Breaking changes are still possible before 1.0; pin exact versions and follow the upgrade guide.
-
-Links beginning with / are relative to the deployment serving this file.`;
-
-function documentationPages() {
-  return pages.map((entry) => {
-    const page = source.getPage([entry.slug]);
-    if (!page) throw new Error(`Missing documentation page: ${entry.slug}`);
-    return { ...entry, page };
-  });
-}
-
-export function llmsIndex() {
+import { products, getProduct } from "@/lib/products";
+import { getSource, publishedPages } from "@/lib/source";
+export function llmsIndex(id: string) {
+  const product = getProduct(id)!;
+  const source = getSource(id)!;
   const groups = new Map<string, string[]>();
-  for (const { group, page } of documentationPages()) {
-    const links = groups.get(group) ?? [];
-    const description = page.data.description
-      ? `: ${page.data.description.replace(/\s+/g, " ")}`
-      : "";
-    links.push(`- [${page.data.title}](${page.url})${description}`);
-    groups.set(group, links);
+  for (const entry of publishedPages(product)) {
+    const page = source.getPage([entry.slug])!;
+    const links = groups.get(entry.group) ?? [];
+    links.push(
+      `- [${page.data.title}](/${id}/markdown/${entry.slug}): ${page.data.description ?? ""}`,
+    );
+    groups.set(entry.group, links);
   }
-
   return (
     [
-      "# Aventara",
-      overview,
-      "## Complete documentation\n\n- [Full documentation in Markdown](/llms-full.txt): All published pages, including examples, the AI agent guide, API references, and release history.",
+      `# Aventara ${product.name}`,
+      `> ${product.description}`,
+      `Version: ${product.currentVersion}. Release candidate; breaking changes are possible before a stable release. Links are relative to this deployment.`,
+      `## Complete documentation\n\n- [Full Markdown](/${id}/llms-full.txt): All published ${product.name} pages.`,
       ...Array.from(
         groups,
         ([title, links]) => `## ${title}\n\n${links.join("\n")}`,
@@ -39,23 +25,22 @@ export function llmsIndex() {
     ].join("\n\n") + "\n"
   );
 }
-
-export async function llmsFull() {
+export async function llmsFull(id: string) {
+  const product = getProduct(id)!;
+  const source = getSource(id)!;
   const documents = await Promise.all(
-    documentationPages().map(async ({ page }) => {
-      const raw = await page.data.getText("raw");
-      // Strip only the page's leading metadata; preserve all examples verbatim.
-      const body = raw
-        .replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "")
-        .trim();
-      return `Source: [${page.data.title}](${page.url})\n\n${body}`;
+    publishedPages(product).map(async (entry) => {
+      const page = source.getPage([entry.slug])!;
+      return `Source: [${page.data.title}](${page.url})\n\n${await page.data.getText("processed")}`;
     }),
   );
-  return `# Aventara — complete documentation\n\n${overview}\n\n${documents.join("\n\n---\n\n")}\n`;
+  return `# Aventara ${product.name} — complete documentation\n\nVersion: ${product.currentVersion}\n\n${documents.join("\n\n---\n\n")}\n`;
 }
-
 export function markdownResponse(body: string) {
   return new Response(body, {
     headers: { "Content-Type": "text/plain; charset=utf-8" },
   });
+}
+export function productParams() {
+  return products.map((p) => ({ product: p.id }));
 }

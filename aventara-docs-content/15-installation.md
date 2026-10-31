@@ -13,13 +13,13 @@ You rarely install Aventara packages by hand. `aventara new` (or `aventara init`
 
 | | Supported |
 |---|---|
-| Node.js | `^22.18.0 \|\| >=24.2.0` (on Node 22, use npm 11 or newer) |
+| Node.js | `^22.23.4 \|\| >=24.22.1` (on Node 22, use npm 11 or newer) |
 | NestJS | 12 |
-| ORM | Prisma `>=7.10 <8` |
+| ORM | Prisma `^7.10.1` |
 | Database | SQLite or PostgreSQL |
 | Package manager | npm or pnpm (yarn is not supported) |
-| TypeScript, server | 6 (`<7`) |
-| TypeScript, frontend | `>=5.5.0`, TypeScript 7 included |
+| TypeScript, server | 6 (`>=5.7.0 <7`) |
+| TypeScript, frontend | `>=5.7.0`, TypeScript 7 included |
 | Module format | ESM and CommonJS projects (a fresh NestJS 12 project is ESM) |
 
 The bins refuse to run on an unsupported Node, in one sentence that names the range.
@@ -30,7 +30,8 @@ The bins refuse to run on an unsupported Node, in one sentence that names the ra
 |---|---|---|---|
 | `@aventara/cli` | Do not. Run it with `npx` (or `pnpm dlx`), or install it globally | Your machine | The `aventara` command: `aventara new <name>` creates a NestJS 12 project with Aventara; `aventara init` adds Aventara to an existing one. It is not a dependency of your project. |
 | `@aventara/core` | Added for you | Server, dependency | The framework: configuration, contract compilation, validation, execution, transactions. Its `@aventara/core/protocol` entry exposes the HTTP protocol as plain data and functions. Transport- and ORM-agnostic. |
-| `@aventara/prisma7-adapter` | Added for you | Server, dependency | The Prisma 7 adapter for SQLite and PostgreSQL, plus the `aventara-prisma7-generate` bin that runs on install (`aventara:prepare`). |
+| `@aventara/prisma7-adapter` | Added for you | Server, dependency | The Prisma 7 adapter for SQLite and PostgreSQL, plus `describePrismaAdapter` and the `aventara-prisma7-generate` bin that runs on install (`aventara:prepare`). |
+| `@aventara/build` | Added for you | Server, dev dependency, same version | The `aventara-build` bin, which `aventara:prepare` runs after the adapter's generate step. It writes the Resource tree, the computed-fields file and the prebuilt Contracts ([Deploying](/docs/deploying#build-time-contracts)). Nothing in your deployed application imports it. Needs `typescript` `>=5.7.0 <7`. |
 | `@aventara/nest` | Added for you | Server, dependency | Hosts a framework in NestJS 12 on Express or Fastify: `AventaraModule`, `@InjectFramework()`. |
 | `@aventara/mcp` | Optional | Server, dependency, same version | The MCP server: your `agent` layer as tools an AI agent calls. `@aventara/nest` mounts it when the configuration has `mcp` ([MCP](/docs/mcp)). |
 | `@aventara/client` | `avclient init` adds it | Frontend, dev dependency, exact version | The `avclient` generator. Not needed at runtime: the generated client imports nothing from it. |
@@ -47,15 +48,15 @@ A project made by `aventara new` has this in `package.json` (versions are exact)
 ```json
 {
   "dependencies": {
-    "@aventara/core": "1.0.0-rc.2",
-    "@aventara/nest": "1.0.0-rc.2",
-    "@aventara/prisma7-adapter": "1.0.0-rc.2",
-    "@prisma/adapter-better-sqlite3": "7.10.0",
-    "@prisma/client": "7.10.0"
+    "@aventara/core": "1.0.0-rc.11",
+    "@aventara/nest": "1.0.0-rc.11",
+    "@aventara/prisma7-adapter": "1.0.0-rc.11",
+    "@prisma/adapter-better-sqlite3": "7.10.1",
+    "@prisma/client": "7.10.1"
   },
-  "devDependencies": { "prisma": "7.10.0" },
+  "devDependencies": { "@aventara/build": "1.0.0-rc.11", "prisma": "7.10.1" },
   "scripts": {
-    "aventara:prepare": "aventara-prisma7-generate --schema prisma/schema.prisma --client src/generated/prisma --provider sqlite --driver @prisma/adapter-better-sqlite3 --out src/generated/aventara/discovery.artifact.ts --config src/aventara.config.ts",
+    "aventara:prepare": "aventara-prisma7-generate --schema prisma/schema.prisma --client src/generated/prisma --provider sqlite --driver @prisma/adapter-better-sqlite3 --out src/generated/aventara/discovery.artifact.ts --config src/aventara.config.ts && aventara-build",
     "postinstall": "npm run aventara:prepare",
     "prebuild": "npm run aventara:prepare",
     "prestart": "npm run aventara:prepare",
@@ -65,7 +66,7 @@ A project made by `aventara new` has this in `package.json` (versions are exact)
 }
 ```
 
-With PostgreSQL the driver is `@prisma/adapter-pg`. The `postinstall` script regenerates `src/generated/aventara/discovery.artifact.ts` on a plain `npm install`, and the `prebuild`, `prestart`, `prestart:dev` and `prestart:debug` scripts regenerate it before `npm run build` and the start scripts, so a schema change needs no separate step. npm and pnpm run these `pre` hooks; Yarn Berry, and pnpm with `enable-pre-post-scripts=false`, do not, so run `aventara:prepare` yourself there (pnpm projects get `pnpm run aventara:prepare` in these scripts). Run `npm run aventara:prepare` yourself after changing `prisma/schema.prisma`, and after adding or upgrading a package by name (`npm install <package>` did not run `postinstall` with npm 11.19).
+With PostgreSQL the driver is `@prisma/adapter-pg`. `aventara:prepare` runs three things in order: `prisma generate`, the adapter's discovery step (`aventara-prisma7-generate`), then `aventara-build`. Between them they write `src/generated/aventara/discovery.artifact.ts`, `resources.generated.ts`, `computed-fields.generated.ts` and `contracts.generated.ts`. The `postinstall` script runs it on a plain `npm install`, and the `prebuild`, `prestart`, `prestart:dev` and `prestart:debug` scripts run it before `npm run build` and the start scripts, so a schema change needs no separate step. npm and pnpm run these `pre` hooks; Yarn Berry, and pnpm with `enable-pre-post-scripts=false`, do not, so run `aventara:prepare` yourself there (pnpm projects get `pnpm run aventara:prepare` in these scripts). Run `npm run aventara:prepare` yourself after changing `prisma/schema.prisma`, and after adding or upgrading a package by name (`npm install <package>` did not run `postinstall` with npm 11.19).
 
 ### Frontend side
 
@@ -82,15 +83,52 @@ npx @aventara/cli@rc new my-api        # npm
 pnpm dlx @aventara/cli@rc new my-api   # pnpm
 ```
 
-Use the `@rc` tag: it points to the newest release candidate (`1.0.0-rc.2`). The CLI runs a pinned `nest new`, adds Aventara, installs, and commits the result (`Initial Aventara Scaffold`, unless git is missing or unconfigured, the directory is already inside a repository, or you pass `--skip-git`). It picks the package manager from the lockfile, else the one that launched it, else npm, and never touches a database. `aventara --version` prints the CLI's version; `--orm` takes `prisma7`. See [Getting started](/docs/getting-started), or [Add to an existing project](/docs/existing-project).
+Use the `@rc` tag: it points to the newest release candidate (`1.0.0-rc.11`). The CLI runs a pinned `nest new`, adds Aventara, installs, and commits the result (`Initial Aventara Scaffold`, unless git is missing or unconfigured, the directory is already inside a repository, or you pass `--skip-git`). It picks the package manager from the lockfile, else the one that launched it, else npm, and never touches a database. `aventara --version` prints the CLI's version; `--orm` takes `prisma7`. See [Getting started](/docs/getting-started), or [Add to an existing project](/docs/existing-project).
 
 ## Package manager and Node notes
 
 - npm and pnpm are both supported. Under pnpm, the CLI also writes `pnpm-workspace.yaml` with the build-script allowances Prisma and the SQLite driver need, and next steps print `pnpm exec prisma db push` and `pnpm dlx` forms. Yarn is not supported.
 - Node 22 needs npm 11 or newer. The npm 10 bundled with older Node 22 cannot install Nest 12's own scaffold. Check with `npm -v` and upgrade with `npm install -g npm@11`.
-- Node 24: `>=24.2.0` is supported. A CommonJS project's Jest e2e setup needs Node 24.9 or newer, a limit that comes from Nest and Jest.
-- TypeScript: the server side needs TypeScript below 7 (the `aventara new` scaffold uses 6). The frontend generator works with `>=5.5.0`, TypeScript 7 included.
+- Node 24: `>=24.22.1` is supported. A new project is ESM and runs its e2e tests with Vitest (`vitest.config.e2e.ts`). A CommonJS project still uses Jest, and its Jest e2e setup needs Node 24.9 or newer, a limit that comes from Nest and Jest.
+- TypeScript: the server side needs TypeScript 5.7 or later and below 7 (the `aventara new` scaffold uses 6). The frontend generator works with `>=5.7.0`, TypeScript 7 included.
 - Pin exact versions. Aventara is a release candidate and its API can still change before 1.0, so the generated projects already pin exactly. Keep `@aventara/client` at the same version as the server.
+
+## Install safely
+
+Commit your lockfile and install with it, so every machine and every deploy gets the versions you tested:
+
+```bash
+npm ci                          # npm
+pnpm install --frozen-lockfile  # pnpm
+```
+
+npm 11 may print `npm warn install-scripts ... @prisma/engines, prisma ... not yet covered by allowScripts` after the install. It is expected, and the install still works.
+
+Hold back brand-new versions with a release-age delay.
+
+```ini
+# .npmrc (npm 11.10 or later; days)
+min-release-age=3
+```
+
+```yaml
+# pnpm-workspace.yaml (pnpm; minutes)
+minimumReleaseAge: 4320
+```
+
+The units differ: npm counts days, pnpm counts minutes. Both examples above mean three days.
+
+A release-age delay also holds back a brand-new Aventara release, including a fresh `@rc`. Exclude the Aventara packages (`minimumReleaseAgeExclude` in pnpm, `min-release-age-exclude` in npm) or wait out the delay.
+
+When an advisory names a fixed version, exclude that exact version so you get it at once (pnpm takes `name@x.y.z`; npm excludes by package name); remove the exclude after 3 days.
+
+After installing, check the registry signatures of what you installed:
+
+```bash
+npm audit signatures
+```
+
+Aventara releases are published with two-factor authentication on the maintainer's npm account. They do not carry build provenance attestations or signed git tags yet.
 
 ## See also
 

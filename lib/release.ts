@@ -1,3 +1,5 @@
-// Public framework release documented by the current content bundle.
-export const AVENTARA_VERSION = "1.0.0-rc.2";
+import { products } from "./products";
+export const AVENTARA_VERSION = products.find(
+  (p) => p.id === "framework",
+)!.currentVersion;
 export const AVENTARA_DIST_TAG = "rc";

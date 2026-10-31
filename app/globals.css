@@ -606,16 +606,37 @@ svg {
   opacity: 0.24;
   stroke-width: 1;
 }
-.diagram-lines .trace-line {
+/* Shared flow: paths follow measured cards, with one normalized draw per journey. */
+.architecture .diagram-lines .flow-trace {
   stroke: var(--accent);
-  opacity: 0;
+  opacity: 1;
   stroke-width: 2;
-  stroke-dasharray: 35 700;
-  stroke-dashoffset: 735;
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+  animation: architecture-journey 620ms linear both;
 }
-.tracing .trace-line {
-  animation: trace 2.5s linear;
+.architecture .diagram-node.node-current {
+  transform: none;
 }
+@keyframes architecture-journey {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.architecture[data-flow-immediate="true"] .diagram-lines .flow-trace {
+  animation: none;
+  stroke-dashoffset: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .architecture .diagram-lines .flow-trace {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
 .diagram-node {
   position: absolute;
   width: 39%;
@@ -1375,19 +1396,6 @@ svg {
 @keyframes spin {
   to {
     transform: rotate(360deg);
-  }
-}
-@keyframes trace {
-  0% {
-    stroke-dashoffset: 735;
-    opacity: 0.85;
-  }
-  90% {
-    opacity: 0.85;
-  }
-  100% {
-    stroke-dashoffset: 0;
-    opacity: 0;
   }
 }
 @keyframes enter {

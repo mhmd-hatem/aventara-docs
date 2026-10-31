@@ -3,6 +3,8 @@
 !app
 !components
 !lib
+!content
+!scripts
 !public
 !aventara-docs-content
 !package.json

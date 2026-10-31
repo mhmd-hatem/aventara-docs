@@ -15,7 +15,7 @@ This page is about your application serving its data to agents. For the coding a
 
 ## Setup
 
-Install `@aventara/mcp` beside `@aventara/nest`, pinned to the same version as `@aventara/core` (here, `1.0.0-rc.2`):
+Install `@aventara/mcp` beside `@aventara/nest`, pinned to the same version as `@aventara/core` (here, `1.0.0-rc.11`):
 
 ```bash
 npm install --save-exact @aventara/mcp@rc
@@ -26,30 +26,35 @@ Pin it exactly, like the other Aventara packages. `@aventara/nest` declares `@av
 Add `mcp` to `src/aventara.config.ts` with the path to serve it at:
 
 ```ts
-export async function aventaraConfig(prisma: PrismaService) {
-  return {
-    api: "/api",
-    mcp: "/mcp",
-    exposed: true,
-    adapter: await createPrismaAdapter({ /* ... */ }),
-  } as const;
-}
+export const aventaraConfig = {
+  api: "/api",
+  mcp: "/mcp",
+  exposed: true,
+} as const;
 ```
 
 Start the server. The log shows the endpoint next to the protocol's routes:
 
 ```text
-[AventaraModule] Aventara mounted 9 operations at /api (+ GET /api/_contract, POST /api/_transactions)
+[AventaraModule] Aventara mounted 9 operations at /api (+ GET /api/_contract, POST /api/_transactions, POST /api/_all)
 [AventaraModule] Aventara mounted the MCP endpoint at /mcp (no authorization: it answers callers on this machine only)
 ```
 
 If `mcp` is set and `@aventara/mcp` is not installed, the application refuses to start and gives the install command, pinned to the `@aventara/core` version you have:
 
 ```text
-AventaraModule: the configuration has `mcp`, and the package that serves it, @aventara/mcp, is not installed. Install it at @aventara/core's exact version (npm install --save-exact @aventara/mcp@1.0.0-rc.2), or remove `mcp` from the configuration.
+AventaraModule: the configuration has `mcp`, and the package that serves it, @aventara/mcp, is not installed. Install it at @aventara/core's exact version (npm install --save-exact @aventara/mcp@1.0.0-rc.11), or remove `mcp` from the configuration.
 ```
 
 The path follows the same rules as `api`, and it cannot be `api` itself or sit inside the protocol's `_` routes. See [Configuration](/docs/configuration#the-agent-layer-and-mcp).
+
+### On Next.js
+
+In a [Next.js app](/docs/nextjs-host#mcp), `mcp` goes into the options of `Aventara({...})` in `src/aventara/server.ts`, and the same `handlers` serve the endpoint. Add two one-line route files that re-export `handlers`: `src/app/mcp/route.ts` (`GET`, `POST`, `DELETE`) for the endpoint, and `src/app/.well-known/oauth-protected-resource/mcp/route.ts` (`GET`) for the metadata. The folder names follow `mcp.path`.
+
+On Next.js, `mcp` needs [`authorization`](#authorization). Next.js adds `x-forwarded-for` to every request, so an endpoint without authorization, which answers only local callers with no forwarding header, would refuse every caller. An `mcp` written without `authorization` is a type error on the `Aventara({...})` call, and a configuration typed as `AvConfig` without it is refused when the framework is built.
+
+The metadata document and the `401` name the endpoint at the origin the agent called: `X-Forwarded-Host` and `X-Forwarded-Proto` when present, else `Host`. Everything else on this page applies as it is.
 
 ## What an agent can reach: the agent layer
 
@@ -122,7 +127,7 @@ A failed call returns an MCP tool error (`isError: true`) with the same envelope
 }
 ```
 
-An issue's path starts at `arguments`, which is the call's `args`. In a transaction it starts at `operations[<step>].args`, and `cause.operation` is the failing step. A failed transaction changes nothing. A call to a family or variant the resource does not offer points at the tool's own input instead, `["family"]` or `["variant"]`, not at `arguments`. The codes are listed in [Error codes](/docs/error-codes).
+An issue's path starts at `arguments`, which is the call's `args`. In a transaction it starts at `operations[<step>].args`, and `cause.operation` is the failing step. A failed transaction changes nothing. A call to a family or variant the resource does not offer points at the tool's own input instead, `["family"]` or `["variant"]`, not at `arguments`. A resource the agent layer does not offer is `A2001` at `["resource"]`, as over HTTP; a name JSON can carry but a URL cannot (a lone surrogate) is that unknown name. The codes are listed in [Error codes](/docs/error-codes).
 
 ## The contract resource
 
@@ -165,31 +170,29 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 const issuer = "https://auth.example.com";
 const jwks = createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks.json`));
 
-export async function aventaraConfig(prisma: PrismaService) {
-  return {
-    api: "/api",
-    mcp: {
-      path: "/mcp",
-      authorization: {
-        servers: [issuer],
-        verify: async (token: string) => {
-          try {
-            const { payload } = await jwtVerify(token, jwks, {
-              issuer,
-              audience: "https://api.example.com/mcp",
-            });
-            return payload;
-          } catch (error) {
-            // A rejected token is a normal 401, not logged by Aventara; log it here to see why.
-            console.warn("MCP token rejected", error);
-            return null;
-          }
-        },
+export const aventaraConfig = {
+  api: "/api",
+  mcp: {
+    path: "/mcp",
+    authorization: {
+      servers: [issuer],
+      verify: async (token: string) => {
+        try {
+          const { payload } = await jwtVerify(token, jwks, {
+            issuer,
+            audience: "https://api.example.com/mcp",
+          });
+          return payload;
+        } catch (error) {
+          // A rejected token is a normal 401, not logged by Aventara; log it here to see why.
+          console.warn("MCP token rejected", error);
+          return null;
+        }
       },
     },
-    // ...
-  } as const;
-}
+  },
+  // ...
+} as const;
 ```
 
 With `authorization` set:
@@ -215,6 +218,8 @@ const canWrite: AvGuard = (ctx) =>
   ctx.$operation.family === "find" ||
   String(ctx.$state.mcp?.claims.scope ?? "").split(" ").includes("write");
 ```
+
+With a [policy](/docs/policies) configured, every tool call is checked as an agent request (`origin: "agent"`). `policy.principal` derives the principal from the same `$state`, so it can read `$state.mcp.claims`. The engine can narrow what an agent may do beyond what a client may.
 
 Check the token's audience in `verify` (here `https://api.example.com/mcp`), so a token issued for another service is not accepted.
 

@@ -50,7 +50,7 @@ Inject the framework and call it directly. No HTTP, no guard, no limits beyond t
 // src/admin.service.ts
 import { Injectable } from "@nestjs/common";
 import { InjectFramework } from "@aventara/nest";
-import type { AppFramework } from "./aventara.config.js";
+import type { AppFramework } from "./aventara.framework.js";
 
 @Injectable()
 export class AdminService {

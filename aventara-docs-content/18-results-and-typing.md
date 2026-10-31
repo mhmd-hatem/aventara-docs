@@ -27,6 +27,8 @@ const ada = await avClient.User.find.unique({ where: { id: 1 } });
 //   readonly role: "USER" | "ADMIN"; readonly createdAt: Date }
 ```
 
+Your editor shows these plain types too. Hover a result and each field reads as its value type (`name: string | null`, `role: "USER" | "ADMIN"`, `published: boolean`, `publishedAt: Date | null`), and an included relation as its fields. A declaration file your project emits (`"declaration": true`) writes the same short types, so a service whose methods return results without annotations stays small. This holds for `framework.application`, `framework.client` and `framework.serverClient` results and for generated clients.
+
 A field the client layer hides or makes write-only is not in these types, and is not a valid `select` entry; an operator a field does not offer is not a valid filter either:
 
 ```ts
@@ -75,6 +77,18 @@ const counts = await avClient.User.find.many({ select: ["id", { posts: { select:
 ```
 
 When the nested relation has a `where` and paging, `count` is the number of matching rows before `limit` and `offset`, and `data` is the page.
+
+## $defaults
+
+`"$defaults"` in a `select` stands for the level's default projection, so the type is the default fields plus whatever else the list names, all present:
+
+| `select` | Result type |
+|---|---|
+| `["$defaults"]` | the default fields |
+| `["$defaults", "email"]` | the default fields and `email: string` |
+| `["id", "email"]` | `{ id; email }` only |
+
+A field that a [policy](/docs/policies#governed-fields-and-defaults) governs is not in the default fields. It is typed as present, never optional or nullable, wherever a `select` names it. A request that may not read it is refused (`A4002`) instead of returning a gap.
 
 ## Results are readonly
 
@@ -137,7 +151,7 @@ try {
 
 ## On the server, the same results and errors
 
-Server-side calls through `framework.application.*`, `framework.client.*` and `framework.transaction` settle exactly like the client: they resolve the typed data and throw the same error classes, exported from `@aventara/core` (`import { AvConflictError } from "@aventara/core"`). See [Server-side usage](/docs/server-side-usage#errors).
+Server-side calls through `framework.application.*`, `framework.client.*`, `framework.serverClient.*` and `framework.transaction` settle exactly like the client: they resolve the typed data and throw the same error classes, exported from `@aventara/core` (`import { AvConflictError } from "@aventara/core"`). See [Server-side usage](/docs/server-side-usage#errors).
 
 The types of `framework.application` and `framework.client` follow your [exposure](/docs/exposure) layer by layer, exactly as the generated client's do. A hidden field is not in the types. A field whose `select`, `filter`, `order`, `create` or `update` capability you took away is refused in that position and left out of the result types, and a `where` offers each field only the filter operators it allows (inside `not` too), so an operator the server would refuse with `V1006` is a type error. A removed operation is not on the object. `framework.client` reads the root's exemptions with the `client` overlay's over them; `framework.application` the root's with the `application` overlay's, so a field hidden at the root is hidden on `framework.application` too. `framework.appTx` and `framework.clientTx` follow the same rules.
 

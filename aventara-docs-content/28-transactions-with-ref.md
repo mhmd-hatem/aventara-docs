@@ -154,7 +154,7 @@ await avClient.transaction([a, c, set, drop]);
 
 ## Filter by an earlier result
 
-A reference works in any filter operator, at any depth: under `AND`, `OR` and `NOT`, and through relations (a to-one relation's nested `where`, or `some`, `every` and `none` on a to-many). The posts that earn more than a given post, that share its author but are not that post, and the users who wrote it:
+A pipe that moves a reference (a scoping pipe that ANDs the caller's filter) keeps it working: it is resolved at its new place. A reference works in any filter operator, at any depth: under `AND`, `OR` and `NOT`, and through relations (a to-one relation's nested `where`, or `some`, `every` and `none` on a to-many). The posts that earn more than a given post, that share its author but are not that post, and the users who wrote it:
 
 ```ts
 const post = avClient.tx.Post.find.unique({ where: { id: 56 }, select: ["id", "views", "authorId"] });
@@ -278,7 +278,7 @@ try {
 await avClient.User.find.first({ where: { email: "rb@example.com" } });   // null: step 0 was rolled back
 ```
 
-The failing step's code is reported as it is (`A2008`, `A2003`, ...). `A3002` is reserved for transaction infrastructure failures (commit or rollback problems). Errors thrown by a guard or pipe on a later step roll the plan back too: with a pipe that refuses `Category` named "boom" on step 1, the plan throws `A4002 { message: 'boom denied', operation: 1 }` and step 0's category does not exist afterwards.
+The failing step's code is reported as it is (`A2008`, `A2003`, ...). `A3002` is reserved for transaction infrastructure failures (commit or rollback problems, a transaction that expired under a step, or a transaction interceptor that broke the plan). A guard or pipe that refuses a later step refuses the plan before the transaction opens, so nothing is written: with a pipe that refuses `Category` named "boom" on step 1, the plan throws `A4002 { message: 'boom denied', operation: 1 }` and step 0's category does not exist afterwards.
 
 ## Preconditions: make a step abort the plan
 

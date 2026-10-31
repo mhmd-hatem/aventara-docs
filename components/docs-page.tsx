@@ -1,123 +1,115 @@
-import { AVENTARA_VERSION } from "@/lib/release";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, ArrowRight, ChevronRight, Compass } from "lucide-react";
-import { source } from "@/lib/source";
-import { pages } from "@/lib/navigation";
-import { QuickstartLab } from "@/components/quickstart-lab";
-import { QueryPlayground } from "@/components/query-playground";
-import { TransactionLab } from "@/components/transaction-lab";
-import { Overview } from "@/components/overview";
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronRight,
+  Compass,
+  Clock3,
+} from "lucide-react";
+import { getSource, getDrafts, publishedPages } from "@/lib/source";
+import { getProduct, products } from "@/lib/products";
+import { productLink } from "@/lib/content-links.mjs";
 import { CodeBlock } from "@/components/code-block";
-import { IntroductionCode } from "@/components/introduction-code";
 import { TableOfContents } from "@/components/table-of-contents";
+import { IntroductionCode } from "@/components/introduction-code";
 import type { MDXComponents } from "mdx/types";
-const components: MDXComponents = {
-  h1: ({ id }) => <span id={id} className="heading-anchor" />,
-  pre: CodeBlock,
-  a: ({ href, children, ...props }) => {
-    const url =
-      href && !/^(https?:|mailto:|#|\/)/.test(href) ? `/docs/${href}` : href;
-    return (
-      <a
-        href={url}
-        {...props}
-        className={
-          url ===
-          "https://github.com/mhmd-hatem/aventara-docs/issues/new/choose"
-            ? "button button-primary"
-            : props.className
-        }
-      >
-        {children}
-      </a>
-    );
-  },
-  table: (props) => (
-    <div className="table-scroll">
-      <table {...props} />
-    </div>
-  ),
-};
-export default async function DocsPage({
-  params,
-}: {
-  params: Promise<{ slug?: string[] }>;
-}) {
-  const { slug } = await params;
-  if (!slug) redirect("/docs/introduction");
+type Params = Promise<{ product: string; slug?: string[] }>;
+export default async function DocsPage({ params }: { params: Params }) {
+  const { product: id, slug } = await params;
+  const product = getProduct(id);
+  if (!product) notFound();
+  if (!slug?.length) redirect(`/${id}/docs/${product.overviewSlug}`);
+  const source = getSource(id)!;
   const page = source.getPage(slug);
+  const draft = slug.length === 1 ? getDrafts(id)[slug[0]] : undefined;
+  if (!page && !draft) notFound();
+  if (draft)
+    return (
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="main-content article-page"
+      >
+        <header className="article-header">
+          <span className="eyebrow">
+            <Clock3 size={16} /> Under review
+          </span>
+          <h1>{draft.title}</h1>
+          <p>
+            This guide is awaiting maintainer review. Its draft is not
+            published.
+          </p>
+        </header>
+        <div className="prose">
+          <p>
+            Explore the published{" "}
+            <Link href={`/${id}/docs/${product.overviewSlug}`}>
+              {product.name} overview
+            </Link>{" "}
+            while this guide is being reviewed.
+          </p>
+        </div>
+        {draft.ids.map((anchor) => (
+          <span id={anchor} key={anchor} className="heading-anchor" />
+        ))}
+      </main>
+    );
   if (!page) notFound();
-  const MDX = page.data.body;
-  const sequence = pages.filter(
+  const sequence = publishedPages(product).filter(
     (p) => (p.section === "ai") === (slug[0] === "ai-agents"),
   );
-  const currentIndex = sequence.findIndex((p) => p.slug === slug[0]);
-  const current = sequence[currentIndex];
-  const prev = sequence[currentIndex - 1];
-  const next = sequence[currentIndex + 1];
-  const intro = slug[0] === "introduction";
+  const index = sequence.findIndex((p) => p.slug === slug[0]);
+  const current = sequence[index],
+    prev = sequence[index - 1],
+    next = sequence[index + 1];
+  const MDX = page.data.body;
+  const components: MDXComponents = {
+    h1: ({ id }) => <span id={id} className="heading-anchor" />,
+    pre:
+      id === "framework" && slug[0] === "introduction"
+        ? IntroductionCode
+        : CodeBlock,
+    a: ({ href, ...props }) => <a href={productLink(href, id)} {...props} />,
+    table: (props) => (
+      <div className="table-scroll">
+        <table {...props} />
+      </div>
+    ),
+  };
   return (
-    <main
-      id="main-content"
-      tabIndex={-1}
-      className={
-        intro ? "main-content overview-page" : "main-content article-page"
-      }
-    >
+    <main id="main-content" tabIndex={-1} className="main-content article-page">
       <div className="breadcrumb">
         <Compass size={14} />
+        <Link href={`/${id}`}>{product.name}</Link>
         <ChevronRight size={12} />
         <span>{current?.group ?? "Documentation"}</span>
         <ChevronRight size={12} />
         <span className="breadcrumb-current">{page.data.title}</span>
-        <span className="breadcrumb-version">v{AVENTARA_VERSION}</span>
+        <span className="breadcrumb-version">v{product.currentVersion}</span>
       </div>
-      {intro ? (
-        <Overview />
-      ) : (
-        <header className="article-header">
-          <span className="eyebrow">
-            <span className="eyebrow-line" />
-            {current?.group.toUpperCase()}
-          </span>
-          <h1>
-            {slug[0] === "getting-started" ? (
-              <>
-                Your first API.
-                <br />
-                <span>Closer than you think.</span>
-              </>
-            ) : (
-              page.data.title
-            )}
-          </h1>
-          <p>{page.data.description}</p>
-        </header>
-      )}
-      {slug[0] === "getting-started" && <QuickstartLab />}
-      {slug[0] === "querying" && <QueryPlayground compact />}
-      {slug[0] === "transactions" && <TransactionLab />}
+      <header className="article-header">
+        <span className="eyebrow">
+          <span className="eyebrow-line" />
+          {current?.group}
+        </span>
+        <h1>{page.data.title}</h1>
+        <p>{page.data.description}</p>
+        <a
+          className="article-markdown-link"
+          href={`/${id}/markdown/${slug[0]}`}
+        >
+          Read as Markdown <ArrowRight size={13} />
+        </a>
+      </header>
       <div className="reading-layout">
         <div className="reading-main">
-          {intro && (
-            <div className="section-heading overview-section-title">
-              <div>
-                <span className="section-index">THE FRAMEWORK, EXPLAINED</span>
-                <h2>Get to know Aventara.</h2>
-              </div>
-            </div>
-          )}
           <article className="prose">
-            <MDX
-              components={
-                intro ? { ...components, pre: IntroductionCode } : components
-              }
-            />
+            <MDX components={components} />
           </article>
           <div className="page-pagination">
             {prev ? (
-              <Link href={`/docs/${prev.slug}`}>
+              <Link href={`/${id}/docs/${prev.slug}`}>
                 <span>
                   <ArrowLeft size={13} /> Previous
                 </span>
@@ -127,7 +119,7 @@ export default async function DocsPage({
               <span />
             )}
             {next && (
-              <Link href={`/docs/${next.slug}`}>
+              <Link href={`/${id}/docs/${next.slug}`}>
                 <span>
                   Up next <ArrowRight size={13} />
                 </span>
@@ -145,17 +137,28 @@ export default async function DocsPage({
   );
 }
 export function generateStaticParams() {
-  return source.generateParams();
+  return products.flatMap((p) => [
+    { product: p.id, slug: [] },
+    ...getSource(p.id)!
+      .generateParams()
+      .map((params) => ({ ...params, product: p.id })),
+    ...Object.keys(getDrafts(p.id)).map((slug) => ({
+      product: p.id,
+      slug: [slug],
+    })),
+  ]);
 }
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ slug?: string[] }>;
-}) {
-  const { slug } = await params;
-  const page = source.getPage(slug);
+export async function generateMetadata({ params }: { params: Params }) {
+  const { product: id, slug } = await params;
+  const product = getProduct(id);
+  const page = getSource(id)?.getPage(slug);
+  const draft = slug?.length === 1 ? getDrafts(id)[slug[0]] : undefined;
   return {
-    title: page?.data.title ?? "Documentation",
+    title: `${page?.data.title ?? draft?.title ?? "Documentation"} · ${product?.name ?? "Aventara"}`,
     description: page?.data.description,
+    ...(draft ? { robots: { index: false, follow: false } } : {}),
+    alternates: {
+      canonical: `/${id}/docs/${slug?.join("/") || product?.overviewSlug || "introduction"}`,
+    },
   };
 }

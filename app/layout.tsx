@@ -10,11 +10,13 @@ import "./globals.css";
 import "./experience.css";
 import "./motion.css";
 import "./scrollbars.css";
+import "./unified.css";
 import { Providers } from "@/components/providers";
 import { SiteAnalytics } from "@/components/site-analytics";
 export const metadata: Metadata = {
+  metadataBase: new URL("https://aventara.razor34.dev"),
   title: {
-    default: "Aventara — Coming soon",
+    default: "Aventara — Your schema is the API.",
     template: "%s · Aventara",
   },
   description:

@@ -41,15 +41,12 @@ const authenticate: AvGuard = async (ctx) => {
   return true;
 };
 
-export async function aventaraConfig(prisma: PrismaService) {
-  return {
-    api: "/api",
-    adapter: /* ... */,
-    client: {
-      pipelines: { guards: [authenticate] },                   // remote callers only
-    },
-  } as const;
-}
+export const aventaraConfig = {
+  api: "/api",
+  client: {
+    pipelines: { guards: [authenticate] },                   // remote callers only
+  },
+} as const;
 ```
 
 `client.pipelines` runs for remote callers; your own server-side calls (`framework.application`) do not pass through it. Use root `pipelines` to guard both origins. A guard can also sit on one Resource, family or variant (`resources.Post.operations.delete.pipelines.guards`), so it does not need to check which operation it is guarding ([Pipelines](/docs/pipelines#where-stages-go)).
@@ -78,6 +75,8 @@ A guard's outcome:
 | throws `AvError("A4000", message)` | `A4000` UNAUTHENTICATED, your message | 401 |
 | throws `AvError("A4001", message)` | `A4001` FORBIDDEN, your message | 403 |
 | throws `AvError("A4002", message)` | `A4002` POLICY_DENIED, your message | 403 |
+
+A configured [policy engine](/docs/policies) answers `A4002` too, for rows, fields and writes it refuses, and runs before your guards. Your guards can assume the policy already admitted the request.
 
 Your message reaches the caller, so keep it free of secrets. A guard can also throw `AvError("A2004", { message, issues })` with issues whose paths name request arguments (for example `["arguments", "data", "email"]`); each issue's message is sent as written, if it is non-blank and at most 1,000 characters ([Pipelines](/docs/pipelines#what-a-pipe-may-and-may-not-do)). Any other thrown error is an unplanned failure: the caller gets a generic `A3000` ("Internal framework error.", HTTP 500) and your [diagnostics reporter](/docs/request-ids-and-diagnostics) receives the real error.
 
@@ -128,7 +127,7 @@ A guard receives a `ctx` ([The pipeline context](/docs/pipeline-context)):
 | `$args` | The operation's arguments. |
 | `$requestId` | The request's correlation id ([Request IDs](/docs/request-ids-and-diagnostics)). |
 | `$contract` | The active contract, as passive data. |
-| `$transport` | Remote requests only: `{ method: "POST", headers }`. Header names are lower-cased; repeated headers are joined with `", "`. Server-side calls have no `$transport`. |
+| `$transport` | Remote requests only: `{ method: "POST" \| "GET", headers }` (`"GET"` for a [cached read](/docs/caching-reads)). Header names are lower-cased; repeated headers are joined with `", "`. Server-side calls have no `$transport`. |
 | `ctx.<Resource>...`, `$sql`, `$transaction` | Calls to the framework, for example to read the row a rule depends on. |
 
 ## More places a guard can go
@@ -136,6 +135,21 @@ A guard receives a `ctx` ([The pipeline context](/docs/pipeline-context)):
 - On a field: a field write guard (`resources.<R>.fields.<f>.pipelines.guards`) gets the sent value and `ctx`, and refuses the operation when the caller sends that field: only editors may set `status`. On a relation field it covers `$connect`, `$disconnect` and `$set` too. See [Pipelines](/docs/pipelines#field-pipes-and-field-write-guards).
 - On nested writes: a `Post.create` with a nested `category: { $create: ... }` runs `Category`'s own Resource and `create` guards on the nested data, so a guard that refuses `Category.create` also refuses the nested create (`A4001`). See [Nested writes run the target's stages](/docs/pipelines#nested-writes-run-the-targets-stages).
 - On a whole transaction: `resources.<R>.transactions.pipelines.guards` sees every step of a plan at once (`ctx.$args` is the plan): "a client plan deletes at most one project".
+
+## An access provider: sign-in and policy from one object
+
+A guard decides whether a request may run. When you also want rows and fields checked per caller, use a [policy](/docs/policies). The framework's `access` option takes both halves of that from one object, an `AvAccessProvider` exported from `@aventara/core`:
+
+| Member | What it does |
+|---|---|
+| `state({ headers, request })` | Reads the request (a session cookie, a bearer token, a PIN) and seeds `ctx.$state`. Its `me` is the principal: the signed-in user, or `null`. |
+| `policy` | The policy engine, which checks every client and agent request against `me`. |
+
+```text
+createFramework({ ...aventaraConfig, adapter, access: memberAccess })   // instead of policy, and of the host's state option
+```
+
+The host calls `state` once per request, so neither a guard nor the host's own `state` option has to read the headers. Guards still run, after the policy's admission, and read `ctx.$state.me`. With `access`, leave out `policy` and the host's `state` option: either one beside it is refused (at startup on NestJS, when `Aventara()` is called on Next.js), and is a type error. [Policies](/docs/policies#an-access-provider) has a complete hand-written provider (a till with PIN sign-in) and the rules.
 
 ## Typing a guard
 
@@ -147,14 +161,15 @@ import type { AvGuard } from "@aventara/core";
 const onlyReads: AvGuard = (ctx) => ctx.$operation.family === "find";
 ```
 
-A guard written inline in a configuration that a function returns `as const` has no contextual type, and TypeScript reports `Parameter 'ctx' implicitly has an 'any' type`; annotate it as above. The same applies to pipes, hooks, interceptors, filters and the `diagnostics` sink. A guard that reads other Resources through `ctx` needs your model: `AvGuard<Model>` ([Typing ctx calls](/docs/pipeline-context#typing-ctx-calls)). [Pipelines](/docs/pipelines#typing-a-stage) has the details.
+A guard written inline in a configuration that is an `as const` object (the scaffold's `aventaraConfig`) has no contextual type, and TypeScript reports `Parameter 'ctx' implicitly has an 'any' type`; annotate it as above. The same applies to pipes, hooks, interceptors, filters and the `diagnostics` sink. A guard that reads other Resources through `ctx` needs your model: `AvGuard<Model>` ([Typing ctx calls](/docs/pipeline-context#typing-ctx-calls)). [Pipelines](/docs/pipelines#typing-a-stage) has the details.
 
 ## Tips
 
 - Reject early, verify properly: check the token's signature and expiry in the guard. Do not trust a header because it is present.
 - Authorization needs data as well as a token: a guard may call your own services (the session store, a user service). It is the right place to look up the current user.
 - Row-level rules: a guard sees the operation's arguments. It can read a row it needs through `ctx` (`await ctx.Post.find.unique({ where, select: ["authorId"] })`, a raw read that runs no guards). To limit a user to their own records in a list, add a pipe that rewrites `where` ([Pipelines](/docs/pipelines)).
-- Passport, or any middleware that finds the user: run it with `app.use(...)` and hand what it found to the stages with `AventaraModule`'s `state` option, `state: (req) => ({ user: req.user })`. A guard then reads `ctx.$state.user` ([NestJS host](/docs/nestjs-host#request-state-what-your-middleware-found)). A guard can also put the user it verified into `ctx.$state` itself, for the later stages of the request.
+- Next.js: the host's `state` option reads the request's headers, and `avClient` from `@/aventara/server` passes the headers of `next/headers`, so a guard reads the same `ctx.$state.user` from a browser request and from a Server Component ([Next.js host](/docs/nextjs-host#request-state)).
+- Passport, or any middleware that finds the user: run it with `app.use(...)` and hand what it found to the stages with `AventaraModule`'s `state` option, `state: (req) => ({ user: req.user })`. A guard then reads `ctx.$state.user` ([NestJS host](/docs/nestjs-host#request-state-what-your-middleware-found)). A guard can also put the user it verified into `ctx.$state` itself, for the later stages of the request. A configured [policy](/docs/policies#where-the-principal-comes-from) reads `$state` before any guard runs, so it never sees that user.
 
 ## See also
 

@@ -39,13 +39,10 @@ export const postMeta = AvZ.object({
 export type PostMeta = AvZ.infer<typeof postMeta>;
 // { seo: { title: string; keywords: string[] }; status: "draft" | "published"; rating?: number; cover: string | null }
 
-export async function aventaraConfig(prisma: PrismaService) {
-  return {
-    api: "/api",
-    adapter: /* ... */,
-    resources: { Post: { fields: { meta: { definition: { json: postMeta } } } } },
-  } as const;
-}
+export const aventaraConfig = {
+  api: "/api",
+  resources: { Post: { fields: { meta: { definition: { json: postMeta } } } } },
+} as const;
 ```
 
 `definition` is the same key that adds [computed fields](/docs/computed-fields); a `json` entry on a `Json` field the adapter discovered is how you type it. Like every `definition` it sits at the root only, so the shape applies to your server code and to remote callers alike ([Configuration reference](/docs/config-reference#fields)).
@@ -144,7 +141,7 @@ await framework.application.Post.create.one({
 | `V1005` | a key the shape does not declare, once per key | `Key is not part of the shape.` |
 | `V1003`, `V1004` | a failed check on a node (with `check` and `params`, as for a [field validator](/docs/field-validators)) | `Value must be at most 80 characters long.`, `List must have at most 3 entries.` |
 
-The same refusal from inside a nested write has the nested path (`["arguments", "data", "posts", "$create", "meta", "seo"]`). In a transaction step the path is the address in the request body, `["operations", i, "args", ...]`, and the error's `cause.operation` is the step's zero-based index `i`.
+The same refusal from inside a nested write has the nested path (`["arguments", "data", "posts", "$create", "meta", "seo"]`, with the entry's index after `$create` when it holds an array). In a transaction step the path is the address in the request body, `["operations", i, "args", ...]`, and the error's `cause.operation` is the step's zero-based index `i`.
 
 A value taken from an earlier step is checked like any other, when the step runs. A whole field can be taken from a step with `$ref`: a copy of a row's `meta` into a new row passes when the source fits the shape, and a legacy value that does not fit is refused at the step that writes it:
 

@@ -134,7 +134,7 @@ With the generated client you never write this: pass a `Date`. Calling the HTTP 
 {"data":{"bigViews":"-9223372036854775808"},"code":"A1002","cause":null}
 ```
 
-Keep values within the signed 64-bit range (`-9223372036854775808` to `9223372036854775807`). A plain `Int` is checked against 32 bits: `3000000000` is refused with `V1004` ("Integer value is outside signed 32-bit range.") and `1.5` with `V1001`.
+Keep values within the signed 64-bit range (`-9223372036854775808` to `9223372036854775807`). On Cloudflare D1 (`@prisma/adapter-d1`) the range is ±(2^53 − 1) (`-9007199254740991` to `9007199254740991`), because the D1 driver binds a `BigInt` as a JavaScript number: a value beyond it, written, compared in a filter or used in `$increment`, is answered `422` `A2004` / `V1004` at the value (`["arguments","data","bigViews"]`). A plain `Int` is checked against 32 bits: `3000000000` is refused with `V1004` ("Integer value is outside signed 32-bit range.") and `1.5` with `V1001`.
 
 ## Decimal
 
@@ -162,11 +162,13 @@ Aventara passes every value to the ORM as you send it; how it is stored is the d
 - Arithmetic directives (`$increment`, `$decrement`, `$multiply`, `$divide`) are computed by the database, so their result follows the column like any SQL `UPDATE`: on a `@db.Decimal(10, 2)` column, `{ $divide: 3 }` on `1.00` stores `0.33`.
 - A `Float` holds what JavaScript's `number` holds. SQLite stores `Number.MAX_VALUE` as infinity, which JSON cannot carry, so a later read of that field fails; keep `Float`s inside the finite range you need.
 
-When the database refuses a value (a number out of the column's range, a NUL character in PostgreSQL text, a string longer than a `VarChar` allows, a division by zero), the call is answered `422` `A2004` with the database's reason, not `500`:
+When the database refuses a value (a number out of the column's range, a NUL character in PostgreSQL text, a string longer than a `VarChar` allows, a `@unique` value too long for its index on PostgreSQL, a division by zero, a `BigInt` beyond ±(2^53 − 1) on D1, where the issue sits at the value's path), the call is answered `422` `A2004` with the database's reason, not `500`:
 
 ```text
 {"code":"A2004","cause":{"message":"The database refused a value in the arguments: it cannot store or compare it as written.", ...}}
 ```
+
+A value too long for its column or its index is one `V1004` issue at `["arguments"]`: `The database refused this value: it is longer than the database can hold for its column.`
 
 ## Bytes
 

@@ -1,4 +1,6 @@
-import { source } from "@/lib/source";
-import { createFromSource } from "fumadocs-core/search/server";
-
-export const { GET } = createFromSource(source);
+import { NextResponse } from "next/server";
+export function GET(request: Request) {
+  const url = new URL(request.url);
+  url.pathname = "/framework/api/search";
+  return NextResponse.redirect(url, 308);
+}

@@ -42,7 +42,7 @@ Response success codes are the same in the envelope and in the HTTP status: `cre
 |---|---|---|
 | `where` | `{ field: value \| operators, AND?: [], OR?: [], NOT?: ... }` | A plain value is equality; `null` is `IS NULL`; keys at one level are ANDed. Relation filters: a to-one takes a nested `where` or `null`; a to-many takes `some`, `every`, `none`. |
 | `where` (unique variants) | an identifier: `{ id: 1 }` or `{ email: "..." }` | Must match exactly one active identifier of the Resource, else `V1007`. |
-| `select` | `["id", "name", { posts: { select: [...], where?, orderBy?, limit?, offset?, cursor? } }]` | Fields, and relations in object form to customize them. A nested `"$count"` reducer on a to-many relation changes its result shape. |
+| `select` | `["id", "name", { posts: { select: [...], where?, orderBy?, limit?, offset?, cursor? } }]` | Fields, and relations in object form to customize them. A nested `"$count"` reducer on a to-many relation changes its result shape. `"$defaults"` stands for the level's default projection (`["$defaults", "email"]` is the defaults plus `email`); valid in `select` only ([Querying](/docs/querying#defaults)). |
 | `include` | `["posts", "author"]` | Default scalars plus the named relations (default projection). |
 | `orderBy` | `{ field: "asc" \| "desc" }`, an array of those, or `{ field: { sort, nulls: "first" \| "last" } }` | `nulls` only on nullable fields that allow it. |
 | `limit` | non-negative integer | At most `maxListLimit` (default 250). |
@@ -320,7 +320,7 @@ The same code (`A1008`, 200) whether it created or updated. `where` must be an i
 | `A2009` | 422 | A limit was exceeded. |
 | `A2010` / `A2011` / `A2012` | 413 / 415 / 405 | Body too large, wrong media type, wrong method. |
 | `A3000`, `A3001`, `A3004` | 500 | Unexpected failure, a database failure that is not a caller error, or a server pipe that returned invalid arguments. |
-| `A4000`, `A4001`, `A4002` | 401, 403, 403 | A pipeline guard refused. |
+| `A4000`, `A4001`, `A4002` | 401, 403, 403 | A pipeline guard or the configuration's [policy](/docs/policies) refused. |
 
 Writes can additionally return `A2003` (404, a `$connect` to a record that does not exist), `A2008` (409, a uniqueness or reference conflict), `A2013` and `A2014` (409, retryable concurrency outcomes: nothing was written). Full table with causes and fixes: [Error codes](/docs/error-codes).
 

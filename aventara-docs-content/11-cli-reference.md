@@ -7,9 +7,9 @@ section: reference
 
 # CLI reference
 
-Two commands: `aventara` scaffolds the server; `avclient` sets up the frontend and generates the typed client. Both are run once through `npx` (or installed globally); neither is a runtime dependency of your application.
+Two commands: `aventara` scaffolds the server, on NestJS or Next.js; `avclient` sets up a separate frontend and generates its typed client. Both are run once through `npx` (or installed globally); neither is a runtime dependency of your application.
 
-The examples use the `@rc` tag, which points to the newest release candidate (`1.0.0-rc.2`).
+The examples use the `@rc` tag, which points to the newest release candidate (`1.0.0-rc.11`).
 
 ```bash
 npx @aventara/cli@rc <command>        # or: npm i -g @aventara/cli@rc
@@ -19,8 +19,8 @@ npx @aventara/client@rc <command>     # in the frontend; after init, `npx avclie
 ## aventara
 
 ```text
-aventara new <name> [options]   Create a NestJS project with Aventara (nest new, then init).
-aventara init [options]         Add Aventara to the NestJS 12 project in this directory.
+aventara new <name> [options]   Create a project with Aventara (nest new or create-next-app, then init).
+aventara init [options]         Add Aventara to the NestJS or Next.js project in this directory.
 aventara skill [--force]        Write or refresh the agent skill and the AGENTS.md section.
 aventara --help                 Print usage and exit 0.
 aventara <command> --help       Print that command's usage (new, init, skill) and exit 0.
@@ -46,9 +46,18 @@ aventara: no initial commit: /path/to/repo is inside a git repository already; c
 aventara: no initial commit: git has no user.name and user.email set; set them, then commit the project yourself.
 ```
 
+### aventara new --host next
+
+```bash
+npx @aventara/cli@rc new my-app --host next
+npx @aventara/cli@rc new my-app --host next --yes -- --tailwind
+```
+
+Runs `create-next-app@latest <name> --ts --app --src-dir --import-alias "@/*" --use-<npm|pnpm> --skip-install`, then `aventara init`'s steps over the new app, then the install and the commit. create-next-app asks its own questions on your terminal. With `--yes` it takes its defaults (it is given `--yes` too), which is also what a run without a terminal needs. Its own flags go after `--`, passed as they are. `--skip-git` becomes its `--disable-git`. `--host` defaults to `nest`. What it writes is on [Next.js host](/docs/nextjs-host#what-it-writes).
+
 ### aventara init
 
-Runs inside an existing NestJS 12 project. See [Add to an existing project](/docs/existing-project).
+Runs inside an existing NestJS 12 or Next.js 16 project. It tells them apart by `package.json`: `@nestjs/core` is NestJS, `next` is Next.js. A project that depends on both, or on neither, is refused in one sentence, with nothing written. See [Add to an existing project](/docs/existing-project) for NestJS. A Next.js app must use the App Router under `src/app/`, map `@/*` to `./src/*` in `tsconfig.json` (create-next-app writes both) and have no ORM yet; see [Next.js host](/docs/nextjs-host#add-it-to-an-existing-app).
 
 ### aventara skill
 
@@ -59,6 +68,7 @@ Writes or refreshes the agent skill (`.claude/skills/aventara/`) and the Aventar
 | Flag | Applies to | Meaning | Default |
 |---|---|---|---|
 | `<name>` | `new` | The project directory. | required |
+| `--host <nest\|next>` | `new` | The framework to build on. `init` reads it from `package.json`. Not asked. | `nest` |
 | `--orm <adapter>` | both | The ORM, as an adapter name (`prisma7`; `aventara --help` lists the choices). `prisma` and `prisma@7` are refused. | the only one there is |
 | `--db <provider>` | both | `sqlite` or `postgresql`. | `sqlite` |
 | `--package-manager <npm\|pnpm>` | both | | the lockfile's, else the one that launched the CLI, else npm |
@@ -68,6 +78,7 @@ Writes or refreshes the agent skill (`.claude/skills/aventara/`) and the Aventar
 | `--skip-git` | `new` | Create no repository and make no initial commit (passed to `nest new`). | |
 | `-y`, `--yes` | both | Accept every unanswered default and replace existing content that differs. | |
 | `--verbose` | both | Show the output of `nest new` and of the install as it runs, instead of only when one fails. | |
+| `-- <args>` | `new --host next` | Passed to create-next-app as they are, after its own flags. | |
 
 On a terminal, unanswered questions are asked. Anywhere else (CI, a script), pass the flags or `--yes`, or the run stops in one sentence naming what is missing, before writing anything. A question with only one possible answer is shown, not asked.
 
@@ -87,11 +98,13 @@ aventara: aventara init runs in a NestJS 12 project, and there is no package.jso
 aventara: this project is already initialized: src/app.module.ts uses AventaraModule.
 ```
 
-`aventara init` is also refused for another Nest major, TypeScript 7, a yarn-only lockfile, or an installed Prisma outside `^7.10.0`.
+`aventara init` is also refused for another Nest major, TypeScript 7, a yarn-only lockfile, or an installed Prisma outside `^7.10.1`.
 
 ### What it writes
 
-For a project with no ORM yet: `prisma/schema.prisma` (a `User` model), `prisma.config.ts`, `src/prisma.service.ts`, `src/aventara.config.ts`, one edit each to `src/app.module.ts`, `src/main.ts` and `test/app.e2e-spec.ts`, `.env` (`DATABASE_URL` and `CORS_ORIGINS`), `.gitignore` (which lists `.env`, `/src/generated/` and the SQLite files), and `package.json` (the `@aventara/*` packages at the CLI's version, Prisma and the driver at `7.10.0`, the `aventara:prepare` and `postinstall` scripts, and `prebuild`, `prestart`, `prestart:dev` and `prestart:debug` scripts that run `aventara:prepare` so building or starting regenerates the discovery artifact first). The generated `src/generated/**` is rebuilt by `aventara:prepare` and is never edited. With Prisma already present your schema, Prisma config and service are reused and never written, and `.env` only gets the `CORS_ORIGINS` line appended.
+For a project with no ORM yet: `prisma/schema.prisma` (a `User` model), `prisma.config.ts`, `src/prisma.service.ts`, `src/aventara.config.ts` (the configuration as a plain value, with no adapter), `src/aventara.adapter.ts` (the adapter's description), one edit each to `src/app.module.ts`, `src/main.ts` and `test/app.e2e-spec.ts`, `.env` (`DATABASE_URL` and `CORS_ORIGINS`), `.gitignore` (which lists `.env`, `/src/generated/` and the SQLite files), and `package.json` (the `@aventara/*` packages at the CLI's version, `@aventara/build` among them as a dev dependency, Prisma and the driver at `7.10.1`, the `aventara:prepare` script, which ends with `aventara-build`, the `postinstall` script, and `prebuild`, `prestart`, `prestart:dev` and `prestart:debug` scripts that run `aventara:prepare` so building or starting regenerates the discovery artifact first). The generated `src/generated/**` is rebuilt by `aventara:prepare` and is never edited. In a project whose Prisma client is already generated into `src/generated`, Aventara's generated files go to `src/aventara/` instead, because `prisma generate` empties its own output directory, and `.gitignore` gets the one `/src/aventara/` line. With Prisma already present your schema, Prisma config and service are reused and never written, and `.env` only gets the `CORS_ORIGINS` line appended.
+
+In a Next.js app it writes `src/aventara/config.ts`, `src/aventara/adapter.ts`, `src/aventara/server.ts`, `src/app/api/[...aventara]/route.ts`, `src/instrumentation.ts` (never replacing one of yours: the lines to add are printed), `src/prisma.ts`, Prisma's schema and config, `serverExternalPackages` in `next.config.ts` (printed instead when the config already lists them or is written another way), `.env`, `.gitignore` (which also lists the generated `src/aventara/generated/`, `src/aventara/client.ts` and `src/aventara/universal.ts`), and `package.json` (`@aventara/core`, `@aventara/next`, the adapter, `@aventara/build`, `server-only`, Prisma, and `aventara:prepare` ending in `aventara-build --client`, run by `postinstall` and `prebuild`). No CORS, no proxy file and no MCP route. See [Next.js host](/docs/nextjs-host#what-it-writes).
 
 The `src/main.ts` edit enables CORS for the origins in `CORS_ORIGINS` (default `http://localhost:5173,http://localhost:3001`; unset or empty means CORS off) and adds a commented-out platform rate limiter. If `main.ts` already configures CORS it is left alone, and if it has no `const app = await NestFactory.create(...)` line, the lines are printed instead ([Add to an existing project](/docs/existing-project#what-it-changes-in-maints-and-env)). See [Rate limiting](/docs/limits-and-safety#rate-limiting).
 
@@ -122,6 +135,17 @@ Next:
   2. Create the database tables: npx prisma db push
   3. Start the server: npm run start:dev
   4. In your frontend: npx @aventara/client@rc init
+  5. Call the API with curl: see "Calling the API over HTTP" in .claude/skills/aventara/SKILL.md
+```
+
+A Next.js app has no frontend step, and starts with `npm run dev`:
+
+```text
+Next:
+  1. Enter the project: cd my-app
+  2. Create the database tables: npx prisma db push
+  3. Start the app: npm run dev
+  4. Call the API with curl: see "Calling the API over HTTP" in .claude/skills/aventara/SKILL.md
 ```
 
 With `--skip-install` there is one more step, `Install, which also runs aventara:prepare: npm install`, after entering the project. Under pnpm the commands read `pnpm exec prisma db push` and `pnpm dlx @aventara/client@rc init`.
@@ -134,7 +158,7 @@ The runner (`npx` or `pnpm dlx`) matches your package manager. The server answer
 avclient init [options]     Set up this frontend: framework.client.ts, the .env entry, the
                             avclient:generate script and the @aventara/client devDependency;
                             install; generate.
-avclient generate [--yes]   Read framework.client.ts (or .js, .mjs, .cjs, .mts, .cts), fetch
+avclient generate [--yes]   Read framework.client.ts (or .mts, .cts, .js, .mjs, .cjs), fetch
                             <entrypoint>/_contract, and write AvClient.ts and generated/ into
                             generateAt, its imports spelled as the project's tsconfig.json says.
 avclient --help             Print usage and exit 0.
@@ -199,7 +223,26 @@ avclient: entrypoint reads AVENTARA_API_URL, which is not set in the process env
 
 ## aventara-prisma7-generate
 
-The bin of `@aventara/prisma7-adapter`, run by the scaffold's `aventara:prepare` script. Flags `--schema`, `--client`, `--provider`, `--driver`, `--out`, `--config`, `-h`/`--help`; see [Configuration reference](/docs/config-reference#aventara-prisma7-generate).
+The bin of `@aventara/prisma7-adapter`, run by the scaffold's `aventara:prepare` script. Flags `--schema`, `--client`, `--provider`, `--driver`, `--out`, `--config`, `-h`/`--help`; see [Configuration reference](/docs/config-reference#aventara-prisma7-generate). A `--provider` that the schema's `datasource` block contradicts, and an `--out` file the file system will not let it write, are each refused in one sentence (exit 1).
+
+## aventara-build
+
+The bin of `@aventara/build`, a dev dependency, run by the scaffold's `aventara:prepare` script right after `aventara-prisma7-generate`. It writes `resources.generated.ts`, `computed-fields.generated.ts` and `contracts.generated.ts`, in that order, beside the discovery artifact.
+
+| Flag | Meaning |
+|---|---|
+| (none) | Write the three files. A configuration a server would refuse at startup (`CONFIG_...`, `COMPILER_...`) fails the build with the same message, writes nothing and exits `1`. |
+| `--client` | Next.js projects only: also write the browser client, `src/aventara/client.ts`, `src/aventara/universal.ts` and the client's modules under `src/aventara/generated/`, from the ClientContract just compiled. No server has to run. Refused in a NestJS project, whose frontends use `avclient generate`. |
+| `--check` | Write nothing. Exit `0` when the files on disk are what a build would write now, `1` when one is missing or stale, naming the file and saying what changed, in the words of the `AVENTARA_PREBUILT_STALE` warning at startup: the `@aventara/core` version that wrote it against the one installed, a file format or protocol version that differs, the Resources that changed, are new or are gone, the configuration or model outside the Resources, or a file that no longer reads as a prebuilt Contracts file. For CI. |
+| `--check --client` | As `--check`, then the browser client's files: a missing or stale one, or one an earlier ClientContract's client left, exits `1` naming it. |
+| `-h`, `--help` | Print the usage and exit `0`. |
+
+```text
+aventara-build: src/generated/aventara/contracts.generated.ts is stale: it was built by @aventara/core 1.0.0-rc.7, and this is 1.0.0-rc.8. Run aventara-build (npm run aventara:prepare) and deploy the file it writes.
+aventara-build: src/generated/aventara/contracts.generated.ts is stale: Resource User changed and the configuration or model outside the Resources changed since it was written. Run aventara-build (npm run aventara:prepare) and deploy the file it writes.
+```
+
+It never opens a database connection. It runs `src/aventara.config.ts` and `src/aventara.adapter.ts` (in a project that depends on `@aventara/next`, `src/aventara/config.ts` and `src/aventara/adapter.ts`), so their top level must be free of side effects. A project that depends on both `@aventara/nest` and `@aventara/next` is refused. What each file holds is on [Deploying](/docs/deploying#build-time-contracts) and [Configuration](/docs/configuration#the-generated-resource-tree).
 
 ## Exit codes
 
@@ -214,10 +257,10 @@ A stack trace means a defect in the tool; please report it.
 
 | | |
 |---|---|
-| Node.js | `^22.18.0 \|\| >=24.2.0`. On any other version the bin refuses in one sentence naming this range. On Node 22 use npm 11 or newer. |
+| Node.js | `^22.23.4 \|\| >=24.22.1`. On any other version the bin refuses in one sentence naming this range. On Node 22 use npm 11 or newer. |
 | Package managers | npm, pnpm. Yarn is not supported. |
-| Projects | NestJS 12 (a fresh one is ESM), ESM or CommonJS. `avclient`: any TypeScript project (a `tsconfig.json`); plain JavaScript is not supported yet. |
-| ORM | Prisma 7 (`^7.10.0`): SQLite and PostgreSQL. |
-| TypeScript | `avclient`: `>=5.5.0`, including 7 (under 7 the post-generate check degrades to a syntax and shape check with a warning). `aventara` and the Prisma adapter: `<7` (the scaffolded server uses 6). |
+| Projects | NestJS 12 (a fresh one is ESM), ESM or CommonJS. Next.js `>=16.4 <17`, App Router under `src/app/`. `avclient`: any TypeScript project (a `tsconfig.json`); plain JavaScript is not supported yet. |
+| ORM | Prisma 7 (`^7.10.1`): SQLite and PostgreSQL. |
+| TypeScript | `avclient`: `>=5.7.0`, including 7 (under 7, or below 5.7, the post-generate check degrades to a syntax and shape check with a warning). `aventara` and the Prisma adapter: `>=5.7.0 <7` (the scaffolded server uses 6). |
 
 See also: [Upgrading](/docs/upgrading), [Deploying](/docs/deploying).

@@ -89,7 +89,10 @@ AventaraModule.forRootAsync({
   imports: [PrismaModule],
   inject: [PrismaService],
   useFactory: async (prisma: PrismaService) => ({
-    config: await aventaraConfig(prisma),
+    config: {
+      ...aventaraConfig,
+      adapter: await createPrismaAdapter({ ...adapter, client: prisma }),
+    },
   }),
 }),
 ```
@@ -104,7 +107,7 @@ AventaraModule.forRootAsync({
 DI carries no type argument, so type the parameter with your own alias:
 
 ```ts
-// src/aventara.config.ts
+// src/aventara.framework.ts (buildFramework: createFramework({ ...aventaraConfig, adapter }))
 export type AppFramework = Awaited<ReturnType<typeof buildFramework>>;
 
 // src/stats.service.ts
@@ -125,7 +128,7 @@ export class StatsService {
 One route per advertised operation (`POST <api>/_resources/<Resource>/<family>/<variant>`), `GET <api>/_contract`, `POST <api>/_transactions` only when the client contract advertises `interactive`, and an absence handler for the rest of `<api>/_*`. It logs one line through Nest's `Logger` (context `AventaraModule`; silenced by `logger: false`), verified:
 
 ```text
-[Nest] LOG [AventaraModule] Aventara mounted 45 operations at /api (+ GET /api/_contract, POST /api/_transactions)
+[Nest] LOG [AventaraModule] Aventara mounted 45 operations at /api (+ GET /api/_contract, POST /api/_transactions, POST /api/_all)
 ```
 
 `AvConfig.api` alone decides where it is mounted; `app.setGlobalPrefix(...)` does not move it.

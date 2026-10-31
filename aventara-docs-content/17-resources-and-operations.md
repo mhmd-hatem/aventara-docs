@@ -158,7 +158,7 @@ await avClient.User.upsert.unique({
 
 Two behaviors to keep in mind:
 
-- `update.first` and `delete.first` run as a read followed by a write inside one transaction. The record written is one the read selected, or nothing is written and you get `A2014`. If correctness depends on the record still being the first match at the instant of the write, select it yourself and use `update.unique` or `delete.unique`.
+- `update.first` and `delete.first` run as a read followed by a write inside one transaction. The record written is one the read selected, or nothing is written and you get `A2014`. If correctness depends on the record still being the first match at the instant of the write, select it yourself and use `update.unique` or `delete.unique`. Not offered with `@prisma/adapter-d1`, which has no transactions.
 - Whether a variant is available is decided in two steps: the adapter advertises what it can perform faithfully, then [exposure](/docs/exposure#operations) can switch some off per layer. The result is in the contract:
 
 ```json
@@ -188,6 +188,20 @@ Each Resource's contract entry also says what a create cannot do without, as the
 - `parentSupplies`: what a create nested through a parent's relation gets from the parent. A `Post` created in `User.posts` needs neither `author` nor `authorId`.
 
 A layer's contract lists only what that layer lets a caller write: when exposure hides `authorId`, the group becomes `"required": ["author", "title"]`; when it hides `author`, `["authorId", "title"]`. A field with a [`compute.create`](/docs/computed-fields) stage is left out. A layer that can still create the Resource cannot leave a requirement unwritable on create (a required field hidden or with its `create` exempted, or a relation hidden with any field that holds its reference) unless a `compute.create` fills it: startup refuses it with `COMPILER_HIDDEN_REQUIRED_FIELD`. A `create.many` or `create.count` record writes no relation, so there a `oneOf` group means its fields: each record needs `authorId`, and a layer that keeps those variants cannot hide `authorId` either, even with `author` exposed. A Resource that requires nothing has no `createRequirements`. Like the rest of the contract, it is part of the [contract hash](/docs/contract-hash). The generated client and the server-side calls are typed by it ([Relations and nested writes](/docs/relations-and-nested-writes#required-relations-and-fields)).
+
+## How relations are paired
+
+Each relation field also says how it is paired, as the adapter read it off your schema:
+
+```text
+"author": { "kind": "relation", "target": "User", "cardinality": "one", "nullable": false, "inverse": "posts", "referenceFields": ["authorId"], "capabilities": { … } }
+"posts":  { "kind": "relation", "target": "Post", "cardinality": "many", "nullable": false, "inverse": "author", "capabilities": { … } }
+```
+
+- `inverse`: the target's relation field at the other end (`User.posts` and `Post.author`; a self-relation's two ends name each other). A layer's contract names it only while that layer shows the other end.
+- `referenceFields`: the scalar fields of this Resource that hold the relation's reference, in the order the database pairs them with the target's key (`["authorId"]`; a composite reference lists every field). Present on optional relations as on required ones; absent on the end that holds no reference (`User.posts`). A layer's contract keeps the ones it shows and leaves the member out when it shows none.
+
+Inside a record written through a relation, that relation's other end and its reference fields are what the enclosing write supplies: a post created in `User.posts` cannot write `author` or `authorId`, and one created in `Category.posts` cannot write `category` or `categoryId` (`A2004`, `V1012`; the generated client's types leave them out). Both members are part of the contract hash.
 
 ## Success codes
 

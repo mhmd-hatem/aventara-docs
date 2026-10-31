@@ -14,6 +14,7 @@ Aventara has several places to run your own code around an operation, and most t
 | You want to | Use | Where it goes |
 |---|---|---|
 | Check a permission | a guard | `pipelines.guards`, at the layer, a Resource, a family or a variant |
+| Limit which rows and fields a caller may read or write, per caller | a [policy](/docs/policies) | the root `policy` key: an engine that answers `can`, `scopeOf` and `fieldsOf`. It runs before your guards. |
 | Refuse a write to one field | a field write guard | `resources.<R>.fields.<f>.pipelines.guards` |
 | Normalize input (trim, lower-case, add a default, scope a query) | a pipe, or a field pipe for one field's value | `pipelines.pipes`, or `resources.<R>.fields.<f>.pipelines.pipes` |
 | Enforce a rule on a value (length, range, pattern, format) | a validator | `resources.<R>.fields.<f>.pipelines.validators` |
