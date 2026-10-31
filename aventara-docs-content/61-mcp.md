@@ -15,7 +15,7 @@ This page is about your application serving its data to agents. For the coding a
 
 ## Setup
 
-Install `@aventara/mcp` beside `@aventara/nest`, pinned to the same version as `@aventara/core` (here, `1.0.0-rc.11`):
+Install `@aventara/mcp` beside `@aventara/nest`, pinned to the same version as `@aventara/core` (here, `1.0.0-rc.12`):
 
 ```bash
 npm install --save-exact @aventara/mcp@rc
@@ -43,7 +43,7 @@ Start the server. The log shows the endpoint next to the protocol's routes:
 If `mcp` is set and `@aventara/mcp` is not installed, the application refuses to start and gives the install command, pinned to the `@aventara/core` version you have:
 
 ```text
-AventaraModule: the configuration has `mcp`, and the package that serves it, @aventara/mcp, is not installed. Install it at @aventara/core's exact version (npm install --save-exact @aventara/mcp@1.0.0-rc.11), or remove `mcp` from the configuration.
+AventaraModule: the configuration has `mcp`, and the package that serves it, @aventara/mcp, is not installed. Install it at @aventara/core's exact version (npm install --save-exact @aventara/mcp@1.0.0-rc.12), or remove `mcp` from the configuration.
 ```
 
 The path follows the same rules as `api`, and it cannot be `api` itself or sit inside the protocol's `_` routes. See [Configuration](/docs/configuration#the-agent-layer-and-mcp).

@@ -7,11 +7,31 @@ section: about
 
 # Changelog
 
-`1.0.0-rc.0` was the first release candidate, `1.0.0-rc.1` the second, `1.0.0-rc.2` the third, `1.0.0-rc.3` the fourth, `1.0.0-rc.4` the fifth, `1.0.0-rc.8` the sixth, `1.0.0-rc.9` the seventh, `1.0.0-rc.10` the eighth and `1.0.0-rc.11` is the ninth (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published); the releases before them are pilots, and a pilot's API could change. A release candidate changes the API only to fix what testing finds. Pin exact versions. All `@aventara/*` packages are released together at one version. Each package also ships this history for itself as a `CHANGELOG.md` beside its README.
+`1.0.0-rc.0` was the first release candidate, `1.0.0-rc.1` the second, `1.0.0-rc.2` the third, `1.0.0-rc.3` the fourth, `1.0.0-rc.4` the fifth, `1.0.0-rc.8` the sixth, `1.0.0-rc.9` the seventh, `1.0.0-rc.10` the eighth, `1.0.0-rc.11` the ninth and `1.0.0-rc.12` is the tenth (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published); the releases before them are pilots, and a pilot's API could change. A release candidate changes the API only to fix what testing finds. Pin exact versions. All `@aventara/*` packages are released together at one version. Each package also ships this history for itself as a `CHANGELOG.md` beside its README.
+
+## 1.0.0-rc.12
+
+The current release, published under the `rc` dist-tag (install with `@rc`). A unique field a layer may not filter on stops being a lookup key, and the scaffold writes String ids and Prisma ranges. Upgrading from rc.11: see [Upgrading](/docs/upgrading#from-100-rc11-to-100-rc12).
+
+**Lookup keys**
+
+- A unique field a layer may not filter on is no longer an identifier of that layer: a write-only field (`["select", "filter", "order"]`), one with `filter` exempted (`["filter"]`), or a Pick that leaves `filter` out. Before, `find.unique`, `update.unique`, `upsert.unique`, `delete.unique` and a nested `$connect` or `$connectOrCreate` still looked a record up by it, over every route including `/_all` and `/_transactions`. Such a selector is now refused `V1007` before the adapter is called, a compound identifier goes with any one of its fields, and the generated client and the server façades no longer offer it.
+- A layer that keeps a unique operation with no filterable identifier left fails at startup with `COMPILER_MISSING_IDENTIFIER`. Under `exposed: false`, pick `id: ["select", "filter"]`, not `id: ["select"]`, to keep `find.unique`. The agent skill's Pick example says so.
+
+**Scaffold**
+
+- `aventara new` and `aventara init` (with no ORM yet) write the starter model as `User { id String @id @default(cuid()) }` instead of an `Int` autoincrement id. `cuid()` works on every database the CLI offers. A project already scaffolded with `Int` keeps its schema. The agent skill's examples no longer assume a numeric `User` id.
+- `aventara new` and `aventara init` write Prisma, `@prisma/client` and the driver adapter at the adapter's range `^7.10.1` instead of its lowest version, so a new project installs the newest Prisma 7 and never Prisma 8. `aventara init` on a project that already uses Prisma leaves its Prisma versions as they are.
+- `aventara init` adds `.env` to `.gitignore` whenever it writes to `.env`. Before, it ignored `.env` only when the ORM scaffold created or filled it, so appending `CORS_ORIGINS` to your own `.env` could leave its secrets committable. A `.env` the CLI leaves untouched leaves `.gitignore` as it was.
+
+**Hosts and client**
+
+- `@aventara/nest` is built and tested against NestJS 12.3.2. The peer range stays `^12.0.0`.
+- `avclient generate` no longer renames a Resource named `all` to `allModel`; the server already refuses such a Resource in the Client Contract.
 
 ## 1.0.0-rc.11
 
-The current release, published under the `rc` dist-tag (install with `@rc`). It adds Operation Sets (several calls in one request), cached `GET` reads, and a stricter `avLazy`, and it moves the docs. Every ClientContract hash changes, so regenerate your clients. Upgrading from rc.8: see [Upgrading](/docs/upgrading#from-100-rc8-to-100-rc11).
+Published under the `rc` dist-tag before rc.12. It adds Operation Sets (several calls in one request), cached `GET` reads, and a stricter `avLazy`, and it moves the docs. Every ClientContract hash changes, so regenerate your clients. Upgrading from rc.8: see [Upgrading](/docs/upgrading#from-100-rc8-to-100-rc11).
 
 **Operation Sets**
 

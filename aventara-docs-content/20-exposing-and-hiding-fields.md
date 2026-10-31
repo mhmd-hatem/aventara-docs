@@ -78,6 +78,8 @@ Without `filter` and `order` it also cannot be used in `where` or `orderBy`:
 {"code":"A2004","cause":{"issues":[{"code":"V1006","path":["arguments","where","passwordHash"],"message":"Filtering is not available on field \"passwordHash\"."}]}}
 ```
 
+A unique field the layer may not filter on is not a lookup key in that layer: `find.unique`, `update.unique`, `upsert.unique`, `delete.unique` and a nested `$connect` or `$connectOrCreate` by it are refused (`V1007`). This holds for a write-only field, a field with `filter` exempted, and a Pick that leaves `filter` out, so pick `id: ["select", "filter"]` to look records up by `id`.
+
 A plain `find.many({})` simply leaves the field out. A create that includes it works, and the response omits it:
 
 ```json

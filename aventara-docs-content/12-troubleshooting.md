@@ -252,7 +252,7 @@ A list asked for more than the limit. Page with `limit` and `offset` (or `cursor
 
 ## `A2004` / `V1007` on a unique operation
 
-`find.unique`, `update.unique`, `delete.unique` and `upsert.unique` need `where` to be exactly one identifier (`{ id: 1 }` or `{ email: "..." }`). `{ name: "Ada" }` answers `Unique selector must exactly match one active identifier on Resource "User".` Use `find.first` for a non-unique match.
+`find.unique`, `update.unique`, `delete.unique` and `upsert.unique` need `where` to be exactly one identifier (`{ id: 1 }` or `{ email: "..." }`). `{ name: "Ada" }` answers `Unique selector must exactly match one active identifier on Resource "User".` Use `find.first` for a non-unique match. A unique field the layer may not filter on (write-only, `filter` exempted, or a Pick without `"filter"`) is not an identifier there, so selecting by it answers the same.
 
 ## `A2004` / `V1008`: "select and include are mutually exclusive" or "is not selectable"
 

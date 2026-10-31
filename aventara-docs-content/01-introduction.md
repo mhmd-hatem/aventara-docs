@@ -54,7 +54,7 @@ Which package goes where, and which are dev or runtime dependencies, is on [Inst
 
 ## Status
 
-Aventara is a release candidate. The current release is `1.0.0-rc.11`, published under the `rc` dist-tag. Install with `@rc`, as the commands in these docs do, so you get the newest release candidate:
+Aventara is a release candidate. The current release is `1.0.0-rc.12`, published under the `rc` dist-tag. Install with `@rc`, as the commands in these docs do, so you get the newest release candidate:
 
 ```bash
 npx @aventara/cli@rc new my-api
