@@ -39,7 +39,7 @@ AGENTS.md
 To refresh them after upgrading, run `aventara skill` in the project, with the CLI at your `@aventara/core` version:
 
 ```bash
-npx @aventara/cli@1.0.0-rc.11 skill
+npx @aventara/cli@1.0.0-rc.12 skill
 ```
 
 It reads the installed `@aventara/core`'s version and `ERRORS.md` (it runs none of your packages), then:
@@ -72,7 +72,7 @@ description: Build and change this project's Aventara API (NestJS or Next.js, Pr
 
 # Aventara
 
-Aventara turns the Prisma schema into a typed API: every model is a Resource with standard operations (`find`, `create`, `update`, `delete`, `upsert`), served at `api` (`/api`) and called from the generated frontend client. You configure it; you do not write controllers. Written for `@aventara/core` 1.0.0-rc.11.
+Aventara turns the Prisma schema into a typed API: every model is a Resource with standard operations (`find`, `create`, `update`, `delete`, `upsert`), served at `api` (`/api`) and called from the generated frontend client. You configure it; you do not write controllers. Written for `@aventara/core` 1.0.0-rc.12.
 
 There is one way to do each task. Follow these rules; the reference files hold the detail:
 
@@ -197,7 +197,7 @@ curl -X POST http://localhost:3000/api/_resources/User/create/one \
   -d '{ "data": { "email": "ada@example.com", "name": "Ada" } }'
 ```
 
-It answers `201` with `{"data":{"email":"ada@example.com","id":1,"name":"Ada"},"code":"A1002","cause":null}`. Without the two headers the answer is `400 A2000`; a lower-case `user` is `404 A2001`; arguments outside `data` are `422 A2004`. After a schema or configuration change the hash changes and an old one is `409 A2005`: fetch it again. Several operations in one request: `POST <api>/_all` (`reference/client.md`, By hand).
+It answers `201` with `{"data":{"email":"ada@example.com","id":"cmhfa2k1x0000l8v4b2c9d7e3","name":"Ada"},"code":"A1002","cause":null}`. Without the two headers the answer is `400 A2000`; a lower-case `user` is `404 A2001`; arguments outside `data` are `422 A2004`. After a schema or configuration change the hash changes and an old one is `409 A2005`: fetch it again. Several operations in one request: `POST <api>/_all` (`reference/client.md`, By hand).
 
 ## Before you finish
 
@@ -270,7 +270,7 @@ const { list, total } = await avClient.all({
 const panels = await avClient.all(
   {
     posts: avClient.Post.find.many({ select: ["id", "title"] }),
-    me: avClient.User.find.unique({ where: { id: 1 }, select: ["id", "email"] }),
+    me: avClient.User.find.unique({ where: { email: "ada@example.com" }, select: ["id", "email"] }),
   },
   { settle: true },
 );

@@ -75,7 +75,7 @@ datasource db {
 }
 
 model User {
-  id    Int     @id @default(autoincrement())
+  id    String  @id @default(cuid())
   email String  @unique
   name  String?
 }
@@ -303,7 +303,7 @@ const ada = await avClient.User.create.one({
   data: { email: "ada@example.com", name: "Ada" },
   select: ["id", "email"],
 });
-// { id: 1, email: "ada@example.com" }
+// { id: "cmhb3k7q00000a8f2x9d1e4tz", email: "ada@example.com" }   (a cuid)
 
 const users = await avClient.User.find.many({
   where: { email: { contains: "example.com" } },
@@ -328,7 +328,7 @@ enum Role {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
+  id           String   @id @default(cuid())
   email        String   @unique
   name         String?
   role         Role     @default(USER)
@@ -337,12 +337,12 @@ model User {
 }
 
 model Post {
-  id        Int     @id @default(autoincrement())
+  id        String  @id @default(cuid())
   title     String
   views     Int     @default(0)
   published Boolean @default(false)
   author    User    @relation(fields: [authorId], references: [id])
-  authorId  Int
+  authorId  String
 }
 ```
 
@@ -377,7 +377,7 @@ const grace = await avClient.User.create.one({
   data: { email: "grace@example.com", name: "Grace", passwordHash: "hash-from-your-auth-code" },
   select: ["id", "email", "role"],
 });
-// { id: 2, email: "grace@example.com", role: "USER" }   (Ada from step 4 is id 1)
+// { id: "cmhb3k9w20001a8f2c6p0v7qm", email: "grace@example.com", role: "USER" }
 
 await avClient.Post.create.one({
   data: { title: "Hello", published: true, author: { $connect: { id: grace.id } } },
@@ -389,14 +389,14 @@ const posts = await avClient.Post.find.many({
   orderBy: { id: "desc" },
   limit: 10,
 });
-// [{ id: 1, title: "Hello", author: { id: 2, name: "Grace" } }]
+// [{ id: "cmhb3kb1x0002a8f2j5n8r0wy", title: "Hello", author: { id: "cmhb3k9w20001a8f2c6p0v7qm", name: "Grace" } }]
 
 const users = await avClient.User.find.many({
   select: ["id", { posts: { select: ["id", "title", "$count"] } }],
 });
 // [
-//   { id: 1, posts: { data: [], count: 0 } },
-//   { id: 2, posts: { data: [{ id: 1, title: "Hello" }], count: 1 } },
+//   { id: "cmhb3k7q00000a8f2x9d1e4tz", posts: { data: [], count: 0 } },
+//   { id: "cmhb3k9w20001a8f2c6p0v7qm", posts: { data: [{ id: "cmhb3kb1x0002a8f2j5n8r0wy", title: "Hello" }], count: 1 } },
 // ]
 
 await avClient.Post.update.many({ where: { published: true }, data: { views: { $increment: 1 } } });
