@@ -449,7 +449,7 @@ Prisma has no `delete.many`. Common shapes:
 - Write-only field: `fields: { passwordHash: ["select", "filter", "order"] }`.
 - Read-only for remote callers: `client.exemptions…fields: { likeCount: ["create", "update"] }`.
 - Hide a Resource from remote callers: `client.exemptions.resources.AuditLog: true`. Hide the relations that point at it too, or startup fails with `COMPILER_DANGLING_RELATION`.
-- A public client that reaches only what the frontend calls: `client: { exposed: false, exemptions: { resources: { Post: { operations: { find: ["many", "unique"] }, fields: { id: ["select"], title: ["select"] } } } } }`. A unique operation needs its identifier exposed (`COMPILER_MISSING_IDENTIFIER`).
+- A public client that reaches only what the frontend calls: `client: { exposed: false, exemptions: { resources: { Post: { operations: { find: ["many", "unique"] }, fields: { id: ["select", "filter"], title: ["select"] } } } } }`. A unique operation needs its identifier exposed with its `filter`, since a unique `where` filters on it (`COMPILER_MISSING_IDENTIFIER`); a field a layer may not filter on, a write-only secret say, is no identifier there.
 
 A hidden field disappears from that layer's inputs, outputs, filters, ordering and the generated client. A client exemption changes the contract hash: regenerate the frontend client.
 

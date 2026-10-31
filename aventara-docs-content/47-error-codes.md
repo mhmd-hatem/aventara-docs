@@ -694,8 +694,8 @@ When the configuration cannot be built into contracts, `createFramework` (and `A
 
 **A unique operation has no identifier.**
 
-- Cause: A layer exposes a unique variant (find.unique, update.unique, delete.unique, upsert.unique) and no complete identifier of the Resource: a Pick that did not pick one, or an Omit that hid every one.
-- Fix: Expose an identifier field (id, or every field of one unique), or exempt the unique variants.
+- Cause: A layer exposes a unique variant (find.unique, update.unique, delete.unique, upsert.unique) and no complete identifier of the Resource it may filter on: a Pick that did not pick one with its filter, or an Omit that hid every one or its filter.
+- Fix: Expose an identifier field with its filter (id, or every field of one unique), or exempt the unique variants.
 
 #### `COMPILER_HIDDEN_REQUIRED_FIELD`
 
