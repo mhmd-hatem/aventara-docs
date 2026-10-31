@@ -158,7 +158,7 @@ client: {
       Post: {
         operations: { find: ["many", "unique"], create: ["one"] },
         fields: {
-          id: ["select", "order"],
+          id: ["select", "filter", "order"],
           title: ["select", "create", "filter"],
           body: ["select", "create"],
           createdAt: ["select", "order"],
@@ -171,7 +171,7 @@ client: {
 },
 ```
 
-The client contract then has `Post` with `find.many`, `find.unique` and `create.one`, and five fields with exactly those capabilities. `User` has no operations: it is there only as the target of `Post.author`, with `id` and `name` readable through it. `Post.author` can be selected and written with `$connect` only.
+The client contract then has `Post` with `find.many`, `find.unique` and `create.one`, and five fields with exactly those capabilities. `Post.id` has `filter` because `find.unique` looks a post up by it. `User` has no operations: it is there only as the target of `Post.author`, with `id` and `name` readable through it. `Post.author` can be selected and written with `$connect` only.
 
 Under `exposed: false`, an object that grants nothing (`{}`, `{ select: false }`, `{ create: [] }`, or a Resource object that grants no field and no operation) is the same as leaving the entry out: the name does not reach the contract, and the hash is the same either way.
 
@@ -288,7 +288,7 @@ contract-compilation  COMPILER_MISSING_IDENTIFIER  client.exemptions.resources.U
   client.exemptions.resources.User.operations.find.unique needs an identifier field; pick `id` (or another complete identifier) too
 ```
 
-Under `exposed: true` the message says to keep an identifier exposed, or to exempt the operation too. A hidden field that is part of one identifier only removes that identifier; the unique operations stay as long as another complete identifier is left.
+An identifier field counts only where the layer can filter on it: a Pick of `id: ["select"]` without `"filter"` leaves no identifier, and a unique field with its `filter` exempted is refused as a selector (`V1007`). Under `exposed: true` the message says to keep an identifier exposed, or to exempt the operation too. A hidden field that is part of one identifier only removes that identifier; the unique operations stay as long as another complete identifier is left.
 
 ## Creates need what they require
 

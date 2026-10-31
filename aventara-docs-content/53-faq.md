@@ -61,7 +61,7 @@ Only what the client contract advertises, only with the arguments it allows, and
 
 ## Can I use it in production?
 
-It is a release candidate (`1.0.0-rc.11`): until 1.0 the API can still change, breaking changes included (`1.0.0-rc.1` reshaped the configuration), and every change is listed in the Changelog with its upgrade steps. Pin exact versions and read the [Changelog](/docs/changelog) before upgrading.
+It is a release candidate (`1.0.0-rc.12`): until 1.0 the API can still change, breaking changes included (`1.0.0-rc.1` reshaped the configuration), and every change is listed in the Changelog with its upgrade steps. Pin exact versions and read the [Changelog](/docs/changelog) before upgrading.
 
 ## The license, in plain terms
 

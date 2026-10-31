@@ -43,7 +43,7 @@ Each package ships its `CHANGELOG.md` beside its README, so the release notes fo
 
 ### Server side
 
-A project made by `aventara new` has this in `package.json` (versions are exact):
+A project made by `aventara new` has this in `package.json`. The Aventara versions are exact; Prisma and the driver are written at the adapter's range `^7.10.1`, so the first install takes the newest Prisma 7 and never Prisma 8:
 
 ```json
 {
@@ -51,10 +51,10 @@ A project made by `aventara new` has this in `package.json` (versions are exact)
     "@aventara/core": "1.0.0-rc.12",
     "@aventara/nest": "1.0.0-rc.12",
     "@aventara/prisma7-adapter": "1.0.0-rc.12",
-    "@prisma/adapter-better-sqlite3": "7.10.1",
-    "@prisma/client": "7.10.1"
+    "@prisma/adapter-better-sqlite3": "^7.10.1",
+    "@prisma/client": "^7.10.1"
   },
-  "devDependencies": { "@aventara/build": "1.0.0-rc.12", "prisma": "7.10.1" },
+  "devDependencies": { "@aventara/build": "1.0.0-rc.12", "prisma": "^7.10.1" },
   "scripts": {
     "aventara:prepare": "aventara-prisma7-generate --schema prisma/schema.prisma --client src/generated/prisma --provider sqlite --driver @prisma/adapter-better-sqlite3 --out src/generated/aventara/discovery.artifact.ts --config src/aventara.config.ts && aventara-build",
     "postinstall": "npm run aventara:prepare",

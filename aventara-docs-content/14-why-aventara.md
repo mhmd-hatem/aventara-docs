@@ -190,7 +190,7 @@ The protocol is plain HTTP and JSON, published as data and pure functions in `@a
 
 ## Tradeoffs
 
-- Release candidate. The current release is `1.0.0-rc.11`. Until 1.0 the public API can still change, breaking changes included, each one listed in the Changelog with upgrade steps; pin exact versions.
+- Release candidate. The current release is `1.0.0-rc.12`. Until 1.0 the public API can still change, breaking changes included, each one listed in the Changelog with upgrade steps; pin exact versions.
 - NestJS and Prisma 7 only, today. The framework core is transport- and ORM-agnostic, but the adapter shipped is Prisma 7 (SQLite or PostgreSQL) and the host is NestJS 12.
 - A fixed query language. The operations and their meaning are set by the protocol; configuration can switch operations off but not redefine them. Bespoke business logic (a payment, a report) is ordinary NestJS code that sits beside Aventara, or a pipeline on the operations; a hook can write related rows in the same transaction as the operation ([The pipeline context](/docs/pipeline-context)).
 - One `POST` per operation. Reads are `POST` requests with a JSON body, so HTTP caching of individual reads is not what the protocol optimizes for.
