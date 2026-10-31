@@ -80,11 +80,11 @@ The framework warns this when `access` is given only in `server.ts`. Put `access
 
 ### prisma validate fails after auth generate
 
-The scaffold's `User.id` is an `Int`, and Better Auth's ids are strings. Put `advanced: { database: { generateId: "serial" } }` in the `betterAuth` block, delete the models `generate` wrote (and Access's), and run it again ([Better Auth's tables](/docs/create-access#better-auths-tables)). Map `sub` with `Number(sub)` in `principal`.
+`User.id` is an `Int`, and Better Auth's ids are strings. Make it `id String @id @default(cuid())`, delete the models `generate` wrote (and Access's), and run it again ([User ids](/docs/create-access#user-ids)). Numeric ids (`generateId: "serial"`) are refused.
 
 ### auth generate says the schema is already up to date
 
-It only adds what the schema lacks. If it wrote `String` ids before you added `generateId: "serial"`, delete those models and run it again.
+It only adds what the schema lacks. If its models were written against an older schema, delete them (and Access's) and run it again.
 
 ### A Babel note about AvComputedFields
 

@@ -45,7 +45,7 @@ Everything but `@aventara/access` is an optional peer, so install only what the 
 
 | Package | Range | You need it for |
 |---|---|---|
-| `@aventara/access` | `1.0.0-rc.1` (`@rc`) | Everything |
+| `@aventara/access` | `1.0.0-rc.2` (`@rc`) | Everything |
 | `better-auth` | `~1.7.12` | `createAccess`, `aventaraAccess()` and everything built on them. The engine alone (`definePolicies`, `createAccessEngine`) works without it, and type-checks without it with `skipLibCheck: false`. |
 | `@better-auth/oauth-provider` | `~1.7.12` | [Agents over MCP](/docs/agents-mcp), and one audience per service |
 | `@better-auth/cimd` | `~1.7.12` | Agent clients that register by a metadata document URL |

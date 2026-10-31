@@ -76,11 +76,11 @@ A refused request is answered `403 A4002` by the framework. Every decision can g
 
 ## Status and requirements
 
-Access `1.0.0-rc.1` is a release candidate of 1.0. Its public API can still change before the stable release. It is the first 1.0 release candidate, after `0.1.0-rc.0`: Access moves to 1.0 with the framework, with no new features.
+Access `1.0.0-rc.2` is a release candidate of 1.0. Its public API can still change before the stable release.
 
 | | Version |
 |---|---|
-| `@aventara/access` | `1.0.0-rc.1` |
+| `@aventara/access` | `1.0.0-rc.2` |
 | Aventara framework (`@aventara/core` and the packages that host it) | `1.0.0-rc.11` (tested). `1.0.0-rc.10` or later works. |
 | Better Auth | `~1.7.12` (1.7.12 or a later 1.7 patch; tested on 1.7.14) |
 | Node.js | `^22.23.4 \|\| >=24.22.1` |

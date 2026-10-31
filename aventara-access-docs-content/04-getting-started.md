@@ -38,9 +38,11 @@ Open `prisma/schema.prisma` and add:
 model Note {
   id       Int    @id @default(autoincrement())
   body     String
-  authorId Int
+  authorId String
 }
 ```
+
+Access needs `User.id` to be a `String`, as the scaffold writes it (`id String @id @default(cuid())`), so `authorId` is a `String` too. If your `User.id` is an `Int` (`aventara new` 1.0.0-rc.11 and earlier), make it a `String` now ([User ids](/docs/create-access#user-ids)).
 
 `authorId` is a plain column here. If you add a relation to `User` later, `authorId` becomes a reference, and the caller must be able to read the row it points at. Then also add `grant("signedIn", "read", "User", { where: { id: me.id } })` to the rules and `resources: { users: true }` to `createAccess`. Without the second, startup fails with `ACCESS_OPTIONS_INVALID`. Then create the table and refresh the framework's model:
 
@@ -60,7 +62,7 @@ import { model } from "./generated/aventara/discovery.artifact.js";
 
 /** What your app derives for a request: the signed-in user. */
 export type Principal = {
-	id: number;
+	id: string;
 	claims: { role?: "admin"; banned?: boolean };
 };
 
@@ -102,8 +104,6 @@ export const access = createAccess({
 	betterAuth: {
 		database: prismaAdapter(prisma, { provider: "postgresql" }),
 		emailAndPassword: { enabled: true },
-		// The starter User has a numeric id. Better Auth's ids are strings unless told.
-		advanced: { database: { generateId: "serial" } },
 		user: {
 			additionalFields: {
 				role: { type: "string", required: false, input: false },
@@ -112,9 +112,8 @@ export const access = createAccess({
 		},
 	},
 	policies: { rules: policies, claims },
-	// Better Auth hands ids out as strings, so a token's `sub` is "1".
 	principal: ({ sub, claims }) => ({
-		id: Number(sub),
+		id: sub,
 		claims: {
 			...(claims.role === "admin" ? { role: "admin" as const } : {}),
 			...(claims.banned === undefined ? {} : { banned: claims.banned }),
@@ -125,7 +124,7 @@ export const access = createAccess({
 export default access;
 ```
 
-Better Auth's options sit in `betterAuth`, as `betterAuth({...})` takes them. `role` and `banned` have `input: false`, so a user cannot set them at sign-up. Access refuses a claim read from a field the user can set. See [createAccess](/docs/create-access) for every option, and [Better Auth's tables](/docs/create-access#better-auths-tables) for why `generateId: "serial"` is there.
+Better Auth's options sit in `betterAuth`, as `betterAuth({...})` takes them. `role` and `banned` have `input: false`, so a user cannot set them at sign-up. Access refuses a claim read from a field the user can set. See [createAccess](/docs/create-access) for every option.
 
 ## 5. Create Better Auth's tables
 

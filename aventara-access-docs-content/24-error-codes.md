@@ -49,6 +49,7 @@ One code, many causes. The message names the option and the reason. The cases, b
 | Options | An option or block `createAccess` does not take, or cannot read. `accessOf` given an instance without `aventaraAccess()`. |
 | Base URL and cookies | No base URL to fix the tokens' issuer. A session cookie with `sameSite: "none"` and no `trustedOrigins`. |
 | Claims and principal | A claim read from a user field a user can set (no `input: false`). A `principal` object shared by two users. |
+| User ids | Better Auth's numeric ids (`advanced.database.generateId: "serial"`), in every app and in `avaccess serve` and `avaccess keys` ([User ids](/docs/create-access#user-ids)). |
 | Passwords | `passwords` set beside your own `emailAndPassword.password`. Node.js 22 without `@node-rs/argon2`. |
 | Better Auth tables | A grant on a table `resources` leaves closed. Better Auth off its Prisma adapter without `resources.authTables`. An opened table whose secret column is not found. |
 | Organizations | An organization plugin without `requireEmailVerificationOnInvitation: true` under `resources.members` or the bridge. Under the bridge: one that lets any user create an organization, or that maps a role dynamic access control lets admins name. |

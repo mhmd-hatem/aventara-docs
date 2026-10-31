@@ -156,7 +156,7 @@ What protects a PIN:
 | Per device | 10 wrong PINs at once, for any users, then one more every 90 seconds. A user with no wrong PIN on the device since their last right one still gets one try while it is held, so one person cannot lock everyone out of a till. |
 
 The counts are kept in the database before the PIN is checked, so parallel guesses cannot all pass one reading. They
-are kept for any user id, whether it holds a PIN or names no user, and a user id with no PIN costs the same argon2id
+are kept for any user id, whether it holds a PIN or names no user. The user's count, the device's one try for a user with a clean record, the PIN and the audit entry are keyed on the user's id as the database stores it, never as the request wrote it, so another spelling of the same id (an upper-case uuid in a PostgreSQL `uuid` column, another case under a MySQL `_ci` collation) gets no counts of its own. `kioskSetUserPin` and a device's revocation log the stored id too. On `1.0.0-rc.1` every spelling had its own counts, so a kiosk app that ran it on such ids should have its users set new PINs. A user id with no PIN costs the same argon2id
 check as one with a PIN, so no answer tells who holds a PIN. An admin's impersonation is not a full sign-in: it clears
 nothing.
 
