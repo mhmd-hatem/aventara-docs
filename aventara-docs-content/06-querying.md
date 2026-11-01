@@ -60,7 +60,7 @@ await avClient.User.find.many({
 });
 ```
 
-Filter operators depend on the field's type, and only advertised ones are accepted. Common ones: `equals`, `not`, `in`, `notIn`, `lt`, `lte`, `gt`, `gte`, `contains`, `startsWith`, `endsWith`. A restriction can remove operators from a field ([Configuration](/docs/configuration#restrictions)).
+Filter operators depend on the field's type, and only advertised ones are accepted. Common ones: `equals`, `not`, `in`, `notIn`, `lt`, `lte`, `gt`, `gte`, `contains`, `startsWith`, `endsWith`. [Exposure](/docs/exposure) can remove operators from a field, and the types follow: an operator the field does not offer, inside `not` included, is a compile error in the generated client and in server-side calls.
 
 Relation filters: a to-one relation takes a nested `where` directly (`{ author: { name: { contains: "A" } } }`) or `null`; a to-many relation takes `some`, `every` or `none`.
 
@@ -103,6 +103,19 @@ const users = await avClient.User.find.many({
 
 When the nested relation has a `where` and pagination, `count` is the total matching rows before `limit`/`offset`; `data` is the page. See [Counting](/docs/counting).
 
+### $defaults
+
+A `select` returns exactly what it lists. `"$defaults"` is an entry that stands for the default projection of that level (the scalar fields a call with no `select` returns), so you can add to the defaults without listing them all:
+
+```ts
+const post = await avClient.Post.find.first({
+  where: { id: 10 },
+  select: ["$defaults", "author"],        // every default field of Post, and its author
+});
+```
+
+It works at every nesting level, beside `"$count"`: `{ posts: { select: ["$defaults", "$count"] } }` returns each post's default fields and the count. Its main use is a [governed field](/docs/policies#governed-fields-and-defaults), one a [policy](/docs/policies) leaves out of every default projection: `select: ["$defaults", "email"]` is the defaults plus `email`. It is valid in `select` only. In `include` it is refused with `V1008`, because `include` already returns the default fields.
+
 ## orderBy
 
 ```ts
@@ -115,7 +128,7 @@ orderBy: { name: { sort: "asc", nulls: "last" } }               // nullable fiel
 
 `limit` and `offset` page through results (`offset = (page - 1) * limit`). The server caps `limit` at `maxListLimit` (250 by default; `A2009` when exceeded).
 
-For cursor pagination, give `cursor` and an explicit `orderBy` that includes a unique tie-breaker (a complete identifier). Aventara does not add one for you:
+For cursor pagination, give `cursor` and an explicit `orderBy` that includes a unique tie-breaker (a complete identifier). The cursor holds exactly the ordered fields, with the values of the row to start at. Aventara does not add a tie-breaker for you:
 
 ```ts
 await avClient.User.find.many({ orderBy: [{ id: "asc" }], limit: 2, cursor: { id: 1 }, select: ["id"] });
@@ -178,14 +191,14 @@ await avClient.User.update.unique({
 });
 ```
 
-Which directives a relation accepts is part of the contract, and can be narrowed with restrictions. Directives never apply to reads. See [Relations and nested writes](/docs/relations-and-nested-writes).
+Which directives a relation accepts is part of the contract, and can be narrowed with [exposure](/docs/exposure). A `$connect` to a record that does not exist answers `404 A2003`. Directives never apply to reads. See [Relations and nested writes](/docs/relations-and-nested-writes).
 
 ### Strict versus first-style misses
 
 | Operation | When nothing matches |
 |---|---|
 | `find.first`, `update.first`, `delete.first` | Resolves to `null` (`A1001`). |
-| `find.unique`, `update.unique`, `delete.unique` | Throws `NotFoundError` (`A2003`). |
+| `find.unique`, `update.unique`, `delete.unique` | Throws `AvNotFoundError` (`A2003`). |
 | `find.many` | `[]`. |
 | `find.count` | `0`. |
 
@@ -198,24 +211,21 @@ Result types are `readonly`: a record returned by the client or by server-side c
 Inside your NestJS code you can run the same operations directly, with no HTTP. Inject the framework ([NestJS host](/docs/nestjs-host#injecting-the-framework)) and call it through one of two layers:
 
 - `framework.application.<Resource>.<family>.<variant>(args, options?)` runs as application code (trusted; the application layer's configuration).
-- `framework.client.<Resource>.<family>.<variant>(args, options?)` runs under the client layer's rules (the same restrictions and limits a remote caller gets).
+- `framework.client.<Resource>.<family>.<variant>(args, options?)` runs under the client layer's rules (the same exposure and limits a remote caller gets).
 
 ```ts
-const result = await framework.application.User.find.many(
+const users = await framework.application.User.find.many(
   { select: ["id", "email"] },
   { requestId: "job-42" },
 );
-
-result.code;   // "A1000"
-result.data;   // [{ id: 1, email: "..." }, ...]
-result.cause;  // null, or { message, issues? } on failure
+// [{ id: 1, email: "..." }, ...]
 ```
 
-Unlike the generated client, server-side calls return the envelope (`{ data, code, cause }`) and do not throw for operation failures. Check `code`.
+Server-side calls settle like the generated client: they resolve the data and throw every failure as an `AvError` subclass (`AvNotFoundError`, `AvValidationError`, ...), exported from `@aventara/core`. Catch the class, or read `error.code`. See [Server-side usage](/docs/server-side-usage#errors).
 
-`ExecutionOptions` has one member, `requestId`: the correlation id the operation runs under (it reaches pipelines and diagnostics). When omitted, one is generated. See [Server-side usage](/docs/server-side-usage).
+`AvExecutionOptions` has `requestId`, the correlation id the operation runs under (it reaches pipelines and diagnostics; when omitted, one is generated), `state` and `as` ([Server-side usage](/docs/server-side-usage#avexecutionoptions)). See [Server-side usage](/docs/server-side-usage).
 
-Pipelines run for both layers: root pipelines for every call, `application.pipelines` or `client.pipelines` for their own layer.
+Pipelines run for both layers: the root's stages for every call, the `application` or `client` overlay's for their own origin.
 
 ## See also
 

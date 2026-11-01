@@ -18,27 +18,32 @@ An API that accepts a query language needs ceilings, or one request can ask for 
 | `maxListLimit` | `250` | The `limit` of a list or of a nested relation. | `422` `A2009` / `V1014` |
 | `maxBooleanNodes` | `50` | Nodes in a `where` tree (`AND`/`OR`/`NOT` and conditions). | `422` `A2009` / `V1015` |
 | `maxTransactionOperations` | `20` | Steps in one transaction plan. | `422` `A2009` / `V1014` |
+| `maxJsonDepth` | `64` | Levels of nesting inside a Json field's value. | `422` `A2009` / `V1021` |
+| `maxAll` | `10` | Operations in one [Operation Set](/docs/operation-sets) (`POST /_all`). | `422` `A2009` / `V1014`, for the whole request |
+| `maxAllConcurrency` | `4` | Operations of one Operation Set running at once. | none: the rest wait their turn |
 
 All of them are in the contract you can read at `GET /api/_contract` under `limits`:
 
 ```json
-"limits": {"maxBooleanNodes":50,"maxListLimit":250,"maxNestingDepth":12,"maxRequestBytes":1048576,"maxTransactionOperations":20}
+"limits": {"maxAll":10,"maxAllConcurrency":4,"maxBooleanNodes":50,"maxJsonDepth":64,"maxListLimit":250,"maxNestingDepth":12,"maxRequestBytes":1048576,"maxTransactionOperations":20}
 ```
 
 ## Changing them
 
-`limits` is a root property with optional `application` and `client` overrides. Root supplies defaults; a layer's explicit value wins ([Configuration](/docs/configuration#root-and-layer-overrides)). Define only the limits you change:
+`limits` is one of the six layer keys, so it goes at the root and, to differ for one origin, in the `application` or `client` overlay. Each limit an overlay sets wins for that origin; every other limit comes from the root ([Configuration](/docs/configuration#root-and-layer-overrides)). Define only the limits you change:
 
 ```ts
 return {
-  entrypoint: "/api",
+  api: "/api",
   adapter: /* ... */,
-  limits: { maxListLimit: 100, maxNestingDepth: 3 },
-  client: { limits: { maxListLimit: 25, maxRequestBytes: 4096, maxBooleanNodes: 5 } },
+  limits: { maxListLimit: 100, maxNestingDepth: 3, maxJsonDepth: 32 },
+  client: {
+    limits: { maxListLimit: 25, maxRequestBytes: 4096, maxBooleanNodes: 5 },
+  },
 } as const;
 ```
 
-Remote callers get the client layer's limits (25 rows, 4 KiB, 5 `where` nodes, depth 3); your own server code gets the root's (100 rows, depth 3). Client limits are part of the client contract, so changing them changes its hash: regenerate the frontend client.
+Remote callers get the client layer's limits (25 rows, 4 KiB, 5 `where` nodes, depth 3, Json depth 32); your own server code gets the root's (100 rows, depth 3, Json depth 32). Client limits are part of the client contract, so changing them changes its hash: regenerate the frontend client.
 
 Each limit, as a caller sees it with that configuration:
 
@@ -61,7 +66,34 @@ Each limit, as a caller sees it with that configuration:
 
 Nesting depth counts relation levels: three levels (`posts` -> `author` -> `posts`) pass with `maxNestingDepth: 3`, a fourth is refused. A plan of 21 steps is refused with `A2009` before anything runs.
 
-`maxRequestBytes` counts decoded bytes: a compressed body (`gzip`, `deflate`, `br`) is measured after inflation, so compression does not get around it. See [HTTP protocol](/docs/http-protocol) and [NestJS host](/docs/nestjs-host#requests).
+The value of a [Json field](/docs/json-fields) has its own limit, `maxJsonDepth`. Each object or array inside the value is one level, counted from the value itself, so the same value has the same room at the top of `data`, inside a nested write, or in a `where` filter. With the default of 64, a value 64 levels deep is accepted; one more level is refused with `A2009` at the field, before anything is written:
+
+```json
+// Post/create/one with a "meta" value 65 levels deep: {"a":{"a":{"a": ... 1}}}
+{"data":null,"code":"A2009","cause":{"message":"Operation arguments failed framework validation.","issues":[{"path":["arguments","data","meta"],"code":"V1021","message":"Json value depth exceeds maxJsonDepth (64)."}]}}
+```
+
+Rich-text documents fit well under 64. In a TipTap or ProseMirror document each node adds two levels (its object and its `content` array), so a paragraph inside a list nested five levels deep is around 30 levels. If you store deeper documents, raise `maxJsonDepth`. It does not affect `maxNestingDepth`.
+
+`maxRequestBytes` counts decoded bytes: a compressed body (`gzip`, `deflate`, `br`) is measured after inflation, so compression does not get around it. A [cached read](/docs/caching-reads)'s compressed `q` is measured the same way, once inflated. See [HTTP protocol](/docs/http-protocol) and [NestJS host](/docs/nestjs-host#requests).
+
+## Operation Sets
+
+Two limits bound `POST /_all`, the request that carries [several operations at once](/docs/operation-sets):
+
+- **`maxAll`** (default `10`) is how many operations one request may carry. More is refused whole, before anything runs: `422 A2009`, `V1014` at `["operations"]`. The generated client never sends more: it splits a larger group into several requests. Each operation is then held to every other limit on its own, as on its own route.
+- **`maxAllConcurrency`** (default `4`) is how many of one request's operations run at once. The others wait and start in key order. It keeps one request from taking the whole database pool, so you don't need a larger pool for `/_all`. It must be a whole number of at least `1`; `limits.maxAllConcurrency must be a whole number of at least 1` is refused at startup.
+
+```ts
+return {
+  api: "/api",
+  adapter: /* ... */,
+  limits: { maxAll: 20, maxAllConcurrency: 6 },
+  client: { limits: { maxAllConcurrency: 2 } },
+} as const;
+```
+
+Server code is different: `framework.serverClient.all` and Next's `avClient.all` run in process, take any number of calls (`maxAll` guards the HTTP route only), and start at most `maxAllConcurrency` of their `avLazy` calls at once.
 
 ## What is refused by default
 
@@ -96,7 +128,7 @@ Example, a stale client:
 {"data":null,"code":"A2005","cause":{"message":"Generated client contract does not match the server. Regenerate the client."}}
 ```
 
-Nothing the caller sends is ever put into a query as raw text: arguments are validated into the framework's own query language and translated by the adapter. There is no raw-SQL operation to switch off.
+Nothing the caller sends is ever put into a query as raw text: arguments are validated into the framework's own query language and translated by the adapter. No caller can send SQL. The only SQL is your own server code's, through `framework.appTx.$sql` and `ctx.$sql`, written as a tagged template whose values are always bound parameters ([Transactions](/docs/transactions#sql-steps-apptxsql)).
 
 ## Planned failures and unplanned ones
 
@@ -146,7 +178,7 @@ Content-Type: text/html; charset=utf-8
 Too many requests, please try again later.
 ```
 
-The `429` is the limiter's own answer, not an Aventara envelope, so the generated client raises a `TransportError` with `status` `429` (`The response to "User" find.count (HTTP 429) is not an Aventara response envelope.`). Read `Retry-After` from your own fetch, or handle `429` there ([Client errors](/docs/client-errors)).
+The `429` is the limiter's own answer, not an Aventara envelope, so the generated client raises an `AvTransportError` with `status` `429` (`The response to "User" find.count (HTTP 429) is not an Aventara response envelope.`). Read `Retry-After` from your own fetch, or handle `429` there ([Client errors](/docs/client-errors)).
 
 On Fastify, the equivalent is `@fastify/rate-limit`, registered on the Fastify instance; this page's example was run on Express only. Limits keyed by IP behind a proxy need the proxy's address handled (`trust proxy` on Express): see the limiter's own documentation. Rate limits are per process by default; with several instances, use a shared store or limit at the proxy.
 
@@ -158,8 +190,8 @@ On Fastify, the equivalent is `@fastify/rate-limit`, registered on the Fastify i
 
 The limits and the validation layer are only a minimum. Beyond them:
 
-- Authenticate. Nothing is public except what your guards allow. See [Authentication and guards](/docs/authentication-and-guards).
-- Remove what callers should not have. Hide fields, make fields write-only, switch off operations: [Exposing and hiding fields](/docs/exposing-and-hiding-fields), [Restricting operations](/docs/restricting-operations).
+- Authenticate and narrow exposure. By default everything the adapter offers is exposed and no guard runs, so with no guard anyone who can reach the server can call every exposed operation, bulk updates and deletes (`update.many`, `update.count`, `delete.count`) included. Before you serve untrusted callers, add a guard ([Authentication and guards](/docs/authentication-and-guards)) and hide what they should not reach ([Exposure](/docs/exposure)).
+- Remove what callers should not have. Hide fields, make fields write-only, switch off operations: [Exposure](/docs/exposure), [Exposing and hiding fields](/docs/exposing-and-hiding-fields).
 - Tighten the client layer. Defaults suit a trusted frontend. For a public API, lower `maxListLimit` and `maxNestingDepth` under `client`.
 - Rate-limit, and put a proxy in front. Add a [rate limiter](#rate-limiting). TLS and request timeouts belong to your platform; Aventara's `maxRequestBytes` complements, but does not replace, a proxy's body limit.
 

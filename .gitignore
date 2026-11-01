@@ -14,3 +14,6 @@ caligo-palette-kit/
 docs-structure-study.md
 aventara-docs-content/README.md
 aventara-docs-content/_site-notes.md
+.generated/
+aventara-access-docs-content/README.md
+aventara-access-docs-content/_site-notes.md

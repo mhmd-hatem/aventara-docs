@@ -60,6 +60,7 @@ export function QuickstartLab() {
     [
       "Scaffolding your NestJS project…",
       "Adding Prisma and Aventara…",
+      "Writing AGENTS.md and the Aventara agent skill…",
       `✓ ${project}/ is ready. Your schema lives in prisma/.`,
     ],
     [
@@ -107,7 +108,7 @@ export function QuickstartLab() {
         setTimeout(() => setLines(messages.slice(0, i + 1)), (i + 1) * 260),
       ),
     );
-    timers.current.push(setTimeout(finish, 850));
+    timers.current.push(setTimeout(finish, messages.length * 260 + 70));
   }
   function selectStep(i: number) {
     if (!busy && i <= completed + 1) {

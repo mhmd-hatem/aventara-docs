@@ -1,6 +1,6 @@
 ---
 title: "Example: blog API"
-description: An end-to-end blog - Prisma schema with Users, Posts and Categories, configuration with a hidden field, client restrictions and a guard, the server, and frontend calls including a transaction.
+description: An end-to-end blog - Prisma schema with Users, Posts and Categories, configuration with a hidden field, client exemptions and a guard, the server, and frontend calls including a transaction.
 order: 70
 section: examples
 ---
@@ -67,62 +67,55 @@ npm run aventara:prepare
 
 ## 3. The configuration
 
-`src/aventara.config.ts`:
+`src/aventara.config.ts` (the scaffold's `src/aventara.adapter.ts` already holds the adapter, so the configuration has none):
 
 ```ts
-import { FrameworkError, type Guard } from "@aventara/core";
-import { createPrismaAdapter } from "@aventara/prisma7-adapter";
-import { discovery } from "./generated/aventara/discovery.artifact.js";
-import type { PrismaService } from "./prisma.service.js";
+import { AvError, type AvGuard } from "@aventara/core";
 
 // Remote callers must send an Authorization header to write.
-const requireSignIn: Guard = (ctx) => {
-  if (ctx.family !== "find" && !ctx.transport?.headers["authorization"]) {
-    throw new FrameworkError("A4000", "Sign in first.");
+const requireSignIn: AvGuard = (ctx) => {
+  if (ctx.$operation.family !== "find" && !ctx.$transport?.headers["authorization"]) {
+    throw new AvError("A4000", "Sign in first.");
   }
   return true;
 };
 
-export async function aventaraConfig(prisma: PrismaService) {
-  return {
-    entrypoint: "/api",
-    adapter: await createPrismaAdapter({
-      client: prisma,
-      discovery,
-      provider: "sqlite",
-      driver: "@prisma/adapter-better-sqlite3",
-    }),
-    client: {
-      restrictions: {
+export const aventaraConfig = {
+  api: "/api",
+  exposed: true,
+  client: {
+    exposed: true,
+    exemptions: {
+      resources: {
         User: {
           fields: {
             // write-only: can be set on create/update, never read, filtered or ordered
-            passwordHash: { capabilities: { select: false, filter: false, order: false } },
+            passwordHash: ["select", "filter", "order"],
             // not in the client layer at all
-            internalNotes: { hidden: true },
+            internalNotes: true,
           },
-          operations: { delete: { first: false, count: false } },
+          operations: { delete: ["first", "count"] },
         },
-        Post: { operations: { delete: { count: false } } },
+        Post: { operations: { delete: ["count"] } },
       },
-      limits: { maxListLimit: 50 },
-      pipelines: { guards: [requireSignIn] },
     },
-  } as const;
-}
+    limits: { maxListLimit: 50 },
+    pipelines: { guards: [requireSignIn] },
+  },
+} as const;
 ```
 
 What each part does, all for remote callers (the `client` layer), leaving server-side code untouched:
 
 | Setting | Effect |
 |---|---|
-| `passwordHash` capabilities | Settable on create and update, but selecting, filtering or ordering by it fails. |
-| `internalNotes: { hidden: true }` | The field does not exist for remote callers. |
+| `passwordHash: ["select", "filter", "order"]` | Settable on create and update, but selecting, filtering or ordering by it fails. |
+| `internalNotes: true` | The field does not exist for remote callers. |
 | `User` `delete` switched off except `unique` | No `first` or `count` deletes for users, so no filtered mass deletion. |
 | `maxListLimit: 50` | A list may ask for at most 50 rows. |
 | `requireSignIn` guard | Anything that is not a `find` needs an `Authorization` header. Reads stay public. |
 
-See [Configuration](/docs/configuration) for the full model and [Contract layers](/docs/contract-layers) for how layers relate.
+See [Configuration](/docs/configuration) for the full model, [Exposure](/docs/exposure) for `exemptions`, and [Contract layers](/docs/contract-layers) for how layers relate.
 
 ## 4. Run the server
 
@@ -131,7 +124,7 @@ PORT=3000 npm run start:dev
 ```
 
 ```text
-Aventara mounted 42 operations at /api (+ GET /api/_contract, POST /api/_transactions)
+Aventara mounted 42 operations at /api (+ GET /api/_contract, POST /api/_transactions, POST /api/_all)
 ```
 
 A browser frontend on another origin needs CORS. The scaffold's `src/main.ts` already enables it for the origins in `CORS_ORIGINS` (`http://localhost:5173,http://localhost:3001` in `.env`), so a Vite frontend works as it is; add your own origin to that list when you deploy ([Deploying](/docs/deploying#cors-and-browsers)).
@@ -147,7 +140,7 @@ npx @aventara/client@rc init --yes --entrypoint http://localhost:3000/api
 ## 6. Frontend calls
 
 ```ts
-import avClient, { AvClient, ConflictError, AuthError } from "./api/AvClient";
+import avClient, { AvClient, AvConflictError, AvAuthError } from "./api/AvClient";
 
 // Signed-in client: the server's guard wants an Authorization header on writes.
 const api = new AvClient({
@@ -216,7 +209,7 @@ try {
   const again = api.tx.User.create.one({ data: { email: "lin@example.com" }, select: ["id"] });
   await api.transaction([extra, again]);
 } catch (e) {
-  if (e instanceof ConflictError) {
+  if (e instanceof AvConflictError) {
     console.log(e.code, e.cause.operation);   // "A2008" 1  (step 1 failed)
   }
 }
@@ -243,23 +236,23 @@ await api.Post.update.unique({
 try {
   await avClient.Post.create.one({ data: { title: "anon", authorId: 1 } });
 } catch (e) {
-  // e instanceof AuthError, e.code === "A4000", e.cause.message === "Sign in first."
+  // e instanceof AvAuthError, e.code === "A4000", e.cause.message === "Sign in first."
 }
 
 // removed operation: it does not exist on the client, in the type or at runtime
-typeof avClient.User.delete.first;  // "undefined"
+typeof avClient.User.delete.first;  // type error; at runtime "undefined"
 
 // list limit
 await avClient.Post.find.many({ limit: 100 });
-// ValidationError A2009: "limit exceeds maxListLimit (50)."
+// AvValidationError A2009: "limit exceeds maxListLimit (50)."
 
 // write-only field
 await avClient.User.find.many({ where: { passwordHash: "x" } });
-// ValidationError: 'Filtering is not available on field "passwordHash".'
+// type error; at runtime AvValidationError: 'Filtering is not available on field "passwordHash".'
 
 // hidden field
 await avClient.User.find.many({ select: ["internalNotes"] });
-// ValidationError: 'Field "internalNotes" is not available on Resource "User".'
+// type error; at runtime AvValidationError: 'Field "internalNotes" is not available on Resource "User".'
 ```
 
 (The last three are rejected by the TypeScript types before they run; the comments show what the server answers if a caller ignores them.)

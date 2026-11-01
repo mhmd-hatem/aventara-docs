@@ -7,7 +7,7 @@ section: guides
 
 # Deploying
 
-An Aventara server is a NestJS application. You deploy it like any Node service: install, build, run `dist/main`. The framework adds three things to think about: the generated discovery artifact that must exist before the build, the database schema that must exist before the first request, and the frontend client, which is bound to the contract your server serves.
+An Aventara server made by `aventara new` is a NestJS application. You deploy it like any Node service: install, build, run `dist/main`. A Next.js app that hosts Aventara deploys as a Next.js app: see [Next.js](#nextjs). The framework adds three things to think about: the generated files (the discovery artifact and the rest of what `aventara:prepare` writes) that must exist before the build, the database schema that must exist before the first request, and the frontend client, which is bound to the contract your server serves.
 
 ## Environment
 
@@ -26,7 +26,7 @@ Locally they live in `.env`. In production, set them in the platform's environme
 
 `--env-file-if-exists` loads `.env` when it is present and does nothing when it is not, so the same script works on a laptop and on a platform with no file. A real environment variable wins over `.env`: with `DATABASE_URL=file:./override.db npm run start:prod`, the server used `override.db`, not the `.env` value.
 
-Do not commit `.env`. The scaffold's `.gitignore` lists only `/src/generated/` and `/dev.db*`, so add `.env` to it (or `.env*` with an exception for an `.env.example`).
+Do not commit `.env`. The scaffold's `.gitignore` already lists it, with `/src/generated/` (or `/src/aventara/`, in a project whose Prisma client is generated into `src/generated`) and the SQLite files.
 
 ## Build and run
 
@@ -36,17 +36,65 @@ npm run build          # nest build -> dist/
 npm run start:prod     # node --env-file-if-exists=.env dist/main
 ```
 
-`npm ci` runs the project's `postinstall` script, which runs `aventara:prepare`: it reads `prisma/schema.prisma`, runs `prisma generate` and writes `src/generated/aventara/discovery.artifact.ts`. Both are generated and git-ignored, and `nest build` needs them. If your pipeline installs with scripts disabled (`npm ci --ignore-scripts`), run `npm run aventara:prepare` yourself before `npm run build`. Re-run it whenever the schema changes.
+`npm ci` runs the project's `postinstall` script, which runs `aventara:prepare`: it reads `prisma/schema.prisma`, runs `prisma generate`, writes `src/generated/aventara/discovery.artifact.ts`, then runs `aventara-build`, which writes `resources.generated.ts`, `computed-fields.generated.ts` and `contracts.generated.ts` beside it. All are generated and git-ignored, and `nest build` needs them. If your pipeline installs with scripts disabled (`npm ci --ignore-scripts`), run `npm run aventara:prepare` yourself before `npm run build`. Re-run it whenever the schema changes.
 
 Prefer building once and running the same artifact everywhere: build in CI, copy `dist/` and a production `node_modules`, and give each environment its own `DATABASE_URL`. Your Prisma client is generated for the provider in `schema.prisma` (SQLite or PostgreSQL), so build with the same schema you deploy.
 
 On start, the host logs one line you can use as a readiness check:
 
 ```text
-Aventara mounted 45 operations at /api (+ GET /api/_contract, POST /api/_transactions)
+Aventara mounted 45 operations at /api (+ GET /api/_contract, POST /api/_transactions, POST /api/_all)
 ```
 
 Call `app.enableShutdownHooks()` in `main.ts` so Nest closes the Prisma client on SIGTERM.
+
+### Build-time Contracts
+
+A long-running Nest server compiles its Contracts when it starts, which takes tens of milliseconds, and needs nothing more. On serverless and edge platforms every cold start pays that. `aventara-build` compiles the Contracts once, at build time, and writes them to `contracts.generated.ts`. Pass that file as `prebuilt` where you create the framework:
+
+```ts
+// a serverless or edge entry
+import { createFramework } from "@aventara/core";
+import { createPrismaAdapter } from "@aventara/prisma7-adapter";
+import adapter from "./aventara.adapter.js";
+import { aventaraConfig } from "./aventara.config.js";
+import { aventaraContracts } from "./generated/aventara/contracts.generated.js";
+import { PrismaService } from "./prisma.service.js";
+
+const prisma = new PrismaService();
+
+export const framework = await createFramework({
+  ...aventaraConfig,
+  adapter: await createPrismaAdapter({ ...adapter, client: prisma }),
+  prebuilt: aventaraContracts,
+});
+```
+
+`PrismaService` is the file the scaffold writes (`src/prisma.service.ts`): a `PrismaClient` subclass that reads `DATABASE_URL`. Outside Nest, build it directly with `new PrismaService()`, as above. The Contracts, their hashes and `GET /api/_contract` are the same as when compiled at startup. The scaffolded Nest server passes no `prebuilt`.
+
+The framework uses the file only when this `@aventara/core` compiled it, for this protocol version, from the same configuration and the same database model. Otherwise it ignores the whole file, compiles at startup as if there were none, and prints one warning, `AVENTARA_PREBUILT_STALE`, that says what changed (the Resources whose configuration or model changed, or the version that differs). A stale file never serves a wrong Contract. It only costs the startup time it was meant to save.
+
+Add a check to CI so a stale file fails the pipeline before the deploy:
+
+```bash
+npx aventara-build --check
+```
+
+`--check` writes nothing. It exits `1` when `resources.generated.ts`, `computed-fields.generated.ts` or `contracts.generated.ts` is missing or differs from what a build would write now, and says what changed, in the words of the `AVENTARA_PREBUILT_STALE` warning at startup:
+
+```text
+aventara-build: src/generated/aventara/contracts.generated.ts is stale: it was built by @aventara/core 1.0.0-rc.7, and this is 1.0.0-rc.8. Run aventara-build (npm run aventara:prepare) and deploy the file it writes.
+aventara-build: src/generated/aventara/contracts.generated.ts is stale: Resource User changed and the configuration or model outside the Resources changed since it was written. Run aventara-build (npm run aventara:prepare) and deploy the file it writes.
+```
+
+It names the core version that wrote the file against the installed one, a file format or protocol version that differs, the Resources that changed, are new or are gone, the configuration or model outside the Resources, or a file that no longer reads as a prebuilt Contracts file. A configuration that a server would refuse at startup (`CONFIG_...` or `COMPILER_...`) fails `aventara-build` itself, with the same message.
+
+Two things follow from `aventara-build` running your configuration:
+
+- `src/aventara.config.ts` and everything it imports run at build time. Keep their top level free of side effects: no connection, no request.
+- A value read from `process.env` in the configuration is read when the build runs. If the deployed environment gives another value, the file reads as stale and the framework compiles at startup.
+
+Where the three files go: beside the discovery artifact, in `src/generated/aventara/`, or in `src/aventara/` in a project whose Prisma client is generated into `src/generated` (`prisma generate` empties that directory). See [CLI reference](/docs/cli-reference#aventara-build).
 
 ### The server starts without a database
 
@@ -75,12 +123,12 @@ super({ adapter: new PrismaPg({ connectionString: url }) });
 ```
 
 ```ts
-// src/aventara.config.ts
-adapter: await createPrismaAdapter({ client: prisma, discovery, provider: "postgresql", driver: "@prisma/adapter-pg" }),
+// src/aventara.adapter.ts
+export default describePrismaAdapter({ discovery, provider: "postgresql", driver: "@prisma/adapter-pg" });
 ```
 
 ```json
-"aventara:prepare": "aventara-prisma7-generate --schema prisma/schema.prisma --client src/generated/prisma --provider postgresql --driver @prisma/adapter-pg --out src/generated/aventara/discovery.artifact.ts"
+"aventara:prepare": "aventara-prisma7-generate --schema prisma/schema.prisma --client src/generated/prisma --provider postgresql --driver @prisma/adapter-pg --out src/generated/aventara/discovery.artifact.ts --config src/aventara.config.ts && aventara-build"
 ```
 
 and `.env` gets Prisma's placeholder, which you replace:
@@ -89,13 +137,11 @@ and `.env` gets Prisma's placeholder, which you replace:
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?schema=public"
 ```
 
-`provider` and `driver` are declared, never sniffed: they must match your schema and the Prisma driver adapter you construct. Changing database means changing all four, then `npm run aventara:prepare`.
+`provider` and `driver` are declared, never sniffed: they must match your schema and the Prisma driver adapter you construct. The generate step checks `--provider` against your schema's `datasource` block and refuses a mismatch. It cannot check the driver. Changing database means changing all four, then `npm run aventara:prepare`.
 
 Transaction options (`timeout`, `maxWait`, `isolationLevel`) go on the adapter ([Configuration](/docs/configuration#adapter)). SQLite supports `Serializable` only; on PostgreSQL pick the level your invariants need.
 
-> Note: not verified in this release against a live PostgreSQL database in this guide. The PostgreSQL scaffold was generated, built, and started (serving its contract with no database reachable); queries against a real server were not exercised here.
-
-String filters (`contains`, `startsWith`, `endsWith`) are case-insensitive on SQLite and case-sensitive on PostgreSQL. Test on the database you deploy to.
+String filters (`contains`, `startsWith`, `endsWith`) follow the database by default: case-insensitive for ASCII on SQLite, case-sensitive on PostgreSQL. On PostgreSQL, pass `mode: "sensitive"` or `mode: "insensitive"` to make the behavior explicit; SQLite offers only `"default"` ([Filtering](/docs/filtering-sorting-paging#case-mode)).
 
 ## Creating and changing the schema
 
@@ -182,9 +228,28 @@ Verified: the preflight `OPTIONS` for `content-type, aventara-protocol-version, 
 
 CORS is not access control. It tells browsers which origins may read the answers; a server, a script or a bot ignores it. [Guards](/docs/authentication-and-guards) decide who may call, and a [rate limiter](/docs/limits-and-safety#rate-limiting) bounds how often.
 
+## Next.js
+
+A Next.js app made with `aventara new --host next` (or `init`) deploys like any Next.js app on the Node.js runtime:
+
+```bash
+npm ci                 # installs, then runs aventara:prepare (the postinstall script)
+npm run build          # prebuild runs aventara:prepare again, then next build
+npm start              # next start
+```
+
+- `aventara:prepare` ends with `aventara-build --client`, so the build compiles the Contracts and writes the browser client (`src/aventara/client.ts`, `src/aventara/universal.ts`, `src/aventara/generated/`) from the same configuration. Nothing has to run first, and there is no frontend client to commit or regenerate separately.
+- `src/aventara/server.ts` passes `prebuilt: aventaraContracts` when `NODE_ENV` is `production`, so `next start` loads the Contracts instead of compiling them. In CI, `npx aventara-build --check --client` exits `1` when a generated file is stale.
+- `src/instrumentation.ts` awaits `ready()`, so a bad configuration fails `next start` instead of the first request. Keep it: `@/aventara/universal` needs it on the server.
+- Keep `serverExternalPackages: ["@aventara/core", "@aventara/prisma7-adapter"]` in `next.config.ts`, so every route and page shares one core and one Prisma client ([Next.js host](/docs/nextjs-host#serverexternalpackages)).
+- `DATABASE_URL` comes from the environment; Next.js also loads `.env`. `src/prisma.ts` refuses a missing one on first use.
+- The Edge runtime is not supported. Keep Aventara's routes and pages on the Node.js runtime (the default).
+- Aventara needs no proxy file (`proxy.ts`). If your own proxy reads request bodies, Next.js's limit on the bodies it buffers there (10 MB by default) applies before `limits.maxRequestBytes` does.
+- The browser calls the API on its own origin, so there is no CORS to configure.
+
 ## Behind a proxy
 
-- The protocol path is the entrypoint (`/api`), regardless of Nest's global prefix. Route `/api/*` to the server.
+- The protocol path is `api` (`/api`), regardless of Nest's global prefix. Route `/api/*` to the server.
 - Pass `Aventara-*` and `Authorization` headers through. If your proxy assigns a request id, have it set `Aventara-Request-Id` (not `X-Request-Id`).
 - A proxy's own body limit and the framework's `maxRequestBytes` both apply: the stricter one wins.
 
@@ -192,12 +257,14 @@ CORS is not access control. It tells browsers which origins may read the answers
 
 - [ ] `DATABASE_URL` and `PORT` set in the environment; `.env` not committed.
 - [ ] `aventara:prepare` runs before `build` (install scripts enabled, or run it yourself).
+- [ ] On serverless or edge: `aventara-build --check` in CI, and `prebuilt: aventaraContracts` where the framework is created.
 - [ ] `prisma migrate deploy` runs before the new server starts.
 - [ ] A health route outside `/api/_*`, and `app.enableShutdownHooks()`.
 - [ ] `CORS_ORIGINS` set to the deployed frontend's origin, if a browser on another origin calls the API.
 - [ ] A [rate limiter](/docs/limits-and-safety#rate-limiting) in front of, or in, the server.
 - [ ] Guards and limits set for the client layer: [Authentication and guards](/docs/authentication-and-guards), [Limits and safety](/docs/limits-and-safety).
-- [ ] The frontend client regenerated and committed from the deployed contract.
+- [ ] The frontend client regenerated and committed from the deployed contract (a separate frontend; a Next.js app builds its own).
+- [ ] Next.js: `serverExternalPackages` kept, `instrumentation.ts` awaiting `ready()`, `aventara-build --check --client` in CI.
 
 ## See also
 

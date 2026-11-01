@@ -62,3 +62,15 @@ All 54 numbered source pages are integrated directly through Fumadocs MDX. Task-
 Motion is centralized in `app/motion.css`: 100ms press feedback, 180ms color feedback, 220ms surface changes, 240ms travel, 260ms entrances, and 160ms exits, all eased out. Navigation stays stationary on hover; only directional arrows move. Mouse movement restores hover transitions after keyboard use. Main-button padding remains 16px × 8px.
 
 The page, sidebar/TOC, code blocks, data tables, and search results use distinct themed native scrollbar weights and colors. Native wheel, touch, and keyboard scrolling remain intact; high-contrast mode uses system colors.
+
+## Unified product site — 30 October 2026
+
+The shared homepage and header introduce Framework and Access. Product pages share the reading layout and interaction language, while each product supplies its own navigation, version and color tokens from `content/products.json`. Earlier page counts and deployed-host descriptions above document prior iterations.
+
+Framework retains Moonlit Frost / Aurora Ink. Access uses a green family approved alongside its new logo: forest primary `#26704D` on pale `#EDF3F0` for light mode, and mint primary `#79CDA7` on deep green `#111D1A` for dark mode. The scheme extends to product landings, docs, search portals and mobile navigation. Status colors retain their semantic meaning.
+
+Access branding lives in `public/branding/access/`: the approved generated transparent horizontal lockup and light/dark SVG icons for compact product navigation. The image generation brief matched Framework's Compass Weave identity: a geometric woven A with a distinct green authorization motif, alongside the Aventara / Access wordmark. SVG icons are simplified implementations for small UI sizes. The homepage keeps the interactive schema/client preview and the replayable creation flow; documentation renders the current source pack directly.
+
+## Product pitch pages
+
+`/framework` and `/access` each have a full marketing page before the docs: product identity and hero, an interactive example, a capability story, a workflow visual, installation invitation, and FAQs. Framework keeps the replayable schema → contract → API → client diagram. Access illustrates the quickstart's author grant and banned-user deny with caller presets; it does not execute the policy engine. All product-specific pitch copy and examples live in `content/products.json`, so another product can use the same page structure through content. The shared homepage introduces the products; individual pitches lead into their own documentation.

@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Braces, Check, Code2, Database, Play, Radio } from "lucide-react";
+import { architecturePaths } from "@/lib/diagram-geometry.mjs";
 import { Logo } from "@/components/logo";
 const stages = [
   {
@@ -19,10 +20,10 @@ const stages = [
   },
   {
     name: "Your API",
-    detail: "Hosted with NestJS",
+    detail: "NestJS or Next.js",
     label: "03 / SERVE",
     Icon: Radio,
-    status: "Serve the contract through NestJS.",
+    status: "Serve the contract through your host.",
   },
   {
     name: "Your client",
@@ -35,16 +36,74 @@ const stages = [
 export function Architecture() {
   const [step, setStep] = useState(-1);
   const [run, setRun] = useState(0);
+  const [immediate, setImmediate] = useState(false);
+  const blueprint = useRef<HTMLDivElement>(null);
+  const center = useRef<HTMLDivElement>(null);
+  const cards = useRef<(HTMLDivElement | null)[]>([]);
+  const [geometry, setGeometry] = useState<{
+    width: number;
+    height: number;
+    branches: string[];
+    journeys: string[];
+  }>();
+  useLayoutEffect(() => {
+    const canvas = blueprint.current;
+    const hub = center.current;
+    if (!canvas || !hub) return;
+    function measure() {
+      if (
+        !canvas ||
+        !hub ||
+        cards.current.length !== stages.length ||
+        cards.current.some((card) => !card)
+      )
+        return;
+      const bounds = canvas.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return;
+      const local = (element: HTMLElement) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          x: rect.left - bounds.left,
+          y: rect.top - bounds.top,
+          width: rect.width,
+          height: rect.height,
+        };
+      };
+      setGeometry({
+        width: bounds.width,
+        height: bounds.height,
+        ...architecturePaths(
+          local(hub),
+          cards.current.map((card) => local(card!)),
+        ),
+      });
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    [canvas, hub, ...cards.current].forEach((element) => {
+      if (element) observer.observe(element);
+    });
+    // Font loading can change card height without changing the outer diagram.
+    let disposed = false;
+    document.fonts.ready.then(() => {
+      if (!disposed) measure();
+    });
+    return () => {
+      disposed = true;
+      observer.disconnect();
+    };
+  }, []);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   function trace() {
     timers.current.forEach(clearTimeout);
     timers.current = [];
     setRun((value) => value + 1);
-    if (
+    const skipMotion =
       window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
-      document.documentElement.dataset.motionInput === "keyboard"
-    ) {
+      document.documentElement.dataset.motionInput === "keyboard";
+    setImmediate(skipMotion);
+    if (skipMotion) {
       setStep(4);
       return;
     }
@@ -55,6 +114,7 @@ export function Architecture() {
   return (
     <section
       className={`architecture ${step >= 0 ? "tracing" : ""}`}
+      data-flow-immediate={immediate}
       aria-label="How Aventara connects your stack"
     >
       <div className="diagram-caption">
@@ -63,31 +123,47 @@ export function Architecture() {
         </span>
         <span>SCHEMA TO CLIENT</span>
       </div>
-      <div className="blueprint">
+      <div className="blueprint" ref={blueprint}>
         <div className="blueprint-orbit orbit-one" aria-hidden="true" />
         <div className="blueprint-orbit orbit-two" aria-hidden="true" />
         <div className="blueprint-axis" aria-hidden="true" />
         <div
+          ref={center}
           className={`blueprint-center ${step >= 0 ? "center-connected" : ""}`}
         >
           <Logo icon />
           <span>AVENTARA</span>
         </div>
-        <svg
-          key={run}
-          className="diagram-lines"
-          viewBox="0 0 440 300"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <path d="M112 78 L220 150 L328 78 M112 222 L220 150 L328 222" />
-          <path
-            className="trace-line"
-            d="M112 78 L220 150 L328 78 L220 150 L112 222 L220 150 L328 222"
-          />
-        </svg>
+        {geometry && (
+          <svg
+            className="diagram-lines"
+            viewBox={`0 0 ${geometry.width} ${geometry.height}`}
+            aria-hidden="true"
+          >
+            {geometry.branches.map((path, i) => (
+              <path key={i} d={path} vectorEffect="non-scaling-stroke" />
+            ))}
+            {step >= 0 && (
+              <g key={run}>
+                {geometry.journeys.map((path, i) => (
+                  <path
+                    key={i}
+                    className="flow-trace"
+                    d={path}
+                    pathLength={1}
+                    vectorEffect="non-scaling-stroke"
+                    style={{ animationDelay: `${i * 620}ms` }}
+                  />
+                ))}
+              </g>
+            )}
+          </svg>
+        )}
         {stages.map(({ name, detail, label, Icon }, i) => (
           <div
+            ref={(element) => {
+              cards.current[i] = element;
+            }}
             className={`diagram-node node-${i} ${step >= i ? "node-lit" : ""} ${step === i ? "node-current" : ""}`}
             key={name}
           >

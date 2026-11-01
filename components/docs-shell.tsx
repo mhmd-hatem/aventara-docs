@@ -1,5 +1,8 @@
 "use client";
-import { AVENTARA_VERSION } from "@/lib/release";
+import { SecurityReportLink } from "@/components/security-report-link";
+import { productTheme } from "@/lib/product-theme";
+import { ProductSwitcher } from "@/components/product-switcher";
+import { primarySection, type Product } from "@/lib/products";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -28,7 +31,7 @@ import {
   Terminal,
   Workflow,
 } from "lucide-react";
-import { Logo } from "@/components/logo";
+import { SiteBrand } from "@/components/site-brand";
 import { Button } from "@/components/ui/button";
 import { SearchDialog } from "@/components/search";
 import {
@@ -37,7 +40,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { navigation, primarySection } from "@/lib/navigation";
 const icons: Record<string, typeof Compass> = {
   compass: Compass,
   terminal: Terminal,
@@ -87,7 +89,13 @@ function SidebarGroup({
     </div>
   );
 }
-function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+function Sidebar({
+  product,
+  onNavigate,
+}: {
+  product: Product;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const nav = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -109,7 +117,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     <>
       <div className="sidebar-context">
         <BookOpen size={16} />
-        <span>Developer docs</span>
+        <span>{product.name} docs</span>
         <span className="sidebar-pilot" title="Release candidate">
           RC
         </span>
@@ -120,21 +128,21 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         aria-label="Documentation pages"
         className="sidebar-nav"
       >
-        {navigation.map((group) => (
+        {product.navigation.map((group) => (
           <SidebarGroup
             key={group.title}
             title={group.title}
             defaultOpen={group.items.some(
-              ([slug]) => pathname === `/docs/${slug}`,
+              ([slug]) => pathname === `/${product.id}/docs/${slug}`,
             )}
           >
             {group.items.map(([slug, title, icon]) => {
-              const Icon = icons[icon];
-              const active = pathname === `/docs/${slug}`;
+              const Icon = icons[icon] ?? Code2;
+              const active = pathname === `/${product.id}/docs/${slug}`;
               return (
                 <Link
                   key={slug}
-                  href={`/docs/${slug}`}
+                  href={`/${product.id}/docs/${slug}`}
                   className={active ? "nav-link active" : "nav-link"}
                   aria-current={active ? "page" : undefined}
                   onClick={onNavigate}
@@ -153,28 +161,37 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
       <Link
         className="sidebar-playground"
-        href="/docs/querying#playground"
+        href={`/${product.id}/llms.txt`}
         onClick={onNavigate}
       >
         <span className="sidebar-playground-icon">
-          <FlaskConical size={18} />
+          <BookOpen size={18} />
         </span>
         <span>
-          Learn by doing<small>Open the playground</small>
+          Docs for your tools<small>Read the Markdown index</small>
         </span>
         <ArrowUpRight size={15} />
       </Link>
       <div className="sidebar-bottom">
         <span className="pilot-dot" />
-        <span>{AVENTARA_VERSION}</span>
-        <Link href="/docs/introduction#status" onClick={onNavigate}>
+        <span>{product.currentVersion}</span>
+        <Link
+          href={`/${product.id}/docs/${product.overviewSlug}${product.statusAnchor ? `#${product.statusAnchor}` : ""}`}
+          onClick={onNavigate}
+        >
           Release status <ArrowUpRight size={12} />
         </Link>
       </div>
     </>
   );
 }
-export function DocsShell({ children }: { children: React.ReactNode }) {
+export function DocsShell({
+  children,
+  product,
+}: {
+  children: React.ReactNode;
+  product: Product;
+}) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
@@ -189,9 +206,9 @@ export function DocsShell({ children }: { children: React.ReactNode }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  const section = primarySection(pathname);
+  const section = primarySection(product, pathname);
   return (
-    <>
+    <div className="product-scope" style={productTheme(product)}>
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
@@ -207,24 +224,22 @@ export function DocsShell({ children }: { children: React.ReactNode }) {
             <Menu size={21} />
           </Button>
           <Link href="/" aria-label="Aventara home">
-            <Logo />
+            <SiteBrand />
           </Link>
           <span className="header-divider" />
-          <span className="docs-label">docs</span>
+          <ProductSwitcher current={product.id} />
         </div>
         <nav className="header-nav" aria-label="Primary">
-          <Link data-active={section === "overview"} href="/docs/introduction">
-            Overview
-          </Link>
-          <Link data-active={section === "guides"} href="/docs/querying">
-            Guides
-          </Link>
-          <Link
-            data-active={section === "reference"}
-            href="/docs/config-reference"
-          >
-            Reference
-          </Link>
+          {product.primaryNavigation.map((item) => (
+            <Link
+              key={item.section}
+              data-active={section === item.section}
+              aria-current={section === item.section ? "page" : undefined}
+              href={`/${product.id}${item.href}`}
+            >
+              {item.title}
+            </Link>
+          ))}
         </nav>
         <div className="header-actions">
           <button
@@ -233,7 +248,7 @@ export function DocsShell({ children }: { children: React.ReactNode }) {
             aria-label="Search documentation"
           >
             <Search size={16} />
-            <span>Search documentation</span>
+            <span>Search {product.name}</span>
             <kbd>⌘ K</kbd>
           </button>
           <Button
@@ -252,25 +267,36 @@ export function DocsShell({ children }: { children: React.ReactNode }) {
       </header>
       <div className="workspace">
         <aside className="sidebar">
-          <Sidebar />
+          <Sidebar product={product} />
         </aside>
         <div className="page-area" key={pathname}>
           {children}
           <footer className="site-footer">
             <span>Crafted for a connected stack.</span>
             <span>
-              Aventara Framework <span className="footer-dot">·</span>{" "}
-              {AVENTARA_VERSION}
+              Aventara {product.name} <span className="footer-dot">·</span>{" "}
+              {product.currentVersion}
             </span>
-            <Link href="/docs/license">
-              License <ArrowUpRight size={12} />
-            </Link>
+            {product.licenseSlug && (
+              <Link href={`/${product.id}/docs/${product.licenseSlug}`}>
+                License <ArrowUpRight size={12} />
+              </Link>
+            )}
+            <SecurityReportLink />
           </footer>
         </div>
       </div>
-      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+      <SearchDialog
+        key={product.id}
+        product={product}
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+      />
       <Dialog open={mobileOpen} onOpenChange={setMobileOpen}>
-        <DialogContent className="mobile-sidebar">
+        <DialogContent
+          className="mobile-sidebar product-scope"
+          style={productTheme(product)}
+        >
           <DialogTitle className="sr-only">
             Documentation navigation
           </DialogTitle>
@@ -278,11 +304,24 @@ export function DocsShell({ children }: { children: React.ReactNode }) {
             Browse Aventara documentation pages.
           </DialogDescription>
           <Link href="/" onClick={() => setMobileOpen(false)}>
-            <Logo />
+            <SiteBrand />
           </Link>
-          <Sidebar onNavigate={() => setMobileOpen(false)} />
+          <nav aria-label="Primary" className="mobile-primary-nav">
+            {product.primaryNavigation.map((item) => (
+              <Link
+                key={item.section}
+                className="nav-link"
+                aria-current={section === item.section ? "page" : undefined}
+                href={`/${product.id}${item.href}`}
+                onClick={() => setMobileOpen(false)}
+              >
+                {item.title}
+              </Link>
+            ))}
+          </nav>
+          <Sidebar product={product} onNavigate={() => setMobileOpen(false)} />
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

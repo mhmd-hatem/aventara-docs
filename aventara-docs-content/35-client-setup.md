@@ -9,6 +9,8 @@ section: frontend
 
 `avclient init` turns an existing frontend project into one that has a typed client of your Aventara API. It writes a small config file, wires a script, installs the generator and generates the client. The server must be running when it generates.
 
+This page is for a frontend that calls a separate Aventara server. A Next.js app that hosts Aventara itself (`aventara new --host next`) does not run `avclient`: its client is generated with the server's build ([below](#in-a-nextjs-app-that-hosts-aventara)).
+
 The project needs a `tsconfig.json`: the generated client is TypeScript, compiled by your own toolchain. A plain JavaScript project is not supported yet, and `init` says so before it touches anything (see [Troubleshooting](#troubleshooting)).
 
 ## Run init
@@ -117,6 +119,30 @@ Import `AvClient.ts` the way you import your own files; the path depends on `gen
 
 Plain JavaScript projects are not supported yet.
 
+## In a Next.js app that hosts Aventara
+
+When the API runs inside the Next.js app ([Next.js host](/docs/nextjs-host)), there is no `avclient init`, no `framework.client.ts` and no entrypoint to set. `npm run aventara:prepare` runs `aventara-build --client`, which writes the client from the ClientContract it has just compiled, calling the app's own `/api`. It runs on every install and before `next build`. The files are git-ignored and never edited.
+
+The app has three entries:
+
+| Import | Generated | Runs | Use it in |
+|---|---|---|---|
+| `@/aventara/server` (`avClient`, `avApp`) | no: `src/aventara/server.ts` is yours | on the server, in process | Server Components, Server Actions, route handlers |
+| `@/aventara/client` (`avClient`, `avHydrate`, types, `AvDecimal`, errors) | yes | in the browser; a call while a Client Component renders on the server is refused | Client Components |
+| `@/aventara/universal` (`avClient`) | yes | in the browser over `/api`, on the server in process | code shared by both sides, such as a prefetched query |
+
+All three take and return the same values:
+
+| Prisma type | Value |
+|---|---|
+| `DateTime` | `Date` |
+| `BigInt` | `bigint` |
+| `Decimal` | `AvDecimal` |
+| `Bytes` | `Uint8Array` |
+| `Json` | the JSON value |
+
+To hand server data to a Client Component, `avDehydrate` (server) and `avHydrate` (browser) carry these values across: see [TanStack Query and SWR](/docs/tanstack-query-and-swr).
+
 ## Project notes
 
 ### Vite (React)
@@ -148,7 +174,7 @@ The Vite template's root `tsconfig.json` compiles nothing itself and points at `
 
 ### Next.js
 
-Tested with Next.js 16.4, with Turbopack (the default) and with `--webpack`. The client needs no `next.config.ts` change and no extension alias: import it extensionless.
+This section is for a Next.js frontend that calls a separate Aventara server. Tested with Next.js 16.4, with Turbopack (the default) and with `--webpack`. The client needs no `next.config.ts` change and no extension alias: import it extensionless.
 
 From 16.4, new projects have `cacheComponents` on. Under it, a page that fetches on every request must read the data inside a `<Suspense>` boundary, after `await connection()`. A server component then calls the client directly:
 
@@ -230,7 +256,7 @@ CORS is a browser rule and does not control access. A server, a script or a bot 
 | `typescript could not be resolved` | `typescript` is not installed in the project; the client is generated with a syntax-only check. |
 | `no tsconfig.json was found in ... or any directory above it` | The project has no `tsconfig.json`: it is plain JavaScript, which is not supported yet. Nothing was written. Add a `tsconfig.json` (`npx tsc --init`) and run init again. |
 | `... are both in ..., and only one may configure the generator` | Two `framework.client.*` files exist. Keep one and delete the other. |
-| A browser console error about CORS, or a `TransportError` with `status` `null` | The server does not allow your frontend's origin. Add it to `CORS_ORIGINS` and restart the server. |
+| A browser console error about CORS, or an `AvTransportError` with `status` `null` | The server does not allow your frontend's origin. Add it to `CORS_ORIGINS` and restart the server. |
 
 ### Known issues
 

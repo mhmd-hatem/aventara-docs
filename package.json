@@ -11,9 +11,14 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "postinstall": "fumadocs-mdx",
+    "postinstall": "npm run content:prepare && fumadocs-mdx",
     "format": "prettier --write app components lib next.config.mjs source.config.ts postcss.config.mjs tsconfig.json components.json package.json README.md DESIGN.md",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "content:prepare": "node scripts/prepare-content.mjs",
+    "predev": "npm run content:prepare",
+    "prebuild": "npm run content:prepare",
+    "pretest": "npm run content:prepare",
+    "verify:build": "node scripts/verify-build.mjs"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.2.0",
@@ -25,8 +30,9 @@
     "clsx": "^2.1.1",
     "fumadocs-core": "16.16.2",
     "fumadocs-mdx": "15.4.6",
+    "github-slugger": "^2.0.0",
     "lucide-react": "^0.468.0",
-    "next": "16.4.0",
+    "next": "16.4.3",
     "next-themes": "^0.4.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

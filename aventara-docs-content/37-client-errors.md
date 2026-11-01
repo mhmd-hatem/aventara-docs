@@ -1,6 +1,6 @@
 ---
 title: Client errors
-description: The generated client's error classes, how to branch on them with instanceof, what cause and issues carry, TransportError versus FrameworkError, and ContractMismatchError.
+description: The generated client's error classes, how to branch on them with instanceof, what cause and issues carry, AvTransportError versus AvError, and AvContractMismatchError.
 order: 53
 section: frontend
 ---
@@ -10,12 +10,12 @@ section: frontend
 A client call resolves to the data, or throws. There is no `{ data, code, cause }` envelope to inspect: the generated client unwraps successes and turns every failure into a typed error. Branch on the class (or on `code`), never on the message text.
 
 ```ts
-import avClient, { NotFoundError } from "./api/AvClient";
+import avClient, { AvNotFoundError } from "./api/AvClient";
 
 try {
   await avClient.User.find.unique({ where: { id: 9999 } });
 } catch (e) {
-  if (e instanceof NotFoundError) {
+  if (e instanceof AvNotFoundError) {
     console.log(e.code);           // "A2003"
     console.log(e.cause.message);  // "No record matched the unique selector."
   } else {
@@ -26,24 +26,28 @@ try {
 
 ## The classes
 
-All are exported from `AvClient.ts`. Every class except `TransportError` extends `FrameworkError` and carries `code` and `cause`.
+All are exported from `AvClient.ts`. Every class except `AvTransportError` extends `AvError` and carries `code` and `cause`.
 
 | Class | Codes | Thrown when |
 |---|---|---|
-| `ValidationError` | `A2004`, `A2007`, `A2009` | The request breaks a contract rule: unknown field, wrong type, field not selectable, bad `$ref`, limit exceeded. `cause.issues` lists the problems. |
-| `NotFoundError` | `A2003` | A `unique` operation matched nothing. |
-| `ConflictError` | `A2008`, `A2013`, `A2014` | A uniqueness or reference constraint (`A2008`), a concurrent modification (`A2013`) or a stale selection (`A2014`). The last two may succeed if retried. |
-| `AuthError` | `A4000`, `A4001`, `A4002` | A pipeline guard refused: unauthenticated, forbidden, policy denied. |
-| `ContractMismatchError` | `A2005` | The generated client is stale. Regenerate. |
-| `ProtocolError` | `A2000`, `A2001`, `A2002`, `A2006`, `A2010`, `A2011`, `A2012` | The request could not be understood or routed. Rare with a generated client. |
-| `InternalError` | `A3000` to `A3004` | An unexpected server or adapter failure. |
-| `TransportError` | none | No framework answer arrived. |
+| `AvValidationError` | `A2004`, `A2007`, `A2009` | The request breaks a contract rule: unknown field, wrong type, field not selectable, bad `$ref`, limit exceeded, or a [field validator](/docs/field-validators), which the client checks before it sends. `cause.issues` lists the problems. |
+| `AvNotFoundError` | `A2003` | A `unique` operation matched nothing, or a `$connect` names a record that does not exist. |
+| `AvConflictError` | `A2008`, `A2013`, `A2014` | A uniqueness or reference constraint (`A2008`), a concurrent modification (`A2013`) or a stale selection (`A2014`). The last two may succeed if retried. |
+| `AvAuthError` | `A4000`, `A4001`, `A4002` | A pipeline guard or the configuration's [policy](/docs/policies) refused: unauthenticated, forbidden, policy denied. |
+| `AvContractMismatchError` | `A2005` | The generated client is stale. Regenerate. |
+| `AvProtocolError` | `A2000`, `A2001`, `A2002`, `A2006`, `A2010`, `A2011`, `A2012` | The request could not be understood or routed. Rare with a generated client. |
+| `AvInternalError` | `A3000` to `A3004` | An unexpected server or adapter failure. |
+| `AvTransportError` | none | No framework answer arrived. |
 
 The full code table, with HTTP statuses, is in [HTTP protocol](/docs/http-protocol#codes).
 
+### Refused before anything is sent
+
+The client checks a few things locally and throws before any request is made: validators listed in the contract (`V1004` and the other validator codes), and an `undefined` in a filter, a unique selector or a cursor (`A2004` / `V1001` at that path, [Filtering](/docs/filtering-sorting-paging#undefined-in-a-filter)). These are `AvValidationError`s with the same code and path the server would answer.
+
 ### A `TypeError` before anything is sent
 
-One refusal is not a `FrameworkError` at all. The client reads the arguments you pass it through a guard, and a value that cannot be read (a revoked Proxy, a getter that throws) is refused with a `TypeError` that names where, before a request is made:
+One refusal is not an `AvError` at all. The client reads the arguments you pass it through a guard, and a value that cannot be read (a revoked Proxy, a getter that throws) is refused with a `TypeError` that names where, before a request is made:
 
 ```text
 TypeError: An operation's arguments must be readable plain data, and the value at /where/id could not be read.
@@ -53,25 +57,27 @@ A `tx` builder never throws for this either: `avClient.transaction([...])` rejec
 
 ## cause and issues
 
-`FrameworkError.cause` has this shape:
+`AvError.cause` has this shape:
 
 ```ts
-interface Cause {
+interface AvCause {
   readonly message: string;
-  readonly issues?: readonly ValidationIssue[];  // validation failures
+  readonly issues?: readonly AvValidationIssue[];  // validation failures
   readonly operation?: number;                   // transaction step that failed
 }
-interface ValidationIssue {
+interface AvValidationIssue {
   readonly path?: readonly (string | number)[];
-  readonly code: ValidationCode;                 // "V1001", ...
+  readonly code: AvValidationCode;                 // "V1001", ...
   readonly message: string;
+  readonly check?: string;                         // a failed field validator: zod's check name
+  readonly params?: Record<string, unknown>;       // and its parameters
 }
 ```
 
 A validation failure, as thrown for `where: { email: { contains: 5 } }`:
 
 ```ts
-// ValidationError, e.code === "A2004"
+// AvValidationError, e.code === "A2004"
 // e.cause === {
 //   message: "Operation arguments failed framework validation.",
 //   issues: [{
@@ -82,13 +88,24 @@ A validation failure, as thrown for `where: { email: { contains: 5 } }`:
 // }
 ```
 
-When the issue comes from your own pipeline code, `message` is the text you wrote, if it was non-blank and at most 1,000 characters; otherwise it is the standard text for the code. Use `path` to attach the message to a form field:
+A failed [field validator](/docs/field-validators) also says which rule broke, so a form can show its own text:
 
 ```ts
-import { ValidationError } from "./api/AvClient";
+// thrown before any request, by the client's own check
+// e.cause.issues[0] === {
+//   code: "V1004", path: ["arguments", "data", "name"],
+//   message: "Value must be at least 3 characters long.",
+//   check: "min_length", params: { minimum: 3 }
+// }
+```
+
+The server would answer the same issue, so the client and server checks read alike. When the issue comes from your own pipeline code, `message` is the text you wrote, if it was non-blank and at most 1,000 characters; otherwise it is the standard text for the code. Use `path` to attach the message to a form field:
+
+```ts
+import { AvValidationError } from "./api/AvClient";
 
 function fieldErrors(e: unknown): Record<string, string> {
-  if (!(e instanceof ValidationError)) return {};
+  if (!(e instanceof AvValidationError)) return {};
   const out: Record<string, string> = {};
   for (const issue of e.cause.issues ?? []) {
     // paths look like ["arguments", "data", "email"]
@@ -105,22 +122,22 @@ A transaction error carries `cause.operation`, the zero-based index of the faili
 
 ```ts
 import avClient, {
-  AuthError, ConflictError, ContractMismatchError, NotFoundError,
-  TransportError, ValidationError,
+  AvAuthError, AvConflictError, AvContractMismatchError, AvNotFoundError,
+  AvTransportError, AvValidationError,
 } from "./api/AvClient";
 
 try {
   await signedInClient.User.create.one({ data: { email: "ada@example.com" } });
 } catch (e) {
-  if (e instanceof ConflictError) {
+  if (e instanceof AvConflictError) {
     // A2008: "The operation conflicts with the current state of the resource." (duplicate email)
-  } else if (e instanceof AuthError) {
+  } else if (e instanceof AvAuthError) {
     // A4000: "Sign in first."  -> send the user to the login screen
-  } else if (e instanceof ValidationError) {
+  } else if (e instanceof AvValidationError) {
     // show e.cause.issues
-  } else if (e instanceof ContractMismatchError) {
+  } else if (e instanceof AvContractMismatchError) {
     // the app is older than the API: ask for a reload / redeploy
-  } else if (e instanceof TransportError) {
+  } else if (e instanceof AvTransportError) {
     // offline, DNS, CORS, or a non-Aventara answer
   } else {
     throw e;
@@ -128,39 +145,39 @@ try {
 }
 ```
 
-`AuthError` comes from your own guards ([Configuration](/docs/configuration#pipelines)); the message is whatever your guard threw. The same holds for the `message` of each issue a pipeline throws (`FrameworkError("A2004", { message, issues })`), when its path names a member of the request's arguments. Without a guard nothing throws it.
+`AvAuthError` comes from your own guards ([Configuration](/docs/configuration#pipelines)); the message is whatever your guard threw. The same holds for the `message` of each issue a pipeline throws (`AvError("A2004", { message, issues })`), when its path names a member of the request's arguments. Without a guard nothing throws it.
 
-## TransportError versus FrameworkError
+## AvTransportError versus AvError
 
-| | `FrameworkError` family | `TransportError` |
+| | `AvError` family | `AvTransportError` |
 |---|---|---|
 | Meaning | The framework answered, and said no | No framework answer arrived |
 | Has | `code`, `cause` | `status` (HTTP status or `null`) |
 | Remedy | By code | Check the network, URL and server |
 
-`TransportError` covers:
+`AvTransportError` covers:
 
 - A failed request (server down, refused connection, CORS failure in a browser): `status` is `null`, message `The request for "User" find.many failed before any response arrived.`
 - A response that is not an Aventara envelope, such as a proxy's or a host's own 404 for a path it does not mount: `status` is the HTTP status, message `The response to "User" find.many (HTTP 404) is not an Aventara response envelope.`
 - A value in a response that cannot be read.
 
-A `TransportError` names no remedy: nothing in it says the client is stale or the server is wrong.
+An `AvTransportError` names no remedy: nothing in it says the client is stale or the server is wrong.
 
 An aborted call is neither: it rejects with exactly what `fetch` rejected with, an `AbortError` `DOMException` ([Client options](/docs/client-options#aborting)).
 
-## ContractMismatchError
+## AvContractMismatchError
 
 A generated client is bound to the contract hash and protocol version it was generated from, and sends both on every request. When the server's contract differs, it refuses with `A2005`:
 
 ```text
-ContractMismatchError: Generated client contract does not match the server. Regenerate the client.
+AvContractMismatchError: Generated client contract does not match the server. Regenerate the client.
 ```
 
 This also happens when the client calls an operation the server no longer advertises, because the server checks the client's identity before it routes. The remedy is always the same: regenerate against the deployment the client calls ([Keeping in sync](/docs/keeping-in-sync)).
 
 ## No automatic retries
 
-The client never retries. `ConflictError` with `A2013` or `A2014` is the one case where retrying the same call can succeed; do it yourself, with a limit.
+The client never retries. `AvConflictError` with `A2013` or `A2014` is the one case where retrying the same call can succeed; do it yourself, with a limit.
 
 ## See also
 

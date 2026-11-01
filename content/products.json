@@ -1,0 +1,569 @@
+[
+  {
+    "id": "framework",
+    "name": "Framework",
+    "description": "A typed API and frontend client from your Prisma schema.",
+    "headline": "Your schema. Every layer connected.",
+    "detail": "Keep your Prisma schema, client and migrations. Aventara turns your models and configuration into contracts, a typed HTTP API and a frontend client.",
+    "accent": "iris",
+    "currentVersion": "1.0.0-rc.12",
+    "versions": [
+      {
+        "version": "1.0.0-rc.12",
+        "source": {
+          "kind": "local",
+          "path": "aventara-docs-content",
+          "env": "AVENTARA_FRAMEWORK_CONTENT"
+        }
+      }
+    ],
+    "package": "@aventara/core",
+    "navigation": [
+      {
+        "title": "Start building",
+        "section": "overview",
+        "items": [
+          ["introduction", "Introduction", "compass"],
+          ["why-aventara", "Why Aventara", "compass"],
+          ["installation", "Installation", "terminal"],
+          ["getting-started", "Quickstart", "terminal"],
+          ["existing-project", "Existing project", "folder"]
+        ]
+      },
+      {
+        "title": "Core concepts",
+        "section": "overview",
+        "items": [
+          ["concepts", "Core concepts", "layers"],
+          ["contract-layers", "Contract layers", "layers"],
+          ["resources-and-operations", "Resources & operations", "database"],
+          ["results-and-typing", "Results & typing", "code"],
+          ["contract-hash", "Contract hash", "shield"]
+        ]
+      },
+      {
+        "title": "Shaping the API",
+        "section": "guides",
+        "items": [
+          ["configuration", "Configuration", "settings"],
+          ["exposure", "Exposure", "shield"],
+          ["exposing-and-hiding-fields", "Exposing & hiding fields", "shield"],
+          ["computed-fields", "Computed fields", "code"],
+          ["field-validators", "Field validators", "shield"],
+          ["enums-and-scalars", "Enums & scalar types", "code"],
+          ["json-fields", "JSON fields", "code"]
+        ]
+      },
+      {
+        "title": "Querying & writing",
+        "section": "guides",
+        "items": [
+          ["querying", "Querying", "database"],
+          [
+            "filtering-sorting-paging",
+            "Filtering, sorting & paging",
+            "settings"
+          ],
+          [
+            "relations-and-nested-writes",
+            "Relations & nested writes",
+            "workflow"
+          ],
+          ["counting", "Counting", "database"],
+          ["transactions", "Transactions", "workflow"],
+          ["transactions-with-ref", "Transactions with $ref", "workflow"]
+        ]
+      },
+      {
+        "title": "Security & behavior",
+        "section": "guides",
+        "items": [
+          ["authentication-and-guards", "Authentication & guards", "shield"],
+          ["pipelines", "Pipelines", "workflow"],
+          ["pipeline-context", "Pipeline context", "code"],
+          ["which-stage", "Which stage do I use?", "workflow"],
+          ["limits-and-safety", "Limits & safety", "shield"],
+          ["request-ids-and-diagnostics", "Request IDs & diagnostics", "life"],
+          ["policies", "Policies", "shield"],
+          ["caching-reads", "Caching reads", "database"]
+        ]
+      },
+      {
+        "title": "Running in production",
+        "section": "guides",
+        "items": [
+          ["server-side-usage", "Server-side usage", "server"],
+          ["deploying", "Deploying", "globe"],
+          ["upgrading", "Upgrading", "terminal"]
+        ]
+      },
+      {
+        "title": "Frontend client",
+        "section": "guides",
+        "items": [
+          ["frontend-client", "Frontend client", "code"],
+          ["client-setup", "Client setup", "terminal"],
+          ["typed-calls", "Typed calls", "code"],
+          ["client-errors", "Client errors", "life"],
+          ["client-options", "Client options", "settings"],
+          ["keeping-in-sync", "Keeping in sync", "workflow"],
+          ["operation-sets", "Operation Sets", "layers"],
+          ["tanstack-query-and-swr", "TanStack Query & SWR", "code"]
+        ]
+      },
+      {
+        "title": "Hosting",
+        "section": "guides",
+        "items": [
+          ["nestjs-host", "NestJS host", "server"],
+          ["mcp", "MCP", "globe"],
+          ["express-and-fastify", "Express & Fastify", "server"],
+          ["custom-host", "Custom host", "globe"],
+          ["testing-and-conformance", "Testing & conformance", "shield"],
+          ["nextjs-host", "Next.js host", "server"]
+        ]
+      },
+      {
+        "title": "Examples",
+        "section": "guides",
+        "items": [
+          ["example-blog-api", "Blog API", "folder"],
+          ["example-admin-vs-public", "Admin vs public", "shield"],
+          ["example-recipes", "Frontend recipes", "code"]
+        ]
+      },
+      {
+        "title": "Reference",
+        "section": "reference",
+        "items": [
+          ["config-reference", "Configuration reference", "settings"],
+          ["operations-reference", "Operations reference", "database"],
+          ["error-codes", "Error codes", "life"],
+          ["http-protocol", "HTTP protocol", "globe"],
+          ["protocol-api-reference", "Protocol API", "globe"],
+          ["client-api-reference", "Client API", "code"],
+          ["nest-api-reference", "NestJS API", "server"],
+          ["cli-reference", "CLI reference", "square"],
+          ["troubleshooting", "Troubleshooting", "life"],
+          ["next-api-reference", "Next.js API", "server"]
+        ]
+      },
+      {
+        "title": "About",
+        "section": "overview",
+        "items": [
+          ["changelog", "Changelog", "terminal"],
+          ["roadmap", "Roadmap", "compass"],
+          ["faq", "FAQ", "life"],
+          ["glossary", "Glossary", "layers"],
+          ["license", "License", "shield"]
+        ]
+      }
+    ],
+    "primaryNavigation": [
+      {
+        "section": "overview",
+        "title": "Overview",
+        "href": "/docs/introduction"
+      },
+      {
+        "section": "guides",
+        "title": "Guides",
+        "href": "/docs/querying"
+      },
+      {
+        "section": "reference",
+        "title": "Reference",
+        "href": "/docs/config-reference"
+      },
+      {
+        "section": "ai",
+        "title": "AI",
+        "href": "/docs/ai-agents"
+      }
+    ],
+    "topPages": [
+      {
+        "slug": "ai-agents",
+        "title": "Working with AI agents",
+        "group": "For AI agents",
+        "section": "ai"
+      }
+    ],
+    "features": [
+      "Typed queries and results",
+      "Contract layers and field exposure",
+      "Transactions with references",
+      "NestJS and Next.js hosts"
+    ],
+    "install": "npx @aventara/cli@rc new my-api",
+    "statusAnchor": "status",
+    "redirects": [
+      {
+        "from": "restricting-operations",
+        "to": "exposure#operations"
+      }
+    ],
+    "logo": {
+      "light": "/branding/svg/aventara-icon-light.svg",
+      "dark": "/branding/svg/aventara-icon-dark.svg"
+    },
+    "theme": {
+      "light": {},
+      "dark": {}
+    },
+    "pitch": {
+      "eyebrow": "FROM MODEL TO APPLICATION",
+      "heroAccent": "Less code in between.",
+      "storyLabel": "YOUR MODEL ALREADY KNOWS",
+      "storyTitle": "Stop describing the same data. Again.",
+      "storyBody": "Your database schema already describes your data. Aventara carries that shape through the API and into your frontend, so you can spend your time on what your application actually does.",
+      "capabilities": [
+        {
+          "tag": "01 / CONTRACTS",
+          "title": "One model. A deliberate API.",
+          "body": "Compile your Prisma schema and configuration into contracts that describe resources, fields and operations. Choose what your API exposes.",
+          "slug": "concepts"
+        },
+        {
+          "tag": "02 / EXPOSURE",
+          "title": "A different view for every layer.",
+          "body": "Hide sensitive fields, make them write-only, or turn off frontend operations while server code keeps full access.",
+          "slug": "contract-layers"
+        },
+        {
+          "tag": "03 / CLIENT",
+          "title": "Types that follow your query.",
+          "body": "Select the fields you need. Your generated client knows the result shape, with no runtime dependency on Aventara packages.",
+          "slug": "frontend-client"
+        },
+        {
+          "tag": "04 / BEHAVIOR",
+          "title": "Your business logic belongs here.",
+          "body": "Add guards, pipes and hooks through pipelines. Compose transactions with typed references between steps.",
+          "slug": "pipelines"
+        }
+      ],
+      "workflow": {
+        "kind": "architecture",
+        "title": "Every layer, connected.",
+        "body": "Your schema and configuration become a contract. NestJS or Next.js serves it. Your frontend gets a typed client generated from the deployed contract.",
+        "steps": []
+      },
+      "demo": {
+        "label": "SCHEMA → TYPED CLIENT",
+        "scenarios": [
+          {
+            "label": "User",
+            "file": "schema.prisma",
+            "source": "model User {\n  id    String  @id @default(cuid())\n  email String  @unique\n  name  String?\n}",
+            "outputFile": "frontend.ts",
+            "output": "const users = await avClient.User.find.many({\n  select: [\"id\", \"name\"],\n  limit: 3,\n});",
+            "result": "{ id: string; name: string | null }[]",
+            "caption": "The selected fields shape your result. Your Prisma schema stays the source.",
+            "status": "Fields selected"
+          },
+          {
+            "label": "Post",
+            "file": "schema.prisma",
+            "source": "model Post {\n  id        String  @id @default(cuid())\n  title     String\n  published Boolean @default(false)\n}",
+            "outputFile": "frontend.ts",
+            "output": "const posts = await avClient.Post.find.many({\n  where: { published: true },\n  select: [\"id\", \"title\"],\n});",
+            "result": "{ id: string; title: string }[]",
+            "caption": "Filter through a typed client. Keep the query close to the UI that needs it.",
+            "status": "Query shaped"
+          }
+        ]
+      },
+      "ctaTitle": "Your next API starts with a schema.",
+      "ctaBody": "Create a project, connect your models, and build the parts that make your application yours.",
+      "faq": [
+        {
+          "question": "Do I keep my Prisma client and migrations?",
+          "answer": "Yes. Your application owns its Prisma client, schema and migrations. Aventara extends your ORM and runs operations through the adapter."
+        },
+        {
+          "question": "Which hosts can serve the API?",
+          "answer": "NestJS 12 on Express or Fastify, or a Next.js App Router app on the supported Node runtime. The docs cover both hosts."
+        },
+        {
+          "question": "Do I need Access?",
+          "answer": "Access is optional. The framework works on its own; Access adds schema-typed authorization when your application needs it."
+        },
+        {
+          "question": "Is the API stable?",
+          "answer": "The framework is a release candidate. Breaking changes are still possible before a stable release. Pin versions and follow the upgrade guide."
+        }
+      ]
+    },
+    "unpublishedPages": ["policies"]
+  },
+  {
+    "id": "access",
+    "name": "Access",
+    "description": "Authorization, typed from your schema. Every row. Every field.",
+    "headline": "Know exactly who can do what.",
+    "detail": "Write role-first rules that follow your schema. Access decides which rows and fields a caller may use. Better Auth handles sign-in and credentials.",
+    "accent": "mint",
+    "currentVersion": "1.0.0-rc.2",
+    "versions": [
+      {
+        "version": "1.0.0-rc.2",
+        "source": {
+          "kind": "local",
+          "path": "aventara-access-docs-content",
+          "env": "AVENTARA_ACCESS_CONTENT"
+        }
+      }
+    ],
+    "package": "@aventara/access",
+    "navigation": [
+      {
+        "title": "Start building",
+        "section": "overview",
+        "items": [
+          ["introduction", "Introduction", "code"],
+          ["why-access", "Why access", "code"],
+          ["installation", "Installation", "code"],
+          ["getting-started", "Getting started", "code"]
+        ]
+      },
+      {
+        "title": "Writing rules",
+        "section": "guides",
+        "items": [
+          ["rules", "Rules", "code"],
+          ["updates", "Updates", "code"]
+        ]
+      },
+      {
+        "title": "Identity & integration",
+        "section": "guides",
+        "items": [
+          ["create-access", "Create access", "code"],
+          ["passwords", "Passwords", "code"],
+          ["hosts", "Hosts", "code"],
+          ["access-verbs", "Access verbs", "code"],
+          ["better-auth-plugin", "Better auth plugin", "code"]
+        ]
+      },
+      {
+        "title": "Agents & devices",
+        "section": "guides",
+        "items": [
+          ["agents-mcp", "Agents mcp", "code"],
+          ["kiosk", "Kiosk", "code"]
+        ]
+      },
+      {
+        "title": "Data & records",
+        "section": "guides",
+        "items": [
+          ["auth-tables", "Auth tables", "code"],
+          ["audit-log", "Audit log", "code"]
+        ]
+      },
+      {
+        "title": "Multiple services",
+        "section": "guides",
+        "items": [
+          ["registry-and-cli", "Registry and cli", "code"],
+          ["guardrails", "Guardrails", "code"],
+          ["beacons-and-foreign", "Beacons and foreign", "code"],
+          ["generated-client", "Generated client", "code"],
+          ["standalone-server", "Standalone server", "code"]
+        ]
+      },
+      {
+        "title": "Reference",
+        "section": "reference",
+        "items": [
+          ["reference-index", "Reference index", "code"],
+          ["reference", "Reference", "code"],
+          ["cli-reference", "Cli reference", "code"],
+          ["error-codes", "Error codes", "code"],
+          ["limits-and-defaults", "Limits and defaults", "code"],
+          ["troubleshooting", "Troubleshooting", "code"],
+          ["glossary", "Glossary", "code"]
+        ]
+      },
+      {
+        "title": "About",
+        "section": "overview",
+        "items": [["license", "License", "code"]]
+      }
+    ],
+    "primaryNavigation": [
+      {
+        "section": "overview",
+        "title": "Overview",
+        "href": "/docs/introduction"
+      },
+      {
+        "section": "guides",
+        "title": "Guides",
+        "href": "/docs/rules"
+      },
+      {
+        "section": "reference",
+        "title": "Reference",
+        "href": "/docs/reference-index"
+      }
+    ],
+    "topPages": [],
+    "features": [
+      "Rules checked against your schema",
+      "Default deny; matching denies win",
+      "Sessions, tokens and MCP agents",
+      "Audit the rule behind a decision"
+    ],
+    "install": "npm install --save-exact @aventara/access@rc better-auth@~1.7.12",
+    "statusAnchor": "status-and-requirements",
+    "redirects": [],
+    "logo": {
+      "light": "/branding/access/aventara-access-icon-light.svg",
+      "dark": "/branding/access/aventara-access-icon-dark.svg"
+    },
+    "theme": {
+      "light": {
+        "primary": "#26704D",
+        "primary-hover": "#205F41",
+        "on-primary": "#FFFFFF",
+        "accent": "#246C4B",
+        "secondary": "#3C6B59",
+        "selected": "#D4E8DC",
+        "selected-text": "#1F5C3F",
+        "background": "#EDF3F0",
+        "surface": "#F8FCFA",
+        "raised": "#E0EBE5",
+        "foreground": "#1F3028",
+        "muted": "#536C5D",
+        "border": "#B7CBBE",
+        "input-border": "#789785"
+      },
+      "dark": {
+        "primary": "#79CDA7",
+        "primary-hover": "#91D8B9",
+        "on-primary": "#11251B",
+        "accent": "#8AD9B5",
+        "secondary": "#9FCABA",
+        "selected": "#284D3C",
+        "selected-text": "#9CDEBE",
+        "background": "#111D1A",
+        "surface": "#192A23",
+        "raised": "#23392F",
+        "foreground": "#E5F1EB",
+        "muted": "#AEC8BA",
+        "border": "#496457",
+        "input-border": "#759D88"
+      }
+    },
+    "pitch": {
+      "eyebrow": "PERMISSION WITH A CLEAR REASON",
+      "heroAccent": "Every row. Every field.",
+      "storyLabel": "RULES YOU CAN REASON ABOUT",
+      "storyTitle": "Who can do what should be easy to answer.",
+      "storyBody": "As your application grows, permission checks spread across handlers and services. Access gives those decisions a home: role-first rules, typed from your schema, with an explanation behind each decision.",
+      "capabilities": [
+        {
+          "tag": "01 / TYPE SAFETY",
+          "title": "A typo should fail before a request.",
+          "body": "Resource names, fields, relations and enum values are checked against your schema. Mistakes surface at the key that names them.",
+          "slug": "rules"
+        },
+        {
+          "tag": "02 / DECISIONS",
+          "title": "Permission is explicit.",
+          "body": "Nothing is allowed until a grant allows it. Any matching deny wins, regardless of rule order. Missing values fail closed.",
+          "slug": "rules"
+        },
+        {
+          "tag": "03 / PRINCIPALS",
+          "title": "One engine. Every kind of caller.",
+          "body": "Apply decisions to sessions, bearer tokens, MCP agents and server code. Agents are held to their user’s grants and token scopes.",
+          "slug": "agents-mcp"
+        },
+        {
+          "tag": "04 / AUDIT",
+          "title": "See the rule behind the answer.",
+          "body": "Record authorization decisions in the audit log. Trace the rule that decided, so permission changes have a reason you can inspect.",
+          "slug": "audit-log"
+        }
+      ],
+      "workflow": {
+        "kind": "steps",
+        "title": "Identity in. A decision out.",
+        "body": "Better Auth handles sign-in and credentials. Access resolves permissions. The framework validates and runs the operation. Each part has a clear job.",
+        "steps": [
+          {
+            "title": "Identify the caller",
+            "body": "A session or bearer token supplies the principal for the request."
+          },
+          {
+            "title": "Resolve the rules",
+            "body": "Access evaluates grants and denies for the resource, action, rows and fields."
+          },
+          {
+            "title": "Enforce the decision",
+            "body": "The framework applies the decision. Refused requests return 403 A4002."
+          }
+        ]
+      },
+      "demo": {
+        "label": "A RULE. A CALLER. A DECISION.",
+        "scenarios": [
+          {
+            "label": "Author",
+            "file": "access.policies.ts · excerpt",
+            "source": ".grants(({ grant, me }) => [\n  grant(\"signedIn\", \"update\", \"Note\", {\n    where: { authorId: me.id },\n  }),\n])\n.denies(({ deny }) => [\n  deny(\"*\", \"*\", {\n    if: { claims: { banned: true } },\n  }),\n]);",
+            "outputFile": "Illustrative decision",
+            "output": "Caller    Ada · id user_ada\nAction    update Note\nRow       authorId: \"user_ada\"\nBanned    false",
+            "result": "ALLOW · author matches caller",
+            "caption": "The author can edit their own note. This is a local illustration of the quickstart rules.",
+            "status": "Grant matches"
+          },
+          {
+            "label": "Other user",
+            "file": "access.policies.ts · excerpt",
+            "source": ".grants(({ grant, me }) => [\n  grant(\"signedIn\", \"update\", \"Note\", {\n    where: { authorId: me.id },\n  }),\n])\n.denies(({ deny }) => [\n  deny(\"*\", \"*\", {\n    if: { claims: { banned: true } },\n  }),\n]);",
+            "outputFile": "Illustrative decision",
+            "output": "Caller    Grace · id user_grace\nAction    update Note\nRow       authorId: \"user_ada\"\nBanned    false",
+            "result": "DENY · no matching grant",
+            "caption": "Being signed in is not enough to edit someone else’s note. No matching grant means no permission.",
+            "status": "Default deny"
+          },
+          {
+            "label": "Banned author",
+            "file": "access.policies.ts · excerpt",
+            "source": ".grants(({ grant, me }) => [\n  grant(\"signedIn\", \"update\", \"Note\", {\n    where: { authorId: me.id },\n  }),\n])\n.denies(({ deny }) => [\n  deny(\"*\", \"*\", {\n    if: { claims: { banned: true } },\n  }),\n]);",
+            "outputFile": "Illustrative decision",
+            "output": "Caller    Ada · id user_ada\nAction    update Note\nRow       authorId: \"user_ada\"\nBanned    true",
+            "result": "DENY · matching deny wins",
+            "caption": "The author’s grant still matches. The banned-user deny takes precedence.",
+            "status": "Deny takes precedence"
+          }
+        ]
+      },
+      "ctaTitle": "Give every permission a place.",
+      "ctaBody": "Start with the Note example. Write your first rules, allow a request, and see another refused.",
+      "faq": [
+        {
+          "question": "Does Access sign users in?",
+          "answer": "Better Auth handles sign-in and issues credentials. Access adds authorization: which rows and fields a caller may use."
+        },
+        {
+          "question": "Can I use the authentication I already have?",
+          "answer": "Yes. Use the policy engine alone with your own authentication, add the Access plugin to your existing Better Auth setup, or set both up together with createAccess."
+        },
+        {
+          "question": "What happens when a grant and a deny both match?",
+          "answer": "The deny wins. Rule order does not change the result. A request with no matching grant is denied too."
+        },
+        {
+          "question": "Can several services share policies?",
+          "answer": "Each service can own a namespace in the Access registry. The CLI can push, pull and verify policy files; a generated client supports services that do not run on Aventara."
+        }
+      ]
+    }
+  }
+]

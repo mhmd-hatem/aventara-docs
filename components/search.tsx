@@ -8,12 +8,15 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { pages } from "@/lib/navigation";
+import { productTheme } from "@/lib/product-theme";
+import { productPages, type Product } from "@/lib/products";
 type Result = { id: string; url: string; content: string; type: string };
 export function SearchDialog({
   open,
   onOpenChange,
+  product,
 }: {
+  product: Product;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -32,7 +35,7 @@ export function SearchDialog({
     const timer = setTimeout(async () => {
       try {
         const response = await fetch(
-          `/api/search?query=${encodeURIComponent(query)}`,
+          `/${product.id}/api/search?query=${encodeURIComponent(query)}`,
           { signal: controller.signal },
         );
         if (!response.ok) throw new Error("Search failed");
@@ -46,13 +49,13 @@ export function SearchDialog({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, open]);
+  }, [query, open, product.id]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="search-dialog">
+      <DialogContent className="search-dialog product-scope" style={productTheme(product)}>
         <DialogTitle className="sr-only">Search documentation</DialogTitle>
         <DialogDescription className="sr-only">
-          Search all Aventara guides, concepts, and reference pages.
+          Search {product.name} guides, concepts, and reference pages.
         </DialogDescription>
         <div className="search-input-wrap">
           <Search size={21} />
@@ -90,20 +93,22 @@ export function SearchDialog({
           {!query.trim() ? (
             <>
               <div className="search-label">A good place to start</div>
-              {pages.slice(0, 4).map((p) => (
-                <Link
-                  onClick={() => onOpenChange(false)}
-                  key={p.slug}
-                  href={`/docs/${p.slug}`}
-                >
-                  <FileText size={17} />
-                  <span>
-                    {p.title}
-                    <small>{p.group}</small>
-                  </span>
-                  <ArrowUpRight size={16} />
-                </Link>
-              ))}
+              {productPages(product)
+                .slice(0, 4)
+                .map((p) => (
+                  <Link
+                    onClick={() => onOpenChange(false)}
+                    key={p.slug}
+                    href={`/${product.id}/docs/${p.slug}`}
+                  >
+                    <FileText size={17} />
+                    <span>
+                      {p.title}
+                      <small>{p.group}</small>
+                    </span>
+                    <ArrowUpRight size={16} />
+                  </Link>
+                ))}
             </>
           ) : status === "loading" ? (
             <p role="status">

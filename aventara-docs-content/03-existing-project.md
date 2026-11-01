@@ -13,17 +13,26 @@ Run `aventara init` inside an existing NestJS 12 project:
 npx @aventara/cli@rc init
 ```
 
+To start a NestJS 12 project for it, use the Nest CLI version `aventara new` pins:
+
+```bash
+npx -y @nestjs/cli@12.0.8 new my-api        # npm
+pnpm dlx @nestjs/cli@12.0.8 new my-api      # pnpm
+```
+
+`aventara new` runs this for you and then `init`, so use it instead unless you want to set up the Nest project yourself first.
+
 It refuses, in one sentence and before writing anything, when there is no `package.json`, the project is on another Nest major, TypeScript 7 is installed (the server side needs TypeScript below 7, and `init` says so; a TypeScript 7 *frontend* is fine), only a yarn lockfile exists, or the project is already initialized. ESM and CommonJS projects are both supported.
 
 ## No ORM yet
 
-If the project has no Prisma setup, `init` asks for the ORM and database (or take them from `--orm prisma7` and `--db`) and writes the same files as `aventara new` ([what it creates](/docs/getting-started#what-it-creates)): a Prisma schema with a starter `User` model, `prisma.config.ts`, `src/prisma.service.ts`, `src/aventara.config.ts`, a one-time edit of `src/app.module.ts` and `src/main.ts` (CORS, below), `.env`, `.gitignore` entries and the `package.json` scripts and dependencies.
+If the project has no Prisma setup, `init` asks for the ORM and database (or take them from `--orm prisma7` and `--db`) and writes the same files as `aventara new` ([what it creates](/docs/getting-started#what-it-creates)): a Prisma schema with a starter `User` model, `prisma.config.ts`, `src/prisma.service.ts`, `src/aventara.config.ts`, `src/aventara.adapter.ts`, a one-time edit of `src/app.module.ts` and `src/main.ts` (CORS, below), `.env`, `.gitignore` entries and the `package.json` scripts and dependencies.
 
 ## Prisma is already there
 
 If Prisma is already set up, `init` reuses and never writes your schema, Prisma config, `.env` and Prisma service. It requires the installed Prisma to be one an Aventara adapter supports:
 
-- Prisma 7, `^7.10.0`
+- Prisma 7, `^7.10.1`
 - SQLite or PostgreSQL
 - a driver adapter (`@prisma/adapter-better-sqlite3` or `@prisma/adapter-pg`)
 - the `prisma-client` generator
@@ -64,6 +73,10 @@ If it has no `const app = await NestFactory.create(...)` statement to anchor on,
 ```text
 aventara: warning: src/main.ts was not edited: it has no `const app = await NestFactory.create(…);` line; add CORS by hand, as printed below.
 ```
+
+## The build step and where generated files go
+
+`init` adds `@aventara/build` as a dev dependency and ends the `aventara:prepare` script with `aventara-build`. Aventara's generated files (the discovery artifact, `resources.generated.ts`, `computed-fields.generated.ts` and `contracts.generated.ts`) go in `src/generated/aventara/`. When your Prisma client is already generated into `src/generated`, they go in `src/aventara/` instead, because `prisma generate` empties its own output directory and would delete them. `src/aventara.config.ts` then imports the Resource tree from `./aventara/resources.generated`, and `.gitignore` gets one `/src/aventara/` line that covers all four files. What each file is: [Deploying](/docs/deploying#build-time-contracts).
 
 ## After init
 

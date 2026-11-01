@@ -1,87 +1,90 @@
-# Aventara documentation
+# Aventara unified site
 
-A custom documentation site built with Next.js App Router, Fumadocs Core and MDX, Tailwind CSS, and editable shadcn-style Radix components. Uses the Compass Weave logo kit with Moonlit Frost and Aurora Ink themes.
+One Next.js app for the Aventara homepage and product documentation. Built with Fumadocs Core/MDX, Tailwind, and owned Radix components.
 
-## Coming-soon mode
+## Routes and publication
 
-The public site currently shows only the sales homepage while the framework is rebuilt. `/docs` and all nested paths temporarily redirect to `/`; `/api/search` returns 404 and publishes no index. The homepage has no documentation, release, install, or playground links.
+The intended canonical host is **https://aventara.razor34.dev**:
 
-The documentation source is preserved. To restore it, move the renderer in `components/docs-page.tsx` back to `app/docs/[[...slug]]/page.tsx`, restore the docs layout and search handler from Git, and remove the temporary redirect in `next.config.mjs`. Review release claims and homepage calls to action before reopening.
+- `/`: shared homepage.
+- `/framework` and `/access`: product landing pages.
+- `/<product>/docs/<slug>`: documentation, keeping existing slugs and heading anchors.
+- `/<product>/api/search`: search scoped to that product.
+- `/<product>/llms.txt`, `/<product>/llms-full.txt`, and `/<product>/markdown/<slug>`: generated Markdown exports.
 
-## Develop
+The old `aventara-framework.vercel.app` and `aventara-docs.vercel.app` hosts redirect permanently to the canonical host with `/framework` prepended to the original path. Browsers retain URL fragments. `/docs/...` on the canonical host also redirects to Framework. Root `/llms.txt` lists both products; the legacy full export redirects to Framework.
 
-Source: [mhmd-hatem/aventara-docs](https://github.com/mhmd-hatem/aventara-docs). Report framework bugs, docs problems, and feature requests through [GitHub Issues](https://github.com/mhmd-hatem/aventara-docs/issues/new/choose).
+This work is on `codex/unified-docs`. Building this branch does not launch it. Keep production unchanged until the new host and build content sources are ready.
 
-Use Node.js 24.x and npm for the docs site:
+Feedback continues through [the public docs repository's issues](https://github.com/mhmd-hatem/aventara-docs/issues/new/choose); the product repositories are private.
+
+## Local development
+
+Use Node.js 24.x and npm:
 
 ```sh
 npm install
-npm run dev
+npm run dev -- --webpack
 ```
 
-Open http://localhost:3000. The home route is the product homepage; `/docs/introduction` opens the documentation overview.
+The default content sources are live folders:
+
+- Framework: `./aventara-docs-content/`
+- Access: `./aventara-access-docs-content/`
+
+Override these with `AVENTARA_FRAMEWORK_CONTENT` and `AVENTARA_ACCESS_CONTENT` when checkouts live elsewhere. Both folders must exist before installing/building. The app reads them directly; it does not maintain copies of their Markdown.
 
 ```sh
-npm run typecheck
 npm test
-npm run build
-npm start
+npm run build -- --webpack
+npm run verify:build
+npm run typecheck
 ```
 
-If a restricted environment blocks Turbopack’s internal loader port, use `npm run build -- --webpack`; this alternative production build is also verified.
+Webpack supports the external content directories and is also the configured Vercel build. Search requires a Next.js server; this is not a static export.
 
-The documentation pages are prerendered. Full-text search uses a Fumadocs server endpoint at `/api/search`, so production currently requires a Next.js server (not a plain static file host).
+`content:prepare` runs before development, build and tests. It creates ignored collection configuration and public metadata under `.generated/`; Fumadocs compiles the original Markdown. After adding/removing files or changing the registry, restart development to regenerate collections.
 
-## Deploy to Vercel
+## Products and content sources
 
-Production: https://aventara-docs.vercel.app — project `aventara-docs` in `razorxxxivs-projects`.
+`content/products.json` owns each product's identity, current version, version source entries, navigation, landing copy, logo, and optional theme tokens. Add a product entry and numbered Markdown content to obtain its landing page, docs, switcher entry, search and exports without adding routes or components. Every source page must appear exactly once in navigation or `topPages`; preparation validates this.
 
-`vercel.json` selects Next.js, installs from the lockfile with `npm ci`, and uses the verified Webpack production build. Node.js is pinned to 24.x in `package.json`. No application environment variables or external database are required; `/api/search` runs as a Next.js server endpoint.
+Required fields are `id`, `name`, `description`, `currentVersion`, `versions`, and `navigation`. Navigation groups contain `title`, `section`, and `items` tuples of `[slug, title, icon]`. Page titles come from source frontmatter. Optional `overviewSlug` and `startSlug` override introduction/quickstart defaults; otherwise they fall back to the first published page. Landing copy, features, install commands, primary navigation, logo and themes have defaults. Framework's AI guide is configured in top navigation rather than the sidebar.
 
-The Vercel project is connected to `mhmd-hatem/aventara-docs`. Pushes to `main` deploy production; pull requests receive preview deployments. Keep the production domain on the existing Vercel project.
+Currently one selected version is served per product. The registry stores version/source pairs so more refs can be added later; a multi-version reader is not implemented yet.
 
-For a manual deployment from a linked checkout, use `npx vercel --prod`. The `.vercelignore` allowlist uploads only application source, public assets, numbered docs and build configuration. `.gitignore` also excludes local credentials, build output, source design kits, and internal editorial notes from the public repository.
+When content moves to each product repository's `docs/`, replace its local source with a GitHub source:
 
-For a framework release, update the source content and `lib/release.ts` together, run `npm test` and `npm run build -- --webpack`, then push to `main`. Check the resulting deployment's navigation, search and interactive examples before announcing it.
+```json
+{
+  "kind": "github",
+  "repo": "mhmd-hatem/Aventara-Framework",
+  "ref": "<published-tag-or-branch>",
+  "path": "docs",
+  "tokenEnv": "AVENTARA_CONTENT_TOKEN"
+}
+```
 
-## Analytics
+Access's repository is `mhmd-hatem/Aventara-Access`. Both repositories were verified private. Supply a read-only build token as an environment secret; never put it in the registry. The adapter fetches numbered Markdown into temporary build storage and never serializes credentials or source paths into the public product metadata. It refreshes moving refs every build. Local and GitHub adapters share the same interface.
 
-Vercel Web Analytics is mounted in the root layout through `components/site-analytics.tsx`, covering the homepage and documentation. Enable Web Analytics in the Vercel project dashboard before deploying. Development uses the package's debug mode and does not send production analytics.
+Both content folders are now versioned in this repository and included in cloud build inputs. The framework content branch and Access content branch are merged into `codex/unified-docs`. When moving content to product repositories, configure an existing ref and supply a read-only token for private content.
 
-To exclude your own browser, open `https://aventara-docs.vercel.app/?analytics=off` once. The preference persists in this browser's local storage, and the opt-out visit itself is not recorded. Repeat for each browser or device you use; clearing site data resets the preference. Open `?analytics=on` to resume tracking. If storage is blocked, exclusion lasts only for the current page session.
+## Drafts and indexing
 
-## Content
+Pages carrying a `<!-- DRAFT ... -->` marker or listed in a product’s `unpublishedPages` are excluded from MDX collections, search, raw Markdown and full exports. Existing links to these pages show a neutral review notice with preserved heading IDs. The Framework policies page is explicitly held in `unpublishedPages` until maintainer approval, even if its source draft marker is removed; its draft body is not published. README and `_site-notes.md` are never published.
 
-The current framework release is `1.0.0-rc.0`. Shared site badges and interactive install commands read the version and `rc` dist-tag from `lib/release.ts`; the numbered source pages contain the release documentation.
+The public launch enables indexing on Vercel production (`VERCEL_ENV=production`). Local and preview builds retain crawler exclusions even if `AVENTARA_INDEXING=enabled` is inherited. Set `AVENTARA_INDEXING=disabled` on production to pause indexing. Draft holding pages retain their own noindex metadata. Crawler directives are not access control.
 
-Edit the numbered Markdown files in `aventara-docs-content/`. Fumadocs reads those files directly; there is no generated copy to maintain. Numeric prefixes are stripped from page URLs. README and internal site notes are excluded from publishing and search. Navigation groups live in `lib/navigation.ts`.
+Publication was authorized on 31 October 2026. Deploy production directly to the intended Vercel account. The maintainer noted that the GitHub integration belongs to a different account; do not use a `main` push as a substitute for direct deployment. Before subsequent releases:
 
-All 56 pages are arranged in task-focused navigation groups. The current group opens automatically; other groups can be expanded. The same page list drives breadcrumbs, previous/next links, and primary-navigation highlighting. `tests/navigation.test.mjs` checks that every numbered source page appears exactly once.
+1. Recheck npm releases and update `currentVersion` plus its matching version entry in the registry. The site is prepared for Framework `1.0.0-rc.12` and Access `1.0.0-rc.2` as requested in the 31 October handoff. The maintainer explicitly chose to publish these upcoming labels while npm still has Framework rc.11 and Access rc.1.
+2. Pull any final content commits from both release content branches. Both sources are available in this repository for cloud builds.
+3. Run tests, the production build, and built-output verification.
+4. Attach `aventara.razor34.dev` to the existing Vercel project before deploying the old-host redirects. Check redirects and fragments on the deployed hosts.
+5. Review both products on mobile and desktop in both themes, and confirm production indexing and preview exclusions.
 
-## Design
+## Design and analytics
 
-- `app/globals.css`: semantic theme tokens, responsive layout, reading styles, and reduced-motion rules.
-- `components/docs-shell.tsx`: desktop navigation, mobile drawer, and theme control.
-- `app/page.tsx` and `app/landing.css`: the product homepage, with its own navigation, layered model preview, connection flow, playground, and invitation to start building.
-- `components/landing-interactions.tsx`: mobile homepage menu, theme control, install command, and synchronized schema/client examples.
-- `app/docs/layout.tsx`: the documentation workspace, separate from the homepage.
-- `components/overview.tsx`: documentation introduction, examples, and next steps.
-- `components/architecture.tsx`: centered Aventara diagram on the homepage, with a replayable schema → contract → API → client flow.
-- `components/protocol-flow.tsx`: custom contract/HTTP round-trip illustration with selectable compile, generate, and request stages; `introduction-code.tsx` replaces the source text diagram at render time.
-- `app/experience.css`: modern navigation, ambient surfaces, and interactive lab layouts.
-- `app/scrollbars.css`: themed native scrollbar variants for the page, navigation, code, tables, and search.
-- `app/motion.css` and `components/interaction-motion.tsx`: pointer-origin ripples, sliding selection indicators, page/panel transitions, and theme feedback. Ripples are decorative, ignore disabled controls, and clean up on cancellation or scrolling. Keyboard actions and reduced-motion preferences skip the animation.
-- `components/query-playground.tsx`: editable filters, field selection, live sample results, and generated code.
-- `components/quickstart-lab.tsx`: four-step setup simulation with project-name and package-manager controls.
-- `components/transaction-lab.tsx`: commit and rollback simulation.
-- `components/schema-preview.tsx` and `lib/demo-schemas.ts`: copyable Prisma model excerpts, with query selection and transaction constraint explanations. Query and transaction labs expose an ORM Schema tab alongside Preview and Code; setup keeps its schema beside the walkthrough.
-- `lib/playground.ts`: deterministic sample query and transaction logic, covered by `tests/playground.test.mjs`.
-- `components/ui/`: owned button and dialog primitives; `components.json` configures shadcn.
-- `public/branding/`: SVG lockups and favicon assets copied from the supplied kit.
-- Fonts are served locally from bundled Manrope and IBM Plex Mono packages.
+Framework retains Moonlit Frost / Aurora Ink. Access uses a green palette derived from its approved logo, including navigation, selected states, links, controls, search dialogs and mobile navigation. Product tokens live in the registry; shared presentation is in `app/unified.css`. `DESIGN.md` records design decisions and logo assets.
 
-Search opens with Ctrl/Cmd+K. The search results and code-example tabs support keyboard navigation. Theme preference persists; the initial theme follows the system setting. Transient dialogs handle focus trapping and Escape through Radix.
-
-The overview and querying playground execute local filtering, ordering, limits, and field selection against five sample records. The quickstart and transaction labs simulate setup and database outcomes. Every lab is labeled as a simulation; none installs packages, executes the displayed commands, or connects to a running Aventara API. Reduced-motion preferences remove staged animation delays.
-
-The original palette and logo kits are kept locally; the site assets are in `public/branding/`. See `DESIGN.md` for the accepted design direction.
+Vercel Web Analytics respects the existing opt-out. Open `/?analytics=off` once on the site to exclude this browser; `?analytics=on` resumes recording. The preference is specific to each hostname/browser. Development does not send production analytics.

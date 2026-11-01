@@ -7,8 +7,7 @@ export default function NotFound() {
       <span className="eyebrow">404 / OFF THE MAP</span>
       <h1>This page isn’t in the contract.</h1>
       <p>
-        Aventara is being rebuilt. Explore the vision while the next chapter
-        takes shape.
+        Choose Framework or Access from the homepage to find the right guide.
       </p>
       <Button asChild>
         <Link href="/">

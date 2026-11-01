@@ -57,7 +57,7 @@ const some = framework.appTx.Post.find.many({ where: { tags: { hasSome: entry.$r
 const every = framework.appTx.Post.find.many({ where: { tags: { hasEvery: entry.$ref("tags") } }, select: ["title"], orderBy: { id: "asc" } });
 const notIn = framework.appTx.Post.find.many({ where: { views: { notIn: entry.$ref("scores") } }, select: ["title"] });   // scores is an Int[]
 const result = await framework.transaction([entry, some, every, notIn]);
-// result.code === "A1009"; result.data is the array, one entry per step:
+// result is the array of committed results, one entry per step:
 // [ { id: 1, tags: ['x', 'y'], scores: [1, 2] }, [ { title: 'one' }, { title: 'two' } ], [ { title: 'one' } ], [ ...posts whose views are not in [1, 2] ] ]
 ```
 
@@ -67,7 +67,7 @@ An `in` with a plain (non-list) source is a mistake the plan refuses:
 
 ```ts
 // where: { categoryId: { in: post.$ref("categoryId") } }
-// ValidationError A2007: { path: ["operations", 1, "args", "where", "categoryId", "in", "$ref", "path"],
+// AvValidationError A2007: { path: ["operations", 1, "args", "where", "categoryId", "in", "$ref", "path"],
 //   code: "V1011", message: "Transaction reference source type is not assignable to its destination." }, operation: 1
 ```
 
@@ -154,7 +154,7 @@ await avClient.transaction([a, c, set, drop]);
 
 ## Filter by an earlier result
 
-A reference works in any filter operator, at any depth: under `AND`, `OR` and `NOT`, and through relations (a to-one relation's nested `where`, or `some`, `every` and `none` on a to-many). The posts that earn more than a given post, that share its author but are not that post, and the users who wrote it:
+A pipe that moves a reference (a scoping pipe that ANDs the caller's filter) keeps it working: it is resolved at its new place. A reference works in any filter operator, at any depth: under `AND`, `OR` and `NOT`, and through relations (a to-one relation's nested `where`, or `some`, `every` and `none` on a to-many). The posts that earn more than a given post, that share its author but are not that post, and the users who wrote it:
 
 ```ts
 const post = avClient.tx.Post.find.unique({ where: { id: 56 }, select: ["id", "views", "authorId"] });
@@ -242,7 +242,7 @@ await avClient.transaction([open, same]);
 
 ```ts
 // where: { categoryId: { gt: open.$ref("categoryId") } }
-// ValidationError A2007: { path: ["operations", 1, "args", "where", "categoryId", "gt", "$ref", "path"],
+// AvValidationError A2007: { path: ["operations", 1, "args", "where", "categoryId", "gt", "$ref", "path"],
 //   code: "V1011", message: "Transaction reference source type is not assignable to its destination." }, operation: 1
 // where: { id: open.$ref("categoryId") }          (a unique key)       -> the same A2007 / V1011
 ```
@@ -271,14 +271,14 @@ const dup = avClient.tx.User.create.one({ data: { email: "ada@example.com" } });
 try {
   await avClient.transaction([first, dup]);
 } catch (e) {
-  // ConflictError, e.code === "A2008"
+  // AvConflictError, e.code === "A2008"
   // e.cause: { message: "The operation conflicts with the current state of the resource.", operation: 1 }
 }
 
 await avClient.User.find.first({ where: { email: "rb@example.com" } });   // null: step 0 was rolled back
 ```
 
-The failing step's code is reported as it is (`A2008`, `A2003`, ...). `A3002` is reserved for transaction infrastructure failures (commit or rollback problems). Errors thrown by a guard or pipe on a later step roll the plan back too: with a pipe that refuses `Category` named "boom" on step 1, the plan throws `A4002 { message: 'boom denied', operation: 1 }` and step 0's category does not exist afterwards.
+The failing step's code is reported as it is (`A2008`, `A2003`, ...). `A3002` is reserved for transaction infrastructure failures (commit or rollback problems, a transaction that expired under a step, or a transaction interceptor that broke the plan). A guard or pipe that refuses a later step refuses the plan before the transaction opens, so nothing is written: with a pipe that refuses `Category` named "boom" on step 1, the plan throws `A4002 { message: 'boom denied', operation: 1 }` and step 0's category does not exist afterwards.
 
 ## Preconditions: make a step abort the plan
 
@@ -298,7 +298,7 @@ If the owner does not exist, the first step throws and nothing is created:
 
 ```ts
 // where: { email: "ghost@example.com" }
-// NotFoundError A2003 { message: "No record matched the unique selector.", operation: 0 }
+// AvNotFoundError A2003 { message: "No record matched the unique selector.", operation: 0 }
 ```
 
 ## Conditional steps
@@ -318,13 +318,13 @@ To make the rest of the plan depend on that match, reference it. A `$ref` to a s
 const first = avClient.tx.User.find.first({ where: { email: "ghost@example.com" }, select: ["id"] });
 const post = avClient.tx.Post.create.one({ data: { title: "never", authorId: first.$ref("id") } });
 await avClient.transaction([first, post]);
-// ValidationError A2007: { path: ["operations", 1, "args", "data", "authorId", "$ref", "path"],
+// AvValidationError A2007: { path: ["operations", 1, "args", "data", "authorId", "$ref", "path"],
 //   code: "V1018", message: "Transaction reference resolved to no value." }, operation: 1
 ```
 
 | You want | Use |
 |---|---|
-| Abort if the record is missing | a `unique` step (`NotFoundError`, `A2003`) |
+| Abort if the record is missing | a `unique` step (`AvNotFoundError`, `A2003`) |
 | Continue if it is missing | a `first` step, and no `$ref` to it |
 | Abort if it is missing, and use a value from it | a `first` step with a `$ref` (`A2007` / `V1018`) |
 
@@ -333,12 +333,12 @@ await avClient.transaction([first, post]);
 If an earlier step deletes a row whose deletion cascades in the database to rows a later step depends on, the plan is refused before any statement runs, with `A2004` and the issue `V1019`:
 
 ```ts
-const del = tx.User.delete.unique({ where: { id: 2 }, select: ["id"] });
-const upd = tx.Post.update.many({ where: { authorId: 2 }, data: { title: "y" } });
+const del = avClient.tx.User.delete.unique({ where: { id: 2 }, select: ["id"] });
+const upd = avClient.tx.Post.update.many({ where: { authorId: 2 }, data: { title: "y" } });
 // Post rows are removed by the User delete's cascade (onDelete: Cascade), so step 1 depends on removed rows.
 
 await avClient.transaction([del, upd]);
-// ValidationError A2004: { message: "Transaction plan failed framework validation.",
+// AvValidationError A2004: { message: "Transaction plan failed framework validation.",
 //   issues: [ { code: "V1019", path: ["operations", 1, "resource"],
 //     message: "Transaction step depends on a row removed by an earlier step's cascade" } ], operation: 1 }
 ```
@@ -355,7 +355,7 @@ The same plan runs under one layer's rules, chosen by the builder:
 | `framework.clientTx` + `framework.transaction([...])` | the client layer, in process | your server code, when it should be limited like a remote caller |
 | `framework.appTx` + `framework.transaction([...])` | the application layer, in process | trusted server code |
 
-The client layer's restrictions and limits apply to a client plan. Pipelines run for every step, with that step's own context: a guard that requires a token is evaluated per step, and a failure carries `operation: <index>`.
+The client layer's exposure and limits apply to a client plan. Pipelines run for every step, with that step's own context: a guard that requires a token is evaluated per step, and a failure carries `operation: <index>`.
 
 ## From server-side code
 
@@ -364,16 +364,14 @@ const user = this.framework.appTx.User.create.one({ data: { email: "srv@example.
 const post = this.framework.appTx.Post.create.one({ data: { title: "srv", authorId: user.$ref("id") } });
 
 const result = await this.framework.transaction([user, post], { requestId: "tx-1" });
-
-result.code;   // "A1009" (TRANSACTION_COMMITTED)
-result.data;   // [ { id: 5 }, { authorId: 5, bigViews: 0n, body: null, categoryId: null, id: 9, price: Decimal {}, publishedAt: null, title: 'srv', views: 0 } ]
+// [ { id: 5 }, { authorId: 5, bigViews: 0n, body: null, categoryId: null, id: 9, price: AvDecimal {}, publishedAt: null, title: 'srv', views: 0 } ]
 ```
 
-Server-side, `framework.transaction` returns an envelope and does not throw for a failed plan. A failure answers the failing step's code with `cause.operation`:
+Server-side, `framework.transaction` resolves the committed results and throws a failed plan's error, as the generated client does: the `AvError` subclass of the failing step's code, with `cause.operation` its index:
 
 ```ts
 // create "srv2" then a duplicate:
-// { data: null, code: 'A2008', cause: { message: 'The operation conflicts with the current state of the resource.', operation: 1 } }
+// throws AvConflictError: code 'A2008', cause { message: 'The operation conflicts with the current state of the resource.', operation: 1 }
 ```
 
 See [Server-side usage](/docs/server-side-usage).
@@ -382,7 +380,8 @@ See [Server-side usage](/docs/server-side-usage).
 
 - A single operation is already atomic.
 - A transaction holds a database transaction open for its whole run. Keep plans short, and do not call slow external services from a pipeline inside one.
-- `transactions: "none"` switches the feature off for a layer ([Configuration](/docs/configuration#transactions)).
+- `transactionsStyle: "none"` switches the feature off for a layer ([Configuration](/docs/configuration#transactions)).
+- A plan has one origin: on the server, `appTx` and `clientTx` steps cannot be mixed. TypeScript flags such a list, and a list that gets past the types is refused (`A2004` / `V1020`).
 - Isolation level, `maxWait` and `timeout` are set on the adapter ([Configuration](/docs/configuration#adapter)). SQLite supports `Serializable` only.
 
 ## See also

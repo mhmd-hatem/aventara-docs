@@ -11,7 +11,7 @@ Five patterns you will write in most frontends, as React hooks over the generate
 
 ```ts
 import { useEffect, useRef, useState } from "react";
-import avClient, { AvClient, ConflictError, type Post } from "./api/AvClient";
+import avClient, { AvClient, AvConflictError, type Post } from "./api/AvClient";
 
 // A client that sends credentials, for the writes below.
 const authed = new AvClient({
@@ -104,7 +104,7 @@ export function useSearch(term: string) {
 }
 ```
 
-`contains` is case-sensitive or not depending on your database's collation. Which filter operators a field accepts is part of the contract and can be narrowed ([Configuration](/docs/configuration#restrictions)). `AbortSignal` is covered in [Client options](/docs/client-options#aborting).
+`contains` is case-sensitive or not depending on your database's collation. Which filter operators a field accepts is part of the contract and can be narrowed ([Exposure](/docs/exposure)). `AbortSignal` is covered in [Client options](/docs/client-options#aborting).
 
 ## 3. Create with a relation
 
@@ -154,7 +154,7 @@ export function usePublishToggle(initial: readonly Post[]) {
       setPosts((cur) => cur.map((p) => (p.id === id ? saved : p)));          // the server's version
     } catch (e) {
       setPosts(before);                                                       // roll back
-      if (!(e instanceof ConflictError)) throw e;
+      if (!(e instanceof AvConflictError)) throw e;
     }
   }
   return { posts, toggle };
@@ -168,7 +168,7 @@ await authed.Post.update.unique({ where: { id }, data: { views: { $increment: 1 
 // { id: 7, views: 1 }
 ```
 
-A failed call throws a [typed error](/docs/client-errors): `AuthError` when the guard refuses, `NotFoundError` if the row is gone, `TransportError` offline.
+A failed call throws a [typed error](/docs/client-errors): `AvAuthError` when the guard refuses, `AvNotFoundError` if the row is gone, `AvTransportError` offline.
 
 ## 5. Counting badge
 

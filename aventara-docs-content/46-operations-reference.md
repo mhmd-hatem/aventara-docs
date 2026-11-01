@@ -9,7 +9,7 @@ section: reference
 
 Fifteen standard operations exist per Resource: five families (`find`, `create`, `update`, `delete`, `upsert`) times their variants. Which of them a given Resource and layer offers is part of its contract; the server only routes what the contract advertises. For the query language itself see [Querying](/docs/querying); for the codes see [Error codes](/docs/error-codes).
 
-Over HTTP every operation is `POST <entrypoint>/_resources/<Resource>/<family>/<variant>` with a JSON object body of arguments. In the generated client it is `avClient.<Resource>.<family>.<variant>(args, options?)`. Examples below use the schema `User` (id, email, name, role, passwordHash, createdAt, balance, meta, posts), `Post` (id, title, views, published, author, category) and `Category`.
+Over HTTP every operation is `POST <api>/_resources/<Resource>/<family>/<variant>` with a JSON object body of arguments. In the generated client it is `avClient.<Resource>.<family>.<variant>(args, options?)`. Examples below use the schema `User` (id, email, name, role, passwordHash, createdAt, balance, meta, posts), `Post` (id, title, views, published, author, category) and `Category`.
 
 ## Overview
 
@@ -34,7 +34,7 @@ Over HTTP every operation is `POST <entrypoint>/_resources/<Resource>/<family>/<
 
 `select` and `include` are mutually exclusive (`V1008`). `count` variants take no projection. An operation with no arguments is `{}`. There is no `take`, `skip` or `distinct`: pagination is `limit`, `offset` and `cursor`.
 
-Response success codes are the same in the envelope and in the HTTP status: `create` answers 201, everything else 200. The generated client resolves to `data` (and `null` for `A1001`); every other code throws. Server-side calls (`framework.application...`) return the envelope.
+Response success codes are the same in the envelope and in the HTTP status: `create` answers 201, everything else 200. The generated client resolves to `data` (and `null` for `A1001`); every other code throws. Server-side calls (`framework.application...`, `framework.client...`, `framework.transaction`) do the same, with the same error classes.
 
 ## Argument grammar
 
@@ -42,7 +42,7 @@ Response success codes are the same in the envelope and in the HTTP status: `cre
 |---|---|---|
 | `where` | `{ field: value \| operators, AND?: [], OR?: [], NOT?: ... }` | A plain value is equality; `null` is `IS NULL`; keys at one level are ANDed. Relation filters: a to-one takes a nested `where` or `null`; a to-many takes `some`, `every`, `none`. |
 | `where` (unique variants) | an identifier: `{ id: 1 }` or `{ email: "..." }` | Must match exactly one active identifier of the Resource, else `V1007`. |
-| `select` | `["id", "name", { posts: { select: [...], where?, orderBy?, limit?, offset?, cursor? } }]` | Fields, and relations in object form to customize them. A nested `"$count"` reducer on a to-many relation changes its result shape. |
+| `select` | `["id", "name", { posts: { select: [...], where?, orderBy?, limit?, offset?, cursor? } }]` | Fields, and relations in object form to customize them. A nested `"$count"` reducer on a to-many relation changes its result shape. `"$defaults"` stands for the level's default projection (`["$defaults", "email"]` is the defaults plus `email`); valid in `select` only ([Querying](/docs/querying#defaults)). |
 | `include` | `["posts", "author"]` | Default scalars plus the named relations (default projection). |
 | `orderBy` | `{ field: "asc" \| "desc" }`, an array of those, or `{ field: { sort, nulls: "first" \| "last" } }` | `nulls` only on nullable fields that allow it. |
 | `limit` | non-negative integer | At most `maxListLimit` (default 250). |
@@ -52,9 +52,9 @@ Response success codes are the same in the envelope and in the HTTP status: `cre
 | `data` (update) | `{ field: value \| { $increment \| $decrement \| $multiply \| $divide \| $push \| $unset: ... }, relation: { $create \| $connect \| $connectOrCreate \| $disconnect \| $set \| $update \| $delete \| $upsert } }` | |
 | `create` / `update` (upsert) | the `data` shapes above | `create` is used if no record matches `where`, else `update`. |
 
-Which operators, directives and relation forms a field accepts is in the [contract](/docs/contract-layers) and can be narrowed with [restrictions](/docs/config-reference#restrictions-reference).
+Which operators, directives and relation forms a field accepts is in the [contract](/docs/contract-layers) and can be narrowed with [exposure](/docs/exposure).
 
-Wire forms of scalars: `datetime` is `YYYY-MM-DDTHH:mm:ss.sssZ`, `decimal` a decimal string (`"10.5"`), `bigint` an integer string, `bytes` base64; `json` is JSON as is. The generated client converts these to `Date`, `Decimal`, `bigint` and `Uint8Array`.
+Wire forms of scalars: `datetime` is `YYYY-MM-DDTHH:mm:ss.sssZ`, `decimal` a decimal string (`"10.5"`), `bigint` an integer string, `bytes` base64; `json` is JSON as is. The generated client converts these to `Date`, `AvDecimal`, `bigint` and `Uint8Array`.
 
 ## Bulk variants differ
 
@@ -62,7 +62,7 @@ Wire forms of scalars: `datetime` is `YYYY-MM-DDTHH:mm:ss.sssZ`, `decimal` a dec
 
 - No relation writes. `{ author: { $connect: ... } }` in `create.many` answers `V1006`: `Relation "author" is not writable during create.` Use the foreign-key scalar (`authorId`) instead. In `update.many` / `update.count` relation directives answer `V1006` (`not writable during update`).
 - Projection. `select` and `include` on `create.many` / `update.many` may name scalars and to-one relations (`include: ["author"]` answers `201` / `200` with the author embedded). A to-many relation at the top level is refused in either form: `V1008` with `Relation "posts" is not available for select.` or, for `include`, `include accepts only relations with include capability.` (`Relation "posts" is not available for include.` in the object form). `find.many`, `find.first` and `find.unique` have no such limit: they accept `include` and `select` of to-one and to-many relations.
-- Nested to-many is allowed one level inside an admitted to-one relation. The `bulkWrite` restriction applies to the top level only; beneath an admitted to-one relation the full projection is available at any depth. `include: [{ "author": { "include": ["posts"] } }]` (or `select: ["id", { "author": { "select": ["id", { "posts": { "select": ["id", "title"] } }] } }]`) is accepted, and the nested rows are read after the write, so rows created or updated by the call appear in them. A to-many at the top level stays refused.
+- Nested to-many is allowed one level inside an admitted to-one relation. The `bulkWrite` limit applies to the top level only; beneath an admitted to-one relation the full projection is available at any depth. `include: [{ "author": { "include": ["posts"] } }]` (or `select: ["id", { "author": { "select": ["id", { "posts": { "select": ["id", "title"] } }] } }]`) is accepted, and the nested rows are read after the write, so rows created or updated by the call appear in them. A to-many at the top level stays refused.
 
 ```bash
 curl -X POST $BASE/_resources/Post/create/many -d '{"data":[{"title":"h2","authorId":15}],"select":["id",{"author":{"select":["id",{"posts":{"select":["id","title"]}}]}}]}'
@@ -100,7 +100,7 @@ Errors: `A2004` (`V1005` unknown field, `V1006` unsupported operator or order, `
 {"data":{"id":1,"email":"ada@example.com"},"code":"A1000","cause":null}
 ```
 
-A miss is an error: `404 A2003` `"No record matched the unique selector."` (client: `NotFoundError`). A `where` that is not an identifier (`{"name":"Ada"}`) is `422 A2004` / `V1007`: `Unique selector must exactly match one active identifier on Resource "User".`
+A miss is an error: `404 A2003` `"No record matched the unique selector."` (client: `AvNotFoundError`). A `where` that is not an identifier (`{"name":"Ada"}`) is `422 A2004` / `V1007`: `Unique selector must exactly match one active identifier on Resource "User".`
 
 ### find.many
 
@@ -313,16 +313,16 @@ The same code (`A1008`, 200) whether it created or updated. `where` must be an i
 |---|---|---|
 | `A2000` | 400 | Malformed JSON, non-object body, missing identity headers. |
 | `A2001` | 404 | The Resource is not in the contract (`V1005` at `["resource"]`; on an HTTP route, `resource`, `family` and `variant` name the URL segments). |
-| `A2002` | 404 | The operation is not available on that Resource (including switched off by a restriction, or `delete.many`). `V1006` at `["family"]` or `["variant"]` of the request. |
+| `A2002` | 404 | The operation is not available on that Resource (including one removed by exposure, or `delete.many`). `V1006` at `["family"]` or `["variant"]` of the request. |
 | `A2004` | 422 | The arguments break a contract rule; see `cause.issues`. |
 | `A2005` | 409 | The caller's contract hash is stale. |
 | `A2006` | 400 | Unsupported protocol version. |
 | `A2009` | 422 | A limit was exceeded. |
 | `A2010` / `A2011` / `A2012` | 413 / 415 / 405 | Body too large, wrong media type, wrong method. |
 | `A3000`, `A3001`, `A3004` | 500 | Unexpected failure, a database failure that is not a caller error, or a server pipe that returned invalid arguments. |
-| `A4000`, `A4001`, `A4002` | 401, 403, 403 | A pipeline guard refused. |
+| `A4000`, `A4001`, `A4002` | 401, 403, 403 | A pipeline guard or the configuration's [policy](/docs/policies) refused. |
 
-Writes can additionally return `A2008` (409, a uniqueness or reference conflict), `A2013` and `A2014` (409, retryable concurrency outcomes: nothing was written). Full table with causes and fixes: [Error codes](/docs/error-codes).
+Writes can additionally return `A2003` (404, a `$connect` to a record that does not exist), `A2008` (409, a uniqueness or reference conflict), `A2013` and `A2014` (409, retryable concurrency outcomes: nothing was written). Full table with causes and fixes: [Error codes](/docs/error-codes).
 
 ## See also
 

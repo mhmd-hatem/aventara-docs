@@ -7,11 +7,11 @@ section: get-started
 
 # Getting started
 
-This takes a new directory to a running API and a typed frontend call.
+This takes a new directory to a running API and a typed frontend call. It builds a NestJS server and a separate frontend. To serve the API from a Next.js app instead, with no separate server, see [With Next.js](#with-nextjs) below.
 
 ## 1. Create the server
 
-You need Node `^22.18.0 || >=24.2.0` (see [Installation](/docs/installation#requirements); on Node 22 use npm 11 or newer).
+You need Node `^22.23.4 || >=24.22.1` (see [Installation](/docs/installation#requirements); on Node 22 use npm 11 or newer).
 
 ```bash
 npx @aventara/cli@rc new my-api
@@ -36,7 +36,10 @@ Next:
   2. Create the database tables: npx prisma db push
   3. Start the server: npm run start:dev
   4. In your frontend: npx @aventara/client@rc init
+  5. Call the API with curl: see "Calling the API over HTTP" in .claude/skills/aventara/SKILL.md
 ```
+
+With PostgreSQL the list has one more step, after entering the project: `Set DATABASE_URL in .env to your PostgreSQL database.` The later steps move down by one. SQLite needs no such step.
 
 That commit is skipped, with a one-line reason, when `git` is not installed or has no `user.name` and `user.email`, when the new directory is inside a repository already, or with `--skip-git`. `.env` is never committed (the scaffold's `.gitignore` lists it).
 
@@ -49,11 +52,15 @@ A normal NestJS 12 project, plus:
 | `prisma/schema.prisma` | Your schema, with a starter `User` model. Yours to edit. |
 | `prisma.config.ts` | Prisma configuration; loads `.env` for you. |
 | `src/prisma.service.ts` | `PrismaService` (the Prisma client with its driver adapter) and `PrismaModule`. |
-| `src/aventara.config.ts` | Your Aventara configuration: entrypoint `/api`, plus the restrictions and pipelines you add. Yours to edit. |
+| `src/aventara.config.ts` | Your Aventara configuration, a plain value with no adapter in it: the `api` mount path `/api`, the `resources` tree and a `diagnostics` logger, plus the exemptions, pipelines and per-Resource settings you add. Yours to edit. |
+| `src/aventara.adapter.ts` | The adapter's description: `describePrismaAdapter({ discovery, provider, driver })`. `app.module.ts` builds the adapter from it and the Prisma client. |
 | `src/app.module.ts` | Edited once to import `PrismaModule` and `AventaraModule.forRootAsync(...)`. |
 | `src/main.ts` | Edited once to enable CORS for the origins in `CORS_ORIGINS`, and to hold a commented-out rate limiter (below). |
 | `.env` | `DATABASE_URL="file:./dev.db"` and `CORS_ORIGINS`. Not committed. |
-| `src/generated/` | Generated on every install by `npm run aventara:prepare`. Never edit. |
+| `src/generated/` | Generated on every install by `npm run aventara:prepare`: the Prisma client, the discovery artifact, and the three files `aventara-build` writes (`resources.generated.ts`, `computed-fields.generated.ts`, `contracts.generated.ts`). Never edit. |
+| `.claude/skills/aventara/` | The agent skill for your AI coding agent: `SKILL.md` and its `reference/` files, for the Aventara version installed. `aventara skill` refreshes it ([AI agents](/docs/ai-agents)). |
+| `AGENTS.md` | A short Aventara section between `<!-- aventara:start -->` and `<!-- aventara:end -->`; an existing `AGENTS.md` keeps everything else. |
+| `test/app.e2e-spec.ts` | Edited once to add a `GET /api/_contract` test after Nest's `GET /` test. |
 
 The starter schema:
 
@@ -68,30 +75,106 @@ datasource db {
 }
 
 model User {
-  id    Int     @id @default(autoincrement())
+  id    String  @id @default(cuid())
   email String  @unique
   name  String?
 }
 ```
 
-And `src/aventara.config.ts`:
+And `src/aventara.config.ts`, the configuration as a plain value with no adapter in it:
 
 ```ts
-import { createPrismaAdapter } from '@aventara/prisma7-adapter';
-import { discovery } from './generated/aventara/discovery.artifact.js';
-import type { PrismaService } from './prisma.service.js';
+import type { AvDiagnostic } from '@aventara/core';
+import { Logger } from '@nestjs/common';
+import { aventaraResources } from './generated/aventara/resources.generated.js';
 
-export async function aventaraConfig(prisma: PrismaService) {
-  return {
-    entrypoint: '/api',
-    adapter: await createPrismaAdapter({
-      client: prisma,
-      discovery,
-      provider: 'sqlite',
-      driver: '@prisma/adapter-better-sqlite3',
+const logger = new Logger('Aventara');
+
+/**
+ * Aventara's configuration: where the API is mounted (`api`), and what you add
+ * to it (`exposed` and `exemptions`, `pipelines`, and the per-Resource
+ * `resources` tree).
+ * AventaraModule (app.module.ts) builds the framework from it and the adapter
+ * (src/aventara.adapter.ts). aventara-build, in the aventara:prepare script,
+ * runs this file to compile its Contracts, so keep its top level free of side
+ * effects: no connection, no request.
+ */
+export const aventaraConfig = {
+  api: '/api',
+  // Everything the adapter offers is exposed. List what to hide under
+  // `exemptions`, or set `exposed: false` and list what to expose instead.
+  // See: https://aventara.razor34.dev/framework/docs/exposure
+  // Every Resource you define with defineResource() in its own file under
+  // src/resources/ (named <name>.resource.ts), gathered by aventara-build in
+  // the aventara:prepare script: a new Resource file needs no line here. When
+  // a Resource gives a layer a block, that layer takes its tree once, e.g.
+  //   client: { resources: aventaraResources.client },
+  resources: aventaraResources.root,
+  // When something fails inside the server, the caller gets a plain 500 and
+  // Aventara logs one line naming the request. This logs the error itself,
+  // with its stack, through Nest's logger.
+  diagnostics: (diagnostic: AvDiagnostic) => {
+    const { error } = diagnostic;
+    logger.error(
+      `${diagnostic.code} (request ${diagnostic.requestId}): raw error`,
+      (error instanceof Error && error.stack) || String(error),
+    );
+  },
+} as const;
+```
+
+`src/aventara.adapter.ts` describes the database side. `aventara-build` and `app.module.ts` both read it:
+
+```ts
+import { describePrismaAdapter } from '@aventara/prisma7-adapter';
+import { discovery } from './generated/aventara/discovery.artifact.js';
+
+/**
+ * The Prisma adapter's description: your schema's model, as the aventara:prepare
+ * script discovered it (`discovery`), and the database it runs on. aventara-build
+ * compiles the Contracts from it; app.module.ts builds the adapter from it with
+ * the Prisma client.
+ */
+export default describePrismaAdapter({
+  discovery,
+  provider: 'sqlite',
+  driver: '@prisma/adapter-better-sqlite3',
+});
+```
+
+`src/app.module.ts` joins the two and builds the adapter with the Prisma client (Nest's own `controllers` and `providers` stay as they were):
+
+```ts
+import { Module } from '@nestjs/common';
+import { AppController } from './app.controller.js';
+import { AppService } from './app.service.js';
+import { AventaraModule } from '@aventara/nest';
+import { createPrismaAdapter } from '@aventara/prisma7-adapter';
+import adapter from './aventara.adapter.js';
+import { aventaraConfig } from './aventara.config.js';
+import { PrismaModule, PrismaService } from './prisma.service.js';
+
+@Module({
+  imports: [
+    PrismaModule,
+    AventaraModule.forRootAsync({
+      imports: [PrismaModule],
+      inject: [PrismaService],
+      useFactory: async (prisma: PrismaService) => ({
+        config: {
+          ...aventaraConfig,
+          adapter: await createPrismaAdapter({
+            ...adapter,
+            client: prisma,
+          }),
+        },
+      }),
     }),
-  } as const;
-}
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
 ```
 
 A fresh NestJS 12 project is an ES module (`"type": "module"`, `nodenext` module resolution), so its own imports end in `.js`, as above, even though the files are `.ts`. Your own files follow the same rule.
@@ -114,7 +197,7 @@ async function bootstrap() {
   // Rate limiting: @nestjs/throttler is a Nest guard and does not run on Aventara's
   // routes; a platform-level limiter does. `npm i express-rate-limit`, import
   // { rateLimit } from 'express-rate-limit', pick your limits and uncomment below.
-  // See: https://aventara-framework.vercel.app/docs/limits-and-safety#rate-limiting
+  // See: https://aventara.razor34.dev/framework/docs/limits-and-safety#rate-limiting
   // app.use(rateLimit({ windowMs: 60_000, limit: 100 }));
   await app.listen(process.env.PORT ?? 3000);
 }
@@ -139,7 +222,7 @@ npm run start:dev
 On startup the server logs one line naming what it mounted:
 
 ```text
-Aventara mounted 15 operations at /api (+ GET /api/_contract, POST /api/_transactions)
+Aventara mounted 15 operations at /api (+ GET /api/_contract, POST /api/_transactions, POST /api/_all)
 ```
 
 (The operation count depends on your schema and configuration.) With pnpm, use `pnpm exec prisma db push`. With PostgreSQL, set `DATABASE_URL` in `.env` first.
@@ -185,7 +268,7 @@ When you change `prisma/schema.prisma`, run:
 ```bash
 npx prisma db push        # or your migration workflow
 npx prisma generate
-npm run aventara:prepare  # regenerates src/generated/aventara/discovery.artifact.ts
+npm run aventara:prepare  # regenerates src/generated/aventara/ (the discovery artifact, then aventara-build's files)
 ```
 
 `aventara:prepare` also runs on every `npm install`, and in a project made by `aventara new` or `aventara init` before `build`, `start`, `start:dev` and `start:debug` (the `prebuild` and `prestart*` scripts), so restarting `npm run start:dev` is enough there. Yarn Berry, and pnpm with `enable-pre-post-scripts=false`, skip those hooks: run `aventara:prepare` yourself. Restart the server afterwards. Because the contract changes, you must also [regenerate the frontend client](/docs/contract-hash#the-regenerate-workflow).
@@ -219,7 +302,7 @@ const ada = await avClient.User.create.one({
   data: { email: "ada@example.com", name: "Ada" },
   select: ["id", "email"],
 });
-// { id: 1, email: "ada@example.com" }
+// { id: "cmhb3k7q00000a8f2x9d1e4tz", email: "ada@example.com" }   (a cuid)
 
 const users = await avClient.User.find.many({
   where: { email: { contains: "example.com" } },
@@ -244,7 +327,7 @@ enum Role {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
+  id           String   @id @default(cuid())
   email        String   @unique
   name         String?
   role         Role     @default(USER)
@@ -253,24 +336,23 @@ model User {
 }
 
 model Post {
-  id        Int     @id @default(autoincrement())
+  id        String  @id @default(cuid())
   title     String
   views     Int     @default(0)
   published Boolean @default(false)
   author    User    @relation(fields: [authorId], references: [id])
-  authorId  Int
+  authorId  String
 }
 ```
 
-Then make `passwordHash` write-only for remote callers in `src/aventara.config.ts`, by adding a `client` block next to `adapter`:
+Then make `passwordHash` write-only for remote callers in `src/aventara.config.ts`, by adding a `client` block next to `resources` ([Exposure](/docs/exposure)):
 
 ```ts
 client: {
-  restrictions: {
-    User: {
-      fields: {
-        passwordHash: { capabilities: { select: false, filter: false, order: false } },
-      },
+  exposed: true,
+  exemptions: {
+    resources: {
+      User: { fields: { passwordHash: ["select", "filter", "order"] } },
     },
   },
 },
@@ -285,19 +367,19 @@ npm run start:dev                 # in the server project
 npm run avclient:generate         # in the frontend project
 ```
 
-Now relations, enums and the restriction are all typed on the client:
+Now relations, enums and the exemption are all typed on the client:
 
 ```ts
 import avClient from "./api/AvClient";
 
-const ada = await avClient.User.create.one({
+const grace = await avClient.User.create.one({
   data: { email: "grace@example.com", name: "Grace", passwordHash: "hash-from-your-auth-code" },
   select: ["id", "email", "role"],
 });
-// { id: 2, email: "grace@example.com", role: "USER" }
+// { id: "cmhb3k9w20001a8f2c6p0v7qm", email: "grace@example.com", role: "USER" }
 
 await avClient.Post.create.one({
-  data: { title: "Hello", published: true, author: { $connect: { id: ada.id } } },
+  data: { title: "Hello", published: true, author: { $connect: { id: grace.id } } },
 });
 
 const posts = await avClient.Post.find.many({
@@ -306,12 +388,15 @@ const posts = await avClient.Post.find.many({
   orderBy: { id: "desc" },
   limit: 10,
 });
-// [{ id: 1, title: "Hello", author: { id: 1, name: "Ada" } }]
+// [{ id: "cmhb3kb1x0002a8f2j5n8r0wy", title: "Hello", author: { id: "cmhb3k9w20001a8f2c6p0v7qm", name: "Grace" } }]
 
 const users = await avClient.User.find.many({
   select: ["id", { posts: { select: ["id", "title", "$count"] } }],
 });
-// [{ id: 1, posts: { data: [{ id: 1, title: "Hello" }], count: 1 } }]
+// [
+//   { id: "cmhb3k7q00000a8f2x9d1e4tz", posts: { data: [], count: 0 } },
+//   { id: "cmhb3k9w20001a8f2c6p0v7qm", posts: { data: [{ id: "cmhb3kb1x0002a8f2j5n8r0wy", title: "Hello" }], count: 1 } },
+// ]
 
 await avClient.Post.update.many({ where: { published: true }, data: { views: { $increment: 1 } } });
 ```
@@ -320,8 +405,23 @@ Asking for the hidden-from-reads field is refused at compile time, and, if you b
 
 ```ts
 await avClient.User.find.many({ select: ["passwordHash"] });
-// compile error; at runtime: ValidationError A2004 / V1008, Field "passwordHash" is not selectable.
+// compile error; at runtime: AvValidationError A2004 / V1008, Field "passwordHash" is not selectable.
 ```
+
+## With Next.js
+
+`--host next` builds a Next.js app that serves the API itself. There is no separate server, no CORS and no frontend client to regenerate:
+
+```bash
+npx @aventara/cli@rc new my-app --host next
+cd my-app
+npx prisma db push
+npm run dev
+```
+
+It runs `create-next-app` (TypeScript, the App Router under `src/`, the `@/*` alias), then adds Aventara in `src/aventara/`. create-next-app asks its own questions; `--yes` takes its defaults. The API answers at `http://localhost:3000/api`, the same protocol as above.
+
+Server Components and Server Actions call `avClient` from `@/aventara/server`, in process. Client Components call `avClient` from `@/aventara/client`, which `npm run aventara:prepare` generates with the rest (it runs on install and before `next build`). Both take and return `Date`, `bigint` and `AvDecimal` values. [Next.js host](/docs/nextjs-host) has the files, the three clients and a first page. To add Aventara to an app you already have, run `npx @aventara/cli@rc init` in it.
 
 ## Next steps
 
