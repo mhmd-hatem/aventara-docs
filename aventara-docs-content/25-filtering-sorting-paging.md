@@ -129,6 +129,14 @@ Besides values, four operands take a fixed form: `mode` is one of `"default"`, `
 
 Text matching and the values you compare with are passed to the ORM as you wrote them; what they match is the database's own behavior. With Prisma 7, `%` and `_` in `contains`, `startsWith` and `endsWith` act as SQL wildcards on both databases, and a `Json` field's `string*` operators compare the JSON text of the value. When the database refuses a value (out of range, a NUL character on PostgreSQL), the call is answered `A2004` with the database's reason, not `500`.
 
+#### Wildcards in `contains`, `startsWith` and `endsWith`
+
+Filters pass through to Prisma unchanged, and Prisma does not escape them. In `contains`, `startsWith` and `endsWith`, `%` matches any run of characters and `_` matches any one character, so `contains: "50%"` also finds "500" and `contains: "a_b"` also finds "axb".
+
+On PostgreSQL `\` is the escape character. To match `%` or `_` literally, write `\%` and `\_` (in a JavaScript string, `"50\\%"`); a literal backslash is `\\`. A pattern that ends in a lone `\` is refused with `A2004` and `V1001` (`The database refused this value: a text match cannot end with the escape character \.`). SQLite's `LIKE` has no escape character: there `\` is an ordinary character, and `%` and `_` cannot be escaped.
+
+SQLite's `LIKE` also ignores ASCII case, so `contains: "abc"` matches "ABC" there but not on PostgreSQL. Use `mode` (above) when the case rule matters.
+
 ### Dates, decimals and big integers
 
 Filter with the application values; the client encodes them. A plain `Date` is equality, the same shorthand as any other scalar:

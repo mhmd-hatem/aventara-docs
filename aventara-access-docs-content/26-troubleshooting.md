@@ -150,6 +150,19 @@ Updates are checked twice: the rows before, and the row after ([Updates](/docs/u
 
 You are on the `service` profile. It hands no caller a session: `/sign-in/*`, `/sign-up/*`, the OAuth callbacks and the plugins' sign-in routes answer `404` ([Profiles](/docs/create-access#profiles)).
 
+### Every client gets 429, or one client's failures lock out everyone
+
+Better Auth cannot see the client's address, so its rate limit counts every client in one bucket per route: a few wrong sign-ins from one client refuse everyone's. Two setups cause it:
+
+- A NestJS or Express app that mounts `toNodeHandler(access)` alone. Node.js's handler hands Better Auth no client address. Set each request's address before the handler with `clientAddressed` (`src/client-address.ts`), as the [NestJS mount](/docs/hosts#nestjs) and the [Express mount](/docs/hosts#express) do.
+- A self-hosted Next.js app (`next start`) that clients reach directly, or behind a proxy that does not overwrite `X-Forwarded-For`. Run it behind a proxy that overwrites the header with the client's address, or one that appends to it and is listed in `trustedProxies` ([Next.js](/docs/hosts#nextjs)). On Vercel there is nothing to do.
+
+Behind a proxy (a load balancer, a TLS terminator), list it in Better Auth's `advanced.ipAddress.trustedProxies`. Without it, every client counts as the proxy's address.
+
+### No rate limit at all
+
+`NODE_ENV` is not `production`. Better Auth's rate limit, and Access's limit on `access.client`'s calls, are on only under it, unless `betterAuth.rateLimit.enabled` says otherwise ([Limits and defaults](/docs/limits-and-defaults)). The scaffold's `start:prod` does not set it, and since 1.0.0-rc.2 `avaccess serve` does not turn the limit on by itself either. Run production with `NODE_ENV=production`.
+
 ## Passwords
 
 ### Sign-ins fail for users created before Access
