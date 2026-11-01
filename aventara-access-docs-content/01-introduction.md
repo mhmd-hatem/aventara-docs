@@ -109,6 +109,8 @@ Released beside `@aventara/core` `1.0.0-rc.12`, and tested with it. It still wor
   `X-Forwarded-For` the client sent: self-hosted, run `next start` behind a proxy that overwrites it (or appends to it
   and is listed in `trustedProxies`), never reached by clients directly; on Vercel there is nothing to do
   ([Hosts](/docs/hosts#nextjs)). Run production with `NODE_ENV=production`, which Better Auth's rate limit needs.
+- `avaccess serve` no longer turns Better Auth's rate limit on by itself. It is on under `NODE_ENV=production`, Better
+  Auth's default: set it in production ([The standalone server](/docs/standalone-server)).
 - The examples: `createAccess` opens `resources: { users: true }`, which its rules on `User` need to start; the
   rules' `Campaign`, `Member` and `Note` Prisma models are shown ([Rules](/docs/rules)); the NestJS `src/main.ts` is
   the scaffold's with the mount added, its CORS block kept; the hub example on a `pg` Pool names
