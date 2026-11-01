@@ -1,3 +1,4 @@
+import { SecurityReportLink } from "@/components/security-report-link";
 import Link from "next/link";
 import { products } from "@/lib/products";
 import { SiteBrand } from "@/components/site-brand";
@@ -19,6 +20,7 @@ export function SiteFooter() {
         <a href="https://github.com/mhmd-hatem/aventara-docs/issues/new/choose">
           Feedback
         </a>
+        <SecurityReportLink />
       </nav>
     </footer>
   );

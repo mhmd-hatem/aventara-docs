@@ -593,7 +593,9 @@
 .unified-footer nav {
   margin-left: auto;
   display: flex;
-  gap: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
   font-size: 10px;
   color: var(--muted);
 }
@@ -1057,4 +1059,29 @@
   --muted: var(--product-dark-muted, #afbdcf);
   --border: var(--product-dark-border, #505c6d);
   --input-border: var(--product-dark-input-border, #737f91);
+}
+
+/* Keep private security reporting discoverable on every product and docs page. */
+.security-report-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 180ms ease-out;
+}
+.security-report-link:focus-visible {
+  color: var(--primary);
+}
+.site-footer {
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .security-report-link:hover {
+    color: var(--primary);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .security-report-link {
+    transition: none;
+  }
 }

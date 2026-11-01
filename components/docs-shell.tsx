@@ -1,4 +1,5 @@
 "use client";
+import { SecurityReportLink } from "@/components/security-report-link";
 import { productTheme } from "@/lib/product-theme";
 import { ProductSwitcher } from "@/components/product-switcher";
 import { primarySection, type Product } from "@/lib/products";
@@ -281,6 +282,7 @@ export function DocsShell({
                 License <ArrowUpRight size={12} />
               </Link>
             )}
+            <SecurityReportLink />
           </footer>
         </div>
       </div>
