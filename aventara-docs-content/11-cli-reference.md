@@ -46,7 +46,7 @@ aventara: no initial commit: /path/to/repo is inside a git repository already; c
 aventara: no initial commit: git has no user.name and user.email set; set them, then commit the project yourself.
 ```
 
-Every `new` and `init` run prints the version it pins first: `Aventara 1.0.0-rc.12`. When the registry's tag for that channel (`rc` or `latest`) names a newer release, the line says so and gives the command that takes it; a release-age delay is the usual cause ([Installation](/docs/installation)). The lookup reads the registry's tags only, gives up after a moment, and prints nothing more when offline.
+Every `new` and `init` run prints the version it pins first: `Aventara 1.0.0-rc.12`. When the registry's tag for that channel (`rc` or `latest`) names a newer release, the line says so and gives a command that takes it; a release-age delay is the usual cause ([Installation](/docs/installation)). The lookup happens once the run passes its checks, reads the registry's tags only, gives up after a moment, and prints nothing more when offline. The frontend's next step names `@aventara/client` at the same exact version.
 
 #### Inside a pnpm workspace
 
@@ -57,7 +57,7 @@ Run in a folder below a `pnpm-workspace.yaml` (a monorepo's `apps/`), with pnpm,
 - When the root's `packages` globs do not match the new folder, a warning says to add it there; until then the root's install does not install it.
 - When the root has its own Biome, ESLint or Prettier configuration, a one-line hint points at `--skip-lint`.
 
-`aventara init` in a workspace member does the same.
+`aventara init` in a workspace member does the same with `allowBuilds` and the install (`--skip-lint` and its hint are `new`'s only). A folder with its own `pnpm-workspace.yaml` is its own workspace root: the one above it is not touched. When the root's `packages` do not match the folder, the root's file is left alone too. When the root's `allowBuilds` is written in a way the CLI does not edit (inline `{ … }` style, or stated twice), the file is left as it is and the lines to add are printed.
 
 ### aventara new --host next
 
@@ -148,7 +148,7 @@ Next:
   1. Enter the project: cd blog
   2. Create the database tables: npx prisma db push
   3. Start the server: npm run start:dev
-  4. In your frontend: npx @aventara/client@rc init
+  4. In your frontend: npx @aventara/client@<version> init
   5. Call the API with curl: see "Calling the API over HTTP" in .claude/skills/aventara/SKILL.md
 ```
 
@@ -162,7 +162,7 @@ Next:
   4. Call the API with curl: see "Calling the API over HTTP" in .claude/skills/aventara/SKILL.md
 ```
 
-With `--skip-install` there is one more step, `Install, which also runs aventara:prepare: npm install`, after entering the project. Under pnpm the commands read `pnpm exec prisma db push` and `pnpm dlx @aventara/client@rc init`.
+With `--skip-install` there is one more step, `Install, which also runs aventara:prepare: npm install`, after entering the project. Under pnpm the commands read `pnpm exec prisma db push` and `pnpm dlx @aventara/client@<version> init`, where `<version>` is the CLI's own (the frontend gets the same release).
 
 The runner (`npx` or `pnpm dlx`) matches your package manager. The server answers `GET http://localhost:3000/api/_contract` once it runs. With PostgreSQL, set `DATABASE_URL` in `.env` first. `init` writes Prisma's placeholder and never asks for a secret.
 
