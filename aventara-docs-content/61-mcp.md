@@ -219,7 +219,7 @@ const canWrite: AvGuard = (ctx) =>
   String(ctx.$state.mcp?.claims.scope ?? "").split(" ").includes("write");
 ```
 
-With a [policy](/docs/policies) configured, every tool call is checked as an agent request (`origin: "agent"`). `policy.principal` derives the principal from the same `$state`, so it can read `$state.mcp.claims`. The engine can narrow what an agent may do beyond what a client may.
+With a [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine) configured, every tool call is checked as an agent request (`origin: "agent"`). `policy.principal` derives the principal from the same `$state`, so it can read `$state.mcp.claims`. The engine can narrow what an agent may do beyond what a client may.
 
 Check the token's audience in `verify` (here `https://api.example.com/mcp`), so a token issued for another service is not accepted.
 

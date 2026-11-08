@@ -17,7 +17,7 @@ An API that accepts a query language needs ceilings, or one request can ask for 
 | `maxNestingDepth` | `12` | Levels of nested relations in a `select`/`include`. | `422` `A2009` / `V1013` |
 | `maxListLimit` | `250` | The `limit` of a list or of a nested relation. | `422` `A2009` / `V1014` |
 | `maxBooleanNodes` | `50` | Nodes in a `where` tree (`AND`/`OR`/`NOT` and conditions). | `422` `A2009` / `V1015` |
-| `maxTransactionOperations` | `20` | Steps in one transaction plan. | `422` `A2009` / `V1014` |
+| `maxTransactionOperations` | `20` | Steps in one transaction plan, every step counted: reads and `$sql` steps as well as writes. `POST /_all` is not a transaction and is bound by `maxAll` instead. | `422` `A2009` / `V1014` |
 | `maxJsonDepth` | `64` | Levels of nesting inside a Json field's value. | `422` `A2009` / `V1021` |
 | `maxAll` | `10` | Operations in one [Operation Set](/docs/operation-sets) (`POST /_all`). | `422` `A2009` / `V1014`, for the whole request |
 | `maxAllConcurrency` | `4` | Operations of one Operation Set running at once. | none: the rest wait their turn |

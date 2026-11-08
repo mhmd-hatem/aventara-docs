@@ -49,7 +49,7 @@ Each part has a task guide:
 | Decide what each layer exposes | [Exposure](/docs/exposure) |
 | Hide a field, make it write-only or read-only | [Exposing and hiding fields](/docs/exposing-and-hiding-fields) |
 | Require sign-in, answer `A4000`/`A4001` | [Authentication and guards](/docs/authentication-and-guards) |
-| Check rows, fields and writes per principal with a policy engine (`A4002`) | [Policies](/docs/policies) |
+| Check rows, fields and writes per principal with a policy engine (`A4002`) | [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) (the `@aventara/core` README) |
 | Transform, audit, wrap or rewrite errors | [Pipelines](/docs/pipelines) |
 | Call other Resources, run SQL, write an outbox from a hook | [The pipeline context](/docs/pipeline-context) |
 | Check a value's length, range or format | [Field validators](/docs/field-validators) |

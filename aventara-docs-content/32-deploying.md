@@ -143,6 +143,23 @@ Transaction options (`timeout`, `maxWait`, `isolationLevel`) go on the adapter (
 
 String filters (`contains`, `startsWith`, `endsWith`) follow the database by default: case-insensitive for ASCII on SQLite, case-sensitive on PostgreSQL. On PostgreSQL, pass `mode: "sensitive"` or `mode: "insensitive"` to make the behavior explicit; SQLite offers only `"default"` ([Filtering](/docs/filtering-sorting-paging#case-mode)).
 
+### SQLite and PostgreSQL compared
+
+What differs between the two databases with the Prisma 7 adapter, gathered from the pages that explain each:
+
+| | SQLite (`@prisma/adapter-better-sqlite3`) | PostgreSQL (`@prisma/adapter-pg`) |
+|---|---|---|
+| Connections | One connection for the whole process: see the note below | A pool |
+| Transaction isolation (`isolationLevel`) | `Serializable` only; another level is refused | Every level but `Snapshot` ([`createPrismaAdapter`](/docs/config-reference#createprismaadapter)) |
+| String filters, `mode` | `"default"` only: case-insensitive for ASCII letters, case-sensitive for others | `"default"` (case-sensitive), `"sensitive"`, `"insensitive"` ([Filtering](/docs/filtering-sorting-paging#case-mode)) |
+| `Json` filters | No `path` | `path` and its modes ([Enums and scalars](/docs/enums-and-scalars#json)) |
+| `Decimal` | Stored as a 64-bit float: 15 significant digits kept exactly, more rounded | The column's own digits ([What the database keeps](/docs/enums-and-scalars#what-the-database-keeps)) |
+| `Float` | `Number.MAX_VALUE` is stored as infinity, and a later read of it fails | What JavaScript's `number` holds |
+
+SQLite through `@prisma/adapter-better-sqlite3` runs every query on one connection, so an open interactive transaction and the plain queries of other requests share it. Read [Transactions](/docs/transactions) for what that means for concurrent requests before you run a SQLite server that takes writes from several callers at once.
+
+On Cloudflare D1 (`@prisma/adapter-d1`) there are no transactions, so `update.first` and `delete.first` are not offered, and a `BigInt` beyond ±(2^53 − 1) is refused (`A2004`).
+
 ## Creating and changing the schema
 
 Aventara never touches your database or your schema: that is Prisma's job. Two commands:

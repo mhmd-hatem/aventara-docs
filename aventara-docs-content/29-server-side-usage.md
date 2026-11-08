@@ -356,7 +356,7 @@ The second argument of every call has these members:
 - `requestId`: the correlation id the operation runs under. It reaches your pipelines (`ctx.$requestId`) and diagnostics, so logs from a background job can be tied to its operations. Omitted (or empty), the framework generates one.
 - `state`: the call's `ctx.$state`, the one object every stage of the call reads and writes, such as the user your service acts for. It is used as it is, so you can read what the stages wrote after the call. Omitted, the call starts with `{}`. See [The pipeline context](/docs/pipeline-context#request-state).
 
-- `as`: the principal the call is checked as by the configuration's [policy](/docs/policies). Left out, a `framework.application` call is server code and the policy does not check it. Name one to opt in: `{ as: user }`, or `{ as: null }` for an anonymous caller. On a `framework.client` or `framework.serverClient` call, which is always checked, `as` replaces the principal `policy.principal` would derive from `state`. Without a `policy` it does nothing.
+- `as`: the principal the call is checked as by the configuration's [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine). Left out, a `framework.application` call is server code and the policy does not check it. Name one to opt in: `{ as: user }`, or `{ as: null }` for an anonymous caller. On a `framework.client` or `framework.serverClient` call, which is always checked, `as` replaces the principal `policy.principal` would derive from `state`. Without a `policy` it does nothing.
 - `signal` (on `framework.serverClient` calls): an `AbortSignal` that aborts this call. The call rejects at once; a database query that already started still finishes.
 
 ```ts

@@ -20,7 +20,19 @@ npm install --save-exact @aventara/core@1.0.0-rc.12 @aventara/nest@1.0.0-rc.12 @
 # add @aventara/mcp@1.0.0-rc.12 and @aventara/testing@1.0.0-rc.12 to the command if you use them
 ```
 
-Move the frontend's `@aventara/client` to the same version, and run `npx @aventara/cli@1.0.0-rc.12 skill` to refresh the agent skill. Then run `npm run aventara:prepare` on the server and `avclient generate` in each frontend.
+With pnpm or yarn, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
+
+```bash
+# pnpm (in a workspace, add --filter <your server package> after pnpm)
+pnpm add --save-exact @aventara/core@1.0.0-rc.12 @aventara/nest@1.0.0-rc.12 @aventara/prisma7-adapter@1.0.0-rc.12
+pnpm add --save-dev --save-exact @aventara/build@1.0.0-rc.12
+
+# yarn
+yarn add --exact @aventara/core@1.0.0-rc.12 @aventara/nest@1.0.0-rc.12 @aventara/prisma7-adapter@1.0.0-rc.12
+yarn add --dev --exact @aventara/build@1.0.0-rc.12
+```
+
+Move the frontend's `@aventara/client` to the same version, and run `npx @aventara/cli@1.0.0-rc.12 skill` (`pnpm dlx @aventara/cli@1.0.0-rc.12 skill`, `yarn dlx @aventara/cli@1.0.0-rc.12 skill` on Yarn Berry) to refresh the agent skill. Then run `npm run aventara:prepare` on the server (`pnpm run aventara:prepare`, `yarn aventara:prepare`) and `avclient generate` in each frontend.
 
 ### 2. Breaking changes
 
@@ -52,6 +64,18 @@ These change only what `aventara new` and `aventara init` write. An existing pro
 ```bash
 npm install --save-exact @aventara/core@1.0.0-rc.11 @aventara/nest@1.0.0-rc.11 @aventara/prisma7-adapter@1.0.0-rc.11 @aventara/build@1.0.0-rc.11
 # add @aventara/mcp@1.0.0-rc.11 and @aventara/testing@1.0.0-rc.11 to the command if you use them
+```
+
+With pnpm or yarn, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
+
+```bash
+# pnpm (in a workspace, add --filter <your server package> after pnpm)
+pnpm add --save-exact @aventara/core@1.0.0-rc.11 @aventara/nest@1.0.0-rc.11 @aventara/prisma7-adapter@1.0.0-rc.11
+pnpm add --save-dev --save-exact @aventara/build@1.0.0-rc.11
+
+# yarn
+yarn add --exact @aventara/core@1.0.0-rc.11 @aventara/nest@1.0.0-rc.11 @aventara/prisma7-adapter@1.0.0-rc.11
+yarn add --dev --exact @aventara/build@1.0.0-rc.11
 ```
 
 One command moves every `@aventara/*` package together, as in earlier steps. Move the frontend's `@aventara/client` to the same version, and run `npx @aventara/cli@1.0.0-rc.11 skill` to refresh the agent skill.
@@ -94,6 +118,18 @@ Nothing in your configuration has to change. Two things do need a rebuild, and t
 ```bash
 npm install --save-exact @aventara/core@1.0.0-rc.8 @aventara/nest@1.0.0-rc.8 @aventara/prisma7-adapter@1.0.0-rc.8 @aventara/build@1.0.0-rc.8
 # add @aventara/mcp@1.0.0-rc.8 and @aventara/testing@1.0.0-rc.8 to the command if you use them
+```
+
+With pnpm or yarn, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
+
+```bash
+# pnpm (in a workspace, add --filter <your server package> after pnpm)
+pnpm add --save-exact @aventara/core@1.0.0-rc.8 @aventara/nest@1.0.0-rc.8 @aventara/prisma7-adapter@1.0.0-rc.8
+pnpm add --save-dev --save-exact @aventara/build@1.0.0-rc.8
+
+# yarn
+yarn add --exact @aventara/core@1.0.0-rc.8 @aventara/nest@1.0.0-rc.8 @aventara/prisma7-adapter@1.0.0-rc.8
+yarn add --dev --exact @aventara/build@1.0.0-rc.8
 ```
 
 One command moves every `@aventara/*` package together. `@aventara/build` stays in `devDependencies`: npm updates a package in the section where it already is. Installing the packages in two commands makes npm print a peer-dependency warning (`ERESOLVE`), because `@aventara/build` needs the same version of `@aventara/core`.
@@ -144,7 +180,7 @@ Regenerate the artifact (`npm run aventara:prepare`; `pnpm run aventara:prepare`
 
 ### 6. Policy additions
 
-These matter only if you write a [policy engine](/docs/policies).
+These matter only if you write a [policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine).
 
 - `fieldsOf({ access: "write" })` also gets `action: "create" | "update"`, so an engine can lock a field on update and still let a create write it. An engine that ignores it keeps working.
 - An engine can read a relation's `references` from the discovery model or `framework.contracts.core` and ask one `exists` about the row a create points at. The served Contracts never carry `references`.
@@ -155,7 +191,7 @@ These matter only if you write a [policy engine](/docs/policies).
 
 ## From 1.0.0-rc.3 to 1.0.0-rc.4
 
-This step adds a build step, `aventara-build`, and reshapes the scaffold's configuration so it can run without a database client. It also adds the [policy seam](/docs/policies), which does nothing until you configure `policy`. Without `policy`, the Contracts and their hashes are the ones rc.3 produced, so a client generated against rc.3 keeps working.
+This step adds a build step, `aventara-build`, and reshapes the scaffold's configuration so it can run without a database client. It also adds the [policy seam](https://www.npmjs.com/package/@aventara/core#a-policy-engine), which does nothing until you configure `policy`. Without `policy`, the Contracts and their hashes are the ones rc.3 produced, so a client generated against rc.3 keeps working.
 
 ### 1. Install the new versions
 

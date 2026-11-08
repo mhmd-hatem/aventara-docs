@@ -171,7 +171,7 @@ The framework was created with `prebuilt`, and the file no longer matches the co
 
 ## `A4002` where nothing should be refused
 
-A [policy](/docs/policies) is configured and refused the request. `cause.message` says what: the operation, a field, a row, or a change that would leave the caller's read scope. The usual surprises:
+A [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine) is configured and refused the request. `cause.message` says what: the operation, a field, a row, or a change that would leave the caller's read scope. The usual surprises:
 
 - A governed field is in `select` or a filter. A governed field is checked on every row the request reaches, and one row the caller cannot read refuses the whole request. Add a `where` that limits the rows, or fix the engine's grant.
 - An update changes a field the read scope reads (`authorId`, `published`) and moves the row out of what the caller may read.

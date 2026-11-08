@@ -130,6 +130,37 @@ export const aventaraConfig = { api: "/api" } as const;
 
 Your own controllers may live beside it, for example `GET /api/health`, as long as they are outside the protocol's reserved `_` paths (`/api/_contract`, `/api/_resources/...`, `/api/_transactions`, and any other `/api/_*`).
 
+## Serving a frontend beside the API
+
+The same Nest process can serve a built single-page app (a Vite or React build, the files of a desktop shell) beside the protocol. Serve its files, and answer `index.html` for any other `GET` outside the API, so the app's own routes load on refresh. The fallback must skip `<api>` and everything under it: `app.use` middleware also runs on the protocol's routes ([What runs on Aventara routes](#what-runs-on-aventara-routes)), so a fallback that answered `/api/_contract` with `index.html` would hide the API.
+
+```ts
+// src/main.ts (Express)
+import { join } from "node:path";
+import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
+import type { NextFunction, Request, Response } from "express";
+import { AppModule } from "./app.module.js";
+
+async function bootstrap() {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const client = join(process.cwd(), "client");   // the built frontend: index.html and its assets
+  app.useStaticAssets(client);
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const api = req.path === "/api" || req.path.startsWith("/api/");
+    if (req.method === "GET" && !api) {
+      res.sendFile(join(client, "index.html"));
+      return;
+    }
+    next();
+  });
+  await app.listen(3000);
+}
+void bootstrap();
+```
+
+With this, `/` and `/orders/42` answer `index.html`, `/assets/app.js` its file, `/api/_contract` the contract and `/api/health` your controller, and an unknown `/api/...` path still answers `404`. If you set `mcp` to a path outside `<api>` (`/mcp`), skip it in the fallback as well. On Fastify, serve the files with a static plugin and keep its fallback off `<api>` the same way. Point the frontend's generated client at the same origin's `<api>` ([Client setup](/docs/client-setup)).
+
 ## The MCP endpoint
 
 With `mcp` in the configuration, `AventaraModule` also mounts the MCP endpoint of `@aventara/mcp` at that path, on Express and Fastify alike, and logs `Aventara mounted the MCP endpoint at /mcp (...)`. Like `api`, the path is absolute and Nest's global prefix does not move it. Install `@aventara/mcp` at the same exact version as `@aventara/core` (`npm install --save-exact @aventara/mcp@<version>`); with `mcp` set and the package missing, the application refuses to start and prints that command with your version filled in. Your `state` option seeds each tool call's `ctx.$state`. See [MCP](/docs/mcp).
