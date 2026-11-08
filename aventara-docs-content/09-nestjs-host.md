@@ -132,23 +132,29 @@ Your own controllers may live beside it, for example `GET /api/health`, as long 
 
 ## Serving a frontend beside the API
 
-The same Nest process can serve a built single-page app (a Vite or React build, the files of a desktop shell) beside the protocol. Serve its files, and answer `index.html` for any other `GET` outside the API, so the app's own routes load on refresh. The fallback must skip `<api>` and everything under it: `app.use` middleware also runs on the protocol's routes ([What runs on Aventara routes](#what-runs-on-aventara-routes)), so a fallback that answered `/api/_contract` with `index.html` would hide the API.
+The same Nest process can serve a built single-page app (a Vite or React build, the files of a desktop shell) beside the protocol. Serve its files, and answer `index.html` to a browser asking for any other page, so the app's own routes load on refresh.
+
+The fallback is `app.use` middleware, and on Express that runs before every route Nest registers: Aventara's ([What runs on Aventara routes](#what-runs-on-aventara-routes)) and your own controllers'. So it answers only a browser's page request (`GET`, `Accept` naming `text/html`, no file extension), and it skips every path something else owns: `<api>` and everything under it, the MCP path and `/.well-known/` (the MCP endpoint's OAuth metadata lives there), and each of your own controllers outside `<api>`.
 
 ```ts
 // src/main.ts (Express)
-import { join } from "node:path";
+import { extname, join } from "node:path";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import type { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module.js";
+
+// Paths the fallback leaves alone: the API, MCP and its OAuth metadata, and your own controllers.
+const notPages = ["/api", "/mcp", "/.well-known", "/status"];
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const client = join(process.cwd(), "client");   // the built frontend: index.html and its assets
   app.useStaticAssets(client);
   app.use((req: Request, res: Response, next: NextFunction) => {
-    const api = req.path === "/api" || req.path.startsWith("/api/");
-    if (req.method === "GET" && !api) {
+    const owned = notPages.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`));
+    const page = req.method === "GET" && req.accepts("html") === "html" && extname(req.path) === "";
+    if (page && !owned) {
       res.sendFile(join(client, "index.html"));
       return;
     }
@@ -159,7 +165,7 @@ async function bootstrap() {
 void bootstrap();
 ```
 
-With this, `/` and `/orders/42` answer `index.html`, `/assets/app.js` its file, `/api/_contract` the contract and `/api/health` your controller, and an unknown `/api/...` path still answers `404`. If you set `mcp` to a path outside `<api>` (`/mcp`), skip it in the fallback as well. On Fastify, serve the files with a static plugin and keep its fallback off `<api>` the same way. Point the frontend's generated client at the same origin's `<api>` ([Client setup](/docs/client-setup)).
+Checked on a running app with this setup: a browser's `/` and `/orders/42` get `index.html`, `/assets/app.js` its file and a missing `/assets/nope.js` `404`; `/api/_contract`, `/api/health`, `/status` (a controller of the app) and `/.well-known/...` reach their own routes; a request for `/orders/42` that accepts only JSON gets `404`. Point the frontend's generated client at the same origin's `<api>` ([Client setup](/docs/client-setup)). The example is Express; on Fastify, keep the same rules for a static plugin's fallback.
 
 ## The MCP endpoint
 

@@ -348,7 +348,7 @@ Publishing a post moves its `status` from `"draft"` to `"published"`, stamps `pu
 - `forceTransaction` makes the update one transaction, with its hooks and interceptors inside it.
 - A `before` hook re-reads the post inside that transaction and refuses anything but a draft. A guard runs before `BEGIN`, so it could only pre-check ([Check, then act](/docs/pipelines#check-then-act)).
 - An `after` hook writes the side effects through `ctx`, in the same transaction.
-- The update's answer is read before the `after` hook runs, so an interceptor reads the post again and answers with that.
+- The update's answer is read before the `after` hook runs, so an interceptor puts the value the hook wrote into it.
 
 ```ts
 // src/resources/post.resource.ts
@@ -386,13 +386,14 @@ export const post = defineResource<Model>()("Post", {
           },
           interceptors: [
             async (ctx, next) => {
-              await next();
-              // Inside the same transaction: this read sees what the after hook wrote.
-              const { where: { id }, select } = ctx.$args;
+              const result = await next();
+              // Only when the caller's projection holds the field.
+              if (typeof result !== "object" || result === null || !("publishedAt" in result)) return result;
+              const { id } = ctx.$args.where;
               if (typeof id === "object") throw new Error("unresolved $ref");
-              return select === undefined
-                ? ctx.Post.find.unique({ where: { id } })
-                : ctx.Post.find.unique({ where: { id }, select });
+              // Inside the same transaction: this read sees what the after hook wrote.
+              const { publishedAt } = await ctx.Post.find.unique({ where: { id }, select: ["publishedAt"] });
+              return { ...result, publishedAt };
             },
           ],
         },
@@ -403,6 +404,7 @@ export const post = defineResource<Model>()("Post", {
 ```
 
 - The `before` hook, the `after` hook and the interceptor's read all run inside the transaction, so a refusal or a failed event write rolls the status change back.
+- Patch the result `next()` resolved; do not replace it with a fresh read. The answer is checked against the caller's own projection (its `select` or `include`, or the default fields of the caller's layer), and a `ctx` call is application-origin: a read with the application's default fields would carry fields the `client` layer hides, and a remote caller would get `500` `A3000`.
 - The hooks' and the interceptor's `ctx` calls are raw: they run none of your stages, so the `after` hook's own update does not run these hooks again.
 - A value that depends only on the row being written is simpler as [write compute](/docs/computed-fields) (`compute.update` on `publishedAt`). The `after` hook is for values that need other rows: a number taken from a counter row, an event.
 
@@ -417,7 +419,7 @@ const published = await framework.application.Post.update.first({
 // null: no draft with that id. A2014 (AvConflictError): the row changed between the read and the write.
 ```
 
-`update.first` reads the row, then writes it with its `where` asserted again in the same statement, so the second of two racing requests writes nothing ([Resources and operations](/docs/resources-and-operations#what-is-not-offered-and-why)).
+`update.first` runs two statements in one transaction: it reads the row, then writes it with its `where` asserted again in the write, so the second of two racing requests writes nothing ([Resources and operations](/docs/resources-and-operations#what-is-not-offered-and-why)).
 
 ## See also
 
