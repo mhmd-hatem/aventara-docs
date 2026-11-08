@@ -124,7 +124,7 @@ A call reads the database, so Next.js runs it at request time (Cache Components 
 5. **Never cast types away.** No `as`, no `!`, no `any`, no `@ts-ignore` / `@ts-expect-error` to silence an Aventara type. The types are the contract: a type error names the exact key that is wrong (a misspelled field, an overlay granting what the root hid, a missing required field). Fix the key. To get typed arguments in a stage, register it on the operation (`resources.<R>.operations.<family>.<variant>.pipelines`) inside a `defineResource` block; to type `ctx.<Resource>` calls, give the stage type your model (`AvAfterHook<Model>`).
 6. **Annotate stages in the `as const` config.** An inline arrow in `aventaraConfig` has no contextual type (TS7006). Declare it with its stage type (`const requireUser: AvGuard = (ctx) => …`) or move it into a `defineResource` block, where stages are typed from where they sit.
 7. **Fill server-side values with `compute.create`.** A required field the caller must not send (an owner id, a slug, a hash) gets `pipelines.compute.create`; that also makes it optional on create. A pipe cannot fill a missing required field: the framework refuses the create (`A2004`, `V1000`) before any pipe runs. Hiding a required field from a layer that still creates the Resource needs a `compute.create`, or startup fails with `COMPILER_HIDDEN_REQUIRED_FIELD`.
-8. **Validate values with `AvZ`.** Length, range, pattern and format rules are field validators (`AvZ.maxLength(80)`, `AvZ.email()`); they are part of the contract, so the generated client checks them before sending. A rule across fields or one that needs the database is a guard.
+8. **Validate values with `AvZ`.** Length, range, pattern, format and closed-set rules are field validators (`AvZ.maxLength(80)`, `AvZ.email()`, `AvZ.oneOf(["draft", "live"])`); a closed set the types should name is a Prisma `enum` instead. They are part of the contract, so the generated client checks them before sending. A rule across fields or one that needs the database is a guard.
 9. **Read the user from `ctx.$state`.** Declare it once (`declare module "@aventara/core" { interface AvState { user?: … } }`), set it from `AventaraModule`'s `state` option (remote requests) or a call's `{ state }` option (server code), and read `ctx.$state.user` in every stage. Never parse headers again in each stage.
 10. **Side effects that must commit with the write: `forceTransaction` + an `after` hook.** Set `forceTransaction: true` on the operation and write the related rows (an outbox event, a counter) through `ctx.<Resource>` or `ctx.$sql` in its `after` hook. Without it the write has already committed when the hook runs.
 11. **Errors are codes.** Branch on `code` or the error class (`AvNotFoundError`, `AvValidationError`, …), never on a message. Throw `new AvError("A4000", "Sign in first.")` from a stage to answer a code. Look up any code in `reference/errors.md` (or `AvErrorCatalog[code]` from `@aventara/core`); a startup diagnostic carries its `docs` URL.
@@ -151,7 +151,7 @@ A call reads the database, so Next.js runs it at request time (Cache Components 
 | Share request information (the signed-in user) | `ctx.$state` | `AventaraModule`'s `state` option, or a call's `{ state }` |
 | Call another operation from a stage | `ctx.<Resource>.<family>.<variant>(args)` | the `ctx` every stage gets (compute can only read) |
 
-Order: framework validation → guards → pipes (operation, then field) → write compute (create/update) → re-check (Aventara's checks on pipe and compute output: `A3004`, `A3000`; then field validators and Json shapes on every value, computed included: `A2004`) → interceptors → `hooks.before` → the operation (then compute read) → `hooks.after` → interceptors unwind; filters handle a failure. `ctx` calls are raw: they run validation, field pipes, compute and validators, and none of your guards, pipes, hooks, interceptors or filters.
+Order: framework validation → guards → pipes (operation, then field) → field validators and Json shapes on the values the caller sent (`A2004`) → write compute (create/update) → re-check (Aventara's checks on pipe and compute output: `A3004`, `A3000`; then the computed fields' validators and Json shapes: `A2004`) → interceptors → `hooks.before` → the operation (then compute read) → `hooks.after` → interceptors unwind; filters handle a failure. `ctx` calls are raw: they run validation, field pipes, compute and validators, and none of your guards, pipes, hooks, interceptors or filters.
 
 ## The shape of a configuration
 
@@ -531,7 +531,7 @@ Also: the arguments land in the URL (server and proxy logs, history), so never c
 
 ## Fields
 
-- Add a virtual field at the root: `definition: { type: { scalar: "string" }, nullable: false, list: false, lifecycle: ["VIRTUAL"], capabilities: { select: true } }` plus a `compute.read` stage. A write-only virtual input says `capabilities: { select: false, create: [], update: [] }`.
+- Add a virtual field at the root: `definition: { type: { scalar: "string" }, nullable: false, list: false, lifecycle: ["VIRTUAL"], capabilities: { select: true } }` plus a `compute.read` stage. A write-only virtual input says `capabilities: { select: false, create: [], update: [] }`; with `nullable: false` a create must send it (`A2004`, `V1000`, and the client types require it) unless a `compute.create` fills it.
 - Type a `Json` column: `definition: { json: AvZ.object({ … }) }`; every write is checked against it and the client types follow it.
 - A `compute.create` stage makes its field optional on create, and must return a value when the caller sent none.
 - A `compute.read` stage with no `dependsOn` declares no field it reads, so it computes from the same inputs for every row: such a value usually belongs in response metadata or `ctx.$state`, not in a field.
@@ -581,8 +581,9 @@ The root's stages run for every origin; an overlay's only for its own (`ctx.$ori
 framework validation (required create fields included; a field compute.create fills is not required yet)
 -> guards       layer -> Resource -> family -> variant (root, then overlay, at each), then field write guards
 -> pipes        the same levels, then field pipes
+-> validators   field validators and Json shapes on the values the caller sent (A2004); a field compute sets waits for compute
 -> compute      create or update (write compute)
--> re-check     Aventara's own checks on the pipe and compute output (A3004, A3000), then field validators and Json shapes on every value, computed included (A2004)
+-> re-check     Aventara's own checks on the pipe and compute output (A3004, A3000), then the computed fields' validators and Json shapes (A2004)
 -> interceptors enter, outer to inner
 -> hooks.before
 -> operation    one adapter call, then compute read on the returned rows
@@ -593,7 +594,7 @@ on a failure after validation: filters, inner to outer; the first that handles i
 
 A call refused by a guard, the re-check or a validator runs no interceptor and no hook. A `unique` operation that matches no row fails at the operation (`AvNotFoundError`, `A2003`); no `after` hook runs.
 
-With `forceTransaction` (or as a step of a transaction plan), guards and pipes run before the transaction, and validators judge the literal values no write compute changes; a refusal there opens nothing. Then: `BEGIN -> the Resource's transaction stages -> write compute -> re-check (computed and $ref values included) -> interceptors -> hooks.before -> adapter call -> hooks.after -> interceptors -> COMMIT`. A refusal inside rolls the transaction back. The hooks' `ctx` calls and `ctx.$sql` join it; the guards' and pipes' calls do not.
+With `forceTransaction` (or as a step of a transaction plan), guards, pipes and the validators of the caller's literal values run before the transaction; a refusal there opens nothing. Then: `BEGIN -> the Resource's transaction stages -> validators of $ref values (and of what a transaction pipe changed) -> write compute -> re-check (computed values) -> interceptors -> hooks.before -> adapter call -> hooks.after -> interceptors -> COMMIT`. A refusal inside rolls the transaction back. The hooks' `ctx` calls and `ctx.$sql` join it; the guards' and pipes' calls do not.
 
 ## Rules that are easy to miss
 
@@ -603,7 +604,7 @@ With `forceTransaction` (or as a step of a transaction plan), guards and pipes r
 - `compute.read` gets the row (`record`) frozen, with its own copy of each `Date` or bytes value: return the field's value. Writing into `record` throws and answers `A3000`; the answer is built from the row as read.
 - Compute gets a read-only `ctx`: `find.*` calls only, no writes, no `$sql`, no `$transaction` (reaching one answers `A3000`). Effects on other rows belong in an `after` hook under `forceTransaction`.
 - A required create field the caller left out is refused before the guards; no pipe can fill it. Use `compute.create` or a database default.
-- Validators run after write compute, so they judge the computed value too: a `compute.create` result that fails a validator answers `A2004`. Aventara's own re-check comes first: a pipe that returns a wrong type or an unknown key, or drops a required field, answers `A3004`, as does a pipe or compute that writes a reference twice; a compute that returns a wrong type or a value its field's `format` refuses (a relative path for `format: "url"`), or leaves a required field missing, answers `A3000`.
+- Each value is judged once, right after the last stage that sets it. A value the caller sent is judged after its field pipes and before write compute, so compute never sees a value its own validators refuse. A field a `compute.create` or `compute.update` stage sets is judged after compute: a result that fails a validator answers `A2004`. Aventara's own re-check comes first: a pipe that returns a wrong type or an unknown key, or drops a required field, answers `A3004`, as does a pipe or compute that writes a reference twice; a compute that returns a wrong type or a value its field's `format` refuses (a relative path for `format: "url"`), or leaves a required field missing, answers `A3000`.
 - Validators do not judge a directive's operand (`{ $increment: 500 }`); `$push` entries are judged.
 - `pipelines.cache` runs nothing: it is data that lets a read be served as a cacheable `GET` (`reference/config.md`, Caching reads), and the one `pipelines` key that does not add up across levels. Every stage runs on that `GET` as on the `POST`; `ctx.$transport.method` tells them apart.
 - Calls grouped into one `POST /_all` each run their own full pipeline, exactly as alone (`reference/client.md`).

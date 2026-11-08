@@ -99,7 +99,7 @@ The stage kinds are norms. The framework does not check what a callback does: an
 Every operation runs its stages in one order:
 
 ```text
-framework validation (with required fields) -> policy admission (when a policy is configured) -> guards -> pipes -> write compute -> re-check (validators) -> policy write check (when a policy is configured) -> interceptors (before) -> hooks.before -> operation -> hooks.after -> interceptors (after) -> filters
+framework validation (with required fields) -> policy admission (when a policy is configured) -> guards -> pipes -> validators (the caller's values) -> write compute -> re-check (validators of the computed fields) -> policy write check (when a policy is configured) -> interceptors (before) -> hooks.before -> operation -> hooks.after -> interceptors (after) -> filters
 ```
 
 In full, with every level listed root first, then the operation's overlay:
@@ -113,11 +113,13 @@ validate the arguments against the contract: types, unknown fields, structure, a
                           then each nested target's Resource and family guards and field write guards
 -> pipes                  layer -> Resource -> family -> variant, then each sent field's field pipes
                           (root then overlay), then nested targets'
+-> validators             the values the caller sent, as the pipes left them (A2004), top level
+                          then nested targets'; a field a compute stage sets waits for the re-check
 -> compute (write)        create, update, or an upsert's two branches; then nested targets'
                           (a compute.create that leaves its required field missing answers A3000)
 -> re-check               Aventara's own checks on what the pipes and compute produced
-                          (A3004, or A3000 for a computed value); then the validators on every
-                          value, computed ones included (A2004); then nested targets'
+                          (A3004, or A3000 for a computed value); then the validators on the
+                          values compute set (A2004); then nested targets'
 -> policy write check     only when a policy is configured: the checks on what a write is about to
                           write (see Policies)
    (a refusal so far runs no interceptor and no hook)
@@ -271,11 +273,11 @@ A step's guards and pipes run outside the transaction, so their `ctx` calls do n
 
 ```text
 validate the whole plan
--> every step, in order: guards -> pipes -> validators (the literal values no write compute changes; $refs unresolved)
+-> every step, in order: guards -> pipes -> validators (the literal values no write compute sets; $refs unresolved)
 -> BEGIN
 -> guards, then pipes, of each touched Resource (they see the whole plan, $refs unresolved)
 -> every touched Resource's interceptors enter, then every touched Resource's hooks.before
-     -> the steps, in order, each: resolve $refs -> field pipes of the resolved values -> write compute -> validators on every value
+     -> the steps, in order, each: resolve $refs -> field pipes and validators of the resolved values -> write compute -> validators of the computed values
         -> interceptors -> hooks.before -> the adapter call -> hooks.after -> interceptors
    every touched Resource's hooks.after, the last touched Resource's first (they see every step's result), then the interceptors unwind
 -> COMMIT
@@ -324,8 +326,8 @@ const oneProjectDeletePerPlan: AvTransactionGuard = (ctx) =>
 Outside a transaction, a write is already committed when its `after` hook runs. `forceTransaction: true` on a family or a variant makes a plain call of that operation a one-step transaction:
 
 ```text
-validate -> guards -> pipes -> validators (the literal values no write compute changes) -> BEGIN -> the Resource's transaction stages
--> write compute -> re-check (computed values included) -> interceptors -> hooks.before -> the adapter call -> hooks.after -> interceptors -> COMMIT
+validate -> guards -> pipes -> validators (the literal values no write compute sets) -> BEGIN -> the Resource's transaction stages
+-> write compute -> re-check (the computed values) -> interceptors -> hooks.before -> the adapter call -> hooks.after -> interceptors -> COMMIT
 ```
 
 A guard, pipe or validator that refuses the call opens no transaction. A computed value the validators refuse is judged inside it and rolls the transaction back.

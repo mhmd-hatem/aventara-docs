@@ -40,7 +40,7 @@ Some details behind the rows:
 Every operation runs its stages in this order:
 
 ```text
-framework validation -> guards -> pipes -> write compute -> re-check (validators) -> interceptors (enter) -> hooks.before -> operation -> hooks.after -> interceptors (unwind) -> filters
+framework validation -> guards -> pipes -> validators (the caller's values) -> write compute -> re-check (validators of the computed fields) -> interceptors (enter) -> hooks.before -> operation -> hooks.after -> interceptors (unwind) -> filters
 ```
 
 With the levels filled in:
@@ -51,8 +51,9 @@ validate the arguments against the contract, required create fields included
 -> guards         layer -> Resource -> family -> variant (root, then overlay, at each),
                   then the write guards of each field the caller sent
 -> pipes          the same levels, then the field pipes
+-> validators     the values the caller sent; a field a compute stage sets waits for the re-check
 -> compute        create or update: fill the values to write
--> re-check       Aventara's own checks on the output, then the validators on every value
+-> re-check       Aventara's own checks on the output, then the validators on the computed values
 -> interceptors   enter, outer to inner
 -> hooks.before   outer to inner
 -> operation      one adapter call, then compute (read) on the returned rows
@@ -70,12 +71,12 @@ A transaction plan, or a call to an operation with `forceTransaction`, splits th
 
 ```text
 every step, in plan order: framework validation (required fields; a $ref counts as a value)
-                           -> guards -> pipes -> validators   (the literal values no write compute changes; $refs unresolved)
+                           -> guards -> pipes -> validators   (the literal values no write compute sets; $refs unresolved)
 BEGIN
   each touched Resource's transaction guards, then pipes   (they see the whole plan)
   every touched Resource's transaction interceptors enter, then every touched Resource's hooks.before
-    each step: resolve its $refs -> field pipes on the resolved values -> compute
-               -> validators on every value -> interceptors -> hooks.before -> adapter call -> hooks.after -> interceptors
+    each step: resolve its $refs -> field pipes and validators on the resolved values -> compute
+               -> validators on the computed values -> interceptors -> hooks.before -> adapter call -> hooks.after -> interceptors
   every touched Resource's hooks.after (they see every step's result), then every touched Resource's
   interceptors unwind
 COMMIT
@@ -92,7 +93,7 @@ A step that is refused before `BEGIN` opens nothing. A step's guards and pipes r
 - Validators do not judge a directive's operand, because the operand is not the field's value. `{ $increment: 500 }` is not checked against the field's `AvZ.lte(100)`. `$push` entries are judged. If the stored result must stay in range, check it in a guard or with a database constraint.
 - Calls through `ctx` are raw. A `ctx.<Resource>` call runs the framework's own validation, field pipes, field validators and compute, and none of your stages: no guards, pipes, hooks, interceptors or filters at any level, no field write guards, no transaction stages and no `forceTransaction`. So a hook's call never re-enters the hook that made it. The calls are application-origin: the `application` overlay's exposure applies to them and the `client` overlay's does not. See [Calling the framework from a stage](/docs/pipeline-context#calling-the-framework-from-a-stage).
 - `ctx.$state` is the only thing a stage can change in place. It is one object per request, shared by every stage and inherited by `ctx` calls. Compute can read it but not write it. See [Request state](/docs/pipeline-context#request-state).
-- The arguments are read-only. A pipe changes them by returning new ones, and once the validators have run, after write compute, nothing can change them, so what the validators checked is what the adapter writes. An `after` hook gets a frozen copy of the result; to answer with a different result, use an interceptor. See [Read-only data](/docs/pipelines#read-only-data).
+- The arguments are read-only. A pipe changes them by returning new ones, and once the validators have run (the caller's values before write compute, the computed ones after it), nothing can change them, so what the validators checked is what the adapter writes. An `after` hook gets a frozen copy of the result; to answer with a different result, use an interceptor. See [Read-only data](/docs/pipelines#read-only-data).
 - A required create field the caller left out is refused before the guards, so no pipe can fill it. Give the field a `compute.create` stage or a database default instead. See [Computed fields](/docs/computed-fields).
 - Without a transaction, a write has already committed when its `after` hook runs. Set `forceTransaction` on the operation when the hook's writes must commit or roll back with it.
 

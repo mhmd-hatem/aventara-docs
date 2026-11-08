@@ -105,6 +105,19 @@ export const aventaraConfig = {
 
 An added field must spell out `type`, `nullable` and `list`. `lifecycle: ["VIRTUAL"]` says it has no database column. The `type` is `{ scalar: "string" }` or another scalar, or `{ enum: "Role" }`. A field `definition` is root-only: an overlay can add compute stages to a field but never define it.
 
+`nullable` decides whether a create must send a write-only input. With `nullable: true` (the `password` above) it is optional. With `nullable: false` it is required on create, as a database column with no default is: in every layer that lets a caller write it at create, and where no `compute.create` stage (the root's or that layer's) fills it, the contract lists it in `createRequirements`. A create without it answers `A2004` with `V1000` at the field before any guard runs, and `framework.application`, `framework.client` and the generated client type it as required. A layer that hides the field creates without it, and an update never asks for it:
+
+```ts
+// The first employee's name comes with the store's create, and is never stored on the store.
+firstEmployeeName: {
+  definition: {
+    type: { scalar: "string" }, nullable: false, list: false,
+    lifecycle: ["VIRTUAL"], capabilities: { select: false, create: [] },
+  },
+  pipelines: { validators: [AvZ.minLength(1), AvZ.maxLength(80)] },
+},
+```
+
 Written inline in a configuration that is an `as const` object, the same stages need their parameters annotated (`({ record }: { record: Readonly<Record<string, unknown>> }) => ...`), because nothing gives them a contextual type there.
 
 Written inline in `createFramework({ ... })`, the stages need no annotation, and a `compute.create` there takes its field out of the create types as it does in a `defineResource` block. A `create` or `update` stage's `field` and `data` are keyed by `string`; their values are `unknown`, as everywhere.
