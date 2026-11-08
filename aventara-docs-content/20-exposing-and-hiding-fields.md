@@ -38,7 +38,7 @@ return {
       User: {
         fields: {
           // 1. write-only: can be set, never read back, filtered or sorted on
-          passwordHash: ["select", "filter", "order"],
+          passwordHash: "read",
           // 2. read-only after creation, and no substring search
           email: { update: true, filter: ["contains", "startsWith", "endsWith"] },
         },
@@ -57,7 +57,7 @@ return {
 } as const;
 ```
 
-Under `exposed: true` an exemption names what to take away: `true` takes the whole field, a list takes those capabilities, and an object goes one level deeper, here into the `filter` capability's operators. Keep the `as const`: it lets TypeScript check Resource, field and capability names, so a misspelled field is a compile error.
+Under `exposed: true` an exemption names what to take away: `true` takes the whole field, `"read"` takes every read capability (`select`, `filter`, `order`, `orderNulls`) and leaves the writes, a list takes those capabilities, and an object goes one level deeper, here into the `filter` capability's operators. Keep the `as const`: it lets TypeScript check Resource, field and capability names, so a misspelled field is a compile error.
 
 ### Write-only: no `select`
 
@@ -140,6 +140,7 @@ Under `exposed: true`, on `exemptions.resources.<Resource>.fields.<field>`:
 | Exemption | Effect |
 |---|---|
 | `true` | The field does not exist in this layer. |
+| `"read"` | Cannot be read, filtered on or sorted by: the field is write-only. On a relation it also takes `include`, `pagination` and `reducers`. |
 | `["select"]` | Cannot be read. With `"filter"` and `"order"` too, the field is write-only. |
 | `["create"]`, `["update"]` | Cannot be written on create, or on update (read-only). |
 | `["filter"]`, `["order"]`, `["orderNulls"]` | Cannot be filtered on, sorted by, or given a `nulls` order (`orderNulls` exists on nullable fields only). |
@@ -149,7 +150,7 @@ Under `exposed: true`, on `exemptions.resources.<Resource>.fields.<field>`:
 
 Exposure narrows what the model offers; it cannot add a capability the adapter does not have, and naming one it does not have stops startup (`COMPILER_UNAVAILABLE_CAPABILITY`).
 
-To expose only a few fields instead of hiding a few, use `exposed: false` in the overlay and list what to expose: `fields: { id: ["select"], name: ["select", "update"] }`. A field you do not list is closed, including a column added to the schema later. See [Exposure](/docs/exposure#exposing-only-what-you-need-the-pick-style).
+To expose only a few fields instead of hiding a few, use `exposed: false` in the overlay and list what to expose: `fields: { id: ["select"], name: ["select", "update"] }`. A field you do not list is closed, including a column added to the schema later. There, `name: "read"` exposes every read capability of `name` and no write, and `fields: "read"` does that for every field of the Resource: a read-only Resource in one line. See [Exposure](/docs/exposure#exposing-only-what-you-need-the-pick-style).
 
 ## Layers: root, application, client
 

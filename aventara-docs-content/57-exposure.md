@@ -69,8 +69,11 @@ The same four values work at every level, and each is read relative to the layer
 | `false` | Nothing: the entry follows `exposed`. Same as leaving it out. | Nothing: the entry stays closed. Same as leaving it out. |
 | a list | Hide the listed entries one level down. | Expose only the listed entries one level down. |
 | an object | Go one level deeper; anything it does not name is exposed. | Go one level deeper; anything it does not name is closed. |
+| `"read"` (a field, or a Resource's `fields`) | Hide every read capability of the field; its writes stay. | Expose every read capability the layer above offers, and no write. |
 
 An empty list exempts nothing. A list always means "exempt these", relative to `exposed`.
+
+`"read"` names the capabilities a caller reads with: a scalar's `select`, `filter`, `order` and `orderNulls`, and a relation's `select`, `include`, `filter`, `order`, `pagination` and `reducers`, whichever the field has. On a Resource's `fields` it means the same for every field. It is shorthand: it compiles to the same contract as the list it stands for, so the hash does not change when you switch between them.
 
 ## The shape
 
@@ -81,8 +84,8 @@ exemptions: {
       operations?: true | false | <family>[] | {
         <family>?: true | false | <variant>[] | { <variant>?: true | false },
       },
-      fields?: {
-        <field>?: true | false | <capability>[] | {
+      fields?: "read" | {
+        <field>?: true | false | "read" | <capability>[] | {
           <capability>?: true | false | <token>[],
         },
       },
@@ -115,7 +118,7 @@ export const aventaraConfig = {
     resources: {
       User: {
         fields: {
-          passwordHash: ["select", "filter", "order"],      // write-only
+          passwordHash: "read",                             // write-only
           email: { filter: ["contains", "startsWith", "endsWith"] }, // fewer operators
         },
       },
@@ -174,6 +177,29 @@ client: {
 The client contract then has `Post` with `find.many`, `find.unique` and `create.one`, and five fields with exactly those capabilities. `Post.id` has `filter` because `find.unique` looks a post up by it. `User` has no operations: it is there only as the target of `Post.author`, with `id` and `name` readable through it. `Post.author` can be selected and written with `$connect` only.
 
 Under `exposed: false`, an object that grants nothing (`{}`, `{ select: false }`, `{ create: [] }`, or a Resource object that grants no field and no operation) is the same as leaving the entry out: the name does not reach the contract, and the hash is the same either way.
+
+### A read-only Resource: `fields: "read"`
+
+To let remote callers read a Resource whole without listing every field, give it `fields: "read"`:
+
+```ts
+client: {
+  exposed: false,
+  exemptions: {
+    resources: {
+      Category: { operations: { find: true }, fields: "read" },
+      Product: {
+        operations: { find: true },
+        fields: { id: "read", name: "read", category: "read" },
+      },
+    },
+  },
+},
+```
+
+Every field of `Category` can be selected, filtered on, sorted by and, for a relation, included and paged, as far as the root allows; none can be written. A field the root hid stays hidden, and a capability the root took away (a filter, say) does not come back: `"read"` only asks for what the layer above offers. A field whose every read capability the root hid (a write-only `passwordHash`) is left out.
+
+`fields: "read"` names every field, relations included. A relation into a Resource the layer does not expose then has no target, and startup fails with `COMPILER_DANGLING_RELATION`, as it would for `true` on that relation. Expose the target too, or list the fields one by one. A Resource whose fields are all read-only takes no nested `$create` either: a relation into it that offers `$create` in a layer that creates the other side is refused at startup (`COMPILER_HIDDEN_REQUIRED_FIELD`), so grant that relation `create: ["$connect"]`.
 
 ## Layers: overlays only narrow
 
