@@ -127,7 +127,7 @@ const [created, rows] = await framework.transaction([post, job]);
 - `framework.appTx.$sql` is typed `AvSqlStatementBuilder`, and the values it binds are `AvSqlStatementValue`, both exported from `@aventara/core`. A method that returns `framework.appTx.$sql` needs no return type annotation.
 - It exists only on `framework.appTx`. `clientTx` has none, the client contract carries nothing of it, and `/_transactions` cannot express it. An adapter that cannot run SQL statements refuses a plan with one (`A2002`); the Prisma 7 adapter runs them.
 
-A stage that needs SQL inside its own operation's transaction uses `ctx.$sql`, the same template run at once ([The pipeline context](/docs/pipeline-context#ctxsql)). Outside a transaction `ctx.$sql` is a plain statement: no transaction is opened around it, and `transactionsStyle: "none"` does not affect it.
+A stage that needs SQL inside its own operation's transaction uses `ctx.$sql`, the same template run at once ([The pipeline context](/docs/pipeline-context#ctxsql)). Outside a transaction `ctx.$sql` is a plain statement on PostgreSQL: no transaction is opened around it. On SQLite it runs as a one-statement transaction of its own ([SQLite: one connection](#sqlite-one-connection)). `transactionsStyle: "none"` does not affect it.
 
 ## Request state
 
@@ -147,6 +147,22 @@ Then, inside the transaction, each step resolves its `$ref`s and runs its interc
 
 - A Resource's transaction stages (`resources.<R>.transactions.pipelines`) run once per plan that has a top-level step on it, after BEGIN and before COMMIT, and see the whole plan: a guard there can refuse "more than one delete per plan", and an after hook can write an outbox row that commits with the plan.
 - An operation with `forceTransaction` runs as a one-step transaction even when called on its own, so its after hooks commit with it. As a step of a plan it is just a step.
+
+### SQLite: one connection
+
+The SQLite driver (`@prisma/adapter-better-sqlite3`) has one connection to the database file, and an open transaction holds it. Prisma runs a plain statement on that same connection, so on its own a plain call made while another request's transaction is open would run inside that transaction: it would see its uncommitted rows and roll back with it.
+
+So on SQLite the Prisma adapter runs every operation that is not already in a transaction, and every `ctx.$sql` outside one, as a one-statement transaction. It waits until the open transaction ends, then runs on its own. It never sees another request's uncommitted rows and never rolls back with it.
+
+What this means for you:
+
+- Requests that use the database run one at a time. A long transaction (a slow hook, an external call inside it) holds up every other request until it ends.
+- `maxWait` on the adapter (Prisma's default is 2000 ms) is how long an operation waits for the connection. Past it, the operation answers `A3002`.
+- `timeout` on the adapter (Prisma's default is 5000 ms) limits a single plain operation too, not only a transaction.
+- A call made from inside a transaction's own stages runs inside that transaction and commits or rolls back with it, even when it goes through the Framework instead of `ctx`. Use `ctx` there, so this is what you expect.
+- Calls you make on your Prisma client directly are outside Aventara: Prisma runs them inside whatever transaction is open. Make them through the Framework, or wrap them in `prisma.$transaction`.
+
+PostgreSQL uses a pool: each transaction gets its own connection, and plain operations run beside it as plain statements.
 
 ## See also
 

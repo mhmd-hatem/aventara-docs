@@ -163,7 +163,7 @@ const rows = await ctx.$sql<{ total: bigint }>`select count(*) as total from aud
 ```
 
 - It resolves the rows the statement returned, typed by `ctx.$sql<Row>` (`unknown[]` without `Row`).
-- Inside a transaction (a step's interceptors and hooks, a forced call's, a Resource transaction stage, a `ctx.$transaction` callback) it runs on that transaction and commits or rolls back with it. Outside one it is a plain statement: no transaction is opened around it. `transactionsStyle: "none"` does not affect it (only `ctx.$transaction` needs transactions).
+- Inside a transaction (a step's interceptors and hooks, a forced call's, a Resource transaction stage, a `ctx.$transaction` callback) it runs on that transaction and commits or rolls back with it. Outside one it is a plain statement on PostgreSQL: no transaction is opened around it. On SQLite it runs as a one-statement transaction of its own ([SQLite: one connection](/docs/transactions#sqlite-one-connection)). `transactionsStyle: "none"` does not affect it (only `ctx.$transaction` needs transactions).
 - A value is a string, number, boolean, `bigint`, `null`, `Date`, `AvDecimal`, bytes or a JSON value (bound as JSON text, so cast it: `${value}::jsonb`). The SQL text is static: a table or column name cannot come from a value. A plain string call is refused.
 - It needs an adapter that runs SQL statements (the Prisma 7 adapter does). Otherwise it throws `A2002`.
 - Only server code can use it. No contract and no generated client carries it.
