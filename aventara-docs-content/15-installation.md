@@ -118,7 +118,23 @@ minimumReleaseAge: 4320
 
 The units differ: npm counts days, pnpm counts minutes. Both examples above mean three days.
 
-A release-age delay also holds back a brand-new Aventara release, including a fresh `@rc`. Exclude the Aventara packages (`minimumReleaseAgeExclude` in pnpm, `min-release-age-exclude` in npm) or wait out the delay.
+pnpm 11 and later have a delay by default: one day (`minimumReleaseAge: 1440`), even when you set none.
+
+A release-age delay also holds back a brand-new Aventara release, including a fresh `@rc`: `pnpm dlx @aventara/cli@rc new …` then runs the previous CLI, and the project is pinned to that version. `aventara new` and `aventara init` print the version they pin, and the newer one when the registry has it:
+
+```text
+Aventara 1.0.0-rc.11 (newest: 1.0.0-rc.12; a release-age delay may hold it back: pnpm dlx @aventara/cli@1.0.0-rc.12 new …)
+```
+
+To take the newest release, name its exact version (`pnpm dlx @aventara/cli@1.0.0-rc.12 new server`), or exclude the Aventara packages from the delay:
+
+```yaml
+# pnpm-workspace.yaml
+minimumReleaseAgeExclude:
+  - "@aventara/*"
+```
+
+In npm the setting is `min-release-age-exclude`.
 
 When an advisory names a fixed version, exclude that exact version so you get it at once (pnpm takes `name@x.y.z`; npm excludes by package name); remove the exclude after 3 days.
 
