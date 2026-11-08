@@ -291,9 +291,29 @@ With only one missing it reads `The Aventara-Contract-Hash header is missing.` (
 }
 ```
 
-The fingerprint is a short deterministic hash of the step (`fp1:` plus base64url): SHA-256 of the step's canonical JSON, first 16 bytes. It guards against a reference that points at the wrong step; it is not a security mechanism. Hand-writing plans is error-prone; use the generated client, which computes fingerprints for you. A mismatch answers `A2007` with `V1017`; a `$ref` with no `fingerprint` at all answers `A2004` with `V1000`.
+The fingerprint is a short deterministic hash of the step. It guards against a reference that points at the wrong step; it is not a security mechanism. A mismatch answers `A2007` with `V1017`; a `$ref` with no `fingerprint` at all answers `A2004` with `V1000`. The generated client computes fingerprints for you. To build a plan by hand, compute each step's from its `resource`, `family`, `variant` and `args`, the arguments exactly as the step sends them (wire forms, and a `$ref` with its `fingerprint`, so an earlier step's fingerprint comes first):
 
-Plan-level errors: an empty `operations` array answers `422 A2004` / `V1004`; a missing `operations` answers `422 A2004` / `V1000` (`Required property "operations" is missing.`); more than `maxTransactionOperations` steps answers `422 A2009` / `V1014`; a wrong fingerprint answers `422 A2007` / `V1017` at `["operations", i, "fingerprint"]` with `cause.operation` set to `i`.
+1. Write `{ "resource": …, "family": …, "variant": …, "args": … }` as canonical JSON (RFC 8785): no whitespace, object keys sorted by their UTF-16 code units, numbers as JavaScript writes them (`1.0` is `1`, `1e21` is `1e+21`, `-0` is `0`), strings escaped as `JSON.stringify` escapes them. As in JSON, a key whose value is `undefined` is left out and an `undefined` array element is `null`. A lone surrogate, a non-finite number, a `bigint` or an object that is not a plain object or array cannot be fingerprinted.
+2. Hash the text's UTF-8 bytes with SHA-256.
+3. Take the first 16 bytes of the digest, write them in base64url without padding (22 characters), and put `fp1:` before them.
+
+In JavaScript, `AvProtocol.fingerprint` from `@aventara/core/protocol` is the function the server checks a step with:
+
+```ts
+import { AvProtocol } from "@aventara/core/protocol";
+
+const step = {
+  resource: "User",
+  family: "create",
+  variant: "one",
+  args: { data: { email: "tx@example.com" }, select: ["id"] },
+};
+const plan = { operations: [{ ...step, fingerprint: await AvProtocol.fingerprint(step) }] };
+```
+
+The route exists only on a layer whose `transactionsStyle` is `"interactive"`. Under `"server"` or `"none"` a plan answers `404 A2002` with one `V1006` at `["operations"]`, as an absent route does ([Configuration](/docs/configuration#transactions)).
+
+Plan-level errors: an empty `operations` array answers `422 A2004` / `V1004`; a missing `operations` answers `422 A2004` / `V1000` (`Required property "operations" is missing.`); more than `maxTransactionOperations` steps, or more than `maxTransactionWrites` write steps, answers `422 A2009` / `V1014` at `["operations"]`; a wrong fingerprint answers `422 A2007` / `V1017` at `["operations", i, "fingerprint"]` with `cause.operation` set to `i`.
 
 Every error path in a transaction answer is the literal address in the request body: an argument issue is `["operations", i, "args", ...]`; a step's own defects are `["operations", i, "resource"]`, `["operations", i, "family"]`, `["operations", i, "variant"]`, `["operations", i, "fingerprint"]`, `["operations", i, "<key>"]` for an unknown key on the step, or `["operations", i]` for a step that is not an object. For instance, a second step whose `args` is `{ "data": { "title": 5 } }` answers `422 A2004` with `cause.operation` `1` and the issue path `["operations", 1, "args", "data", "title"]`. The full table is in [Error codes](/docs/error-codes#v-codes).
 

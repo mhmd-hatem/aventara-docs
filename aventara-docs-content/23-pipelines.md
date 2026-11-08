@@ -374,7 +374,7 @@ resources: {
 - The after hook's `ctx` calls and `ctx.$sql` join the transaction, so a side effect on other rows (an outbox event, a counter on another Resource) commits with the write or not at all. See the [recipes](/docs/pipeline-context#recipe-an-outbox-that-commits-with-the-write).
 - The operation is forced when any layer sets it, the root or the operation's overlay. Nothing below unforces it.
 - As a step of a plan, a forced operation is just a step: the plan's transaction already wraps it.
-- It needs transactions. Under an effective `transactionsStyle: "none"` it is a startup error (`CONFIG_INVALID_VALUE`), and a type error where the types know the style is `"none"`.
+- It needs transactions. Under an effective `transactionsStyle: "none"` it is a startup error (`CONFIG_INVALID_VALUE`), and a type error where the types know the style is `"none"`. Under `"server"` it runs: that style keeps the transactions the server opens and takes plans away from callers ([Configuration](/docs/configuration#transactions)).
 - Operations without it stay unwrapped. Force only the operations whose hooks write.
 
 ### One origin per plan

@@ -80,7 +80,7 @@ type AvConfig = {
   // The six layer keys: at the root, in application, in client and in agent
   exposed?: boolean;                     // true: exemptions hide; false: exemptions are all that is exposed
   exemptions?: AvConfigExemptions;
-  transactionsStyle?: "none" | "interactive";
+  transactionsStyle?: "none" | "server" | "interactive";
   limits?: Partial<AvContractLimits>;
   pipelines?: AvPipeline;                // stages around every operation of the layer
   resources?: { [Resource: string]: AvConfigResource };   // everything per Resource
@@ -344,7 +344,8 @@ Limits bound what a caller may ask for:
 | `maxRequestBytes` | `1048576` | Decoded request body size (`A2010`). |
 | `maxNestingDepth` | `12` | Nested projection, filter and relation depth (`A2009` / `V1013`). |
 | `maxListLimit` | `250` | The `limit` of a list or nested relation (`A2009` / `V1014`). |
-| `maxTransactionOperations` | `20` | Steps in one transaction plan (`A2009` / `V1014`). |
+| `maxTransactionOperations` | `20` | Steps in one transaction plan, reads and `$sql` steps included (`A2009` / `V1014`). |
+| `maxTransactionWrites` | `20` | Write steps in one transaction plan: `create`, `update`, `upsert`, `delete`, and each `$sql` step (`A2009` / `V1014`). |
 | `maxBooleanNodes` | `50` | Nodes in a `where` boolean tree (`A2009` / `V1015`). |
 | `maxJsonDepth` | `64` | Levels of nesting inside a Json field's value (`A2009` / `V1021`). |
 
@@ -357,13 +358,23 @@ Client limits are part of the client contract, so changing them changes its hash
 
 ## Transactions
 
-`transactionsStyle: "interactive"` (what the Prisma adapter offers by default) turns on `POST /_transactions`, the client's `avClient.tx` / `avClient.transaction`, and `forceTransaction`. `"none"` turns them off for a layer:
+`transactionsStyle` says two things for a layer: whether the server may open a transaction, and whether callers may send a transaction plan.
+
+| `transactionsStyle` | The server opens transactions (`forceTransaction`, a policy-checked write, `ctx.$transaction`) | Callers send plans (`POST /_transactions`, `avClient.tx` / `avClient.transaction`, `framework.transaction`) |
+|---|---|---|
+| `"interactive"` (what the Prisma adapter offers by default) | yes | yes |
+| `"server"` | yes | no |
+| `"none"` | no | no |
+
+`"server"` keeps forced writes atomic while remote callers cannot send multi-step plans:
 
 ```ts
-client: { transactionsStyle: "none" },
+client: { transactionsStyle: "server" },
 ```
 
-`forceTransaction: true` on an operation family or variant runs a plain call of it as a one-step transaction, so its after hooks commit with the write ([Pipelines](/docs/pipelines#forcetransaction)). Under an effective `transactionsStyle: "none"` it is a startup error. See [Transactions](/docs/transactions).
+Under `"server"` the layer has no `POST /_transactions` route (a plan sent there answers `404` `A2002`, as an absent route does), the generated client has no `tx` or `transaction`, and an agent layer has no MCP `transaction` tool. `"none"` turns transactions off for a layer altogether. Both `"server"` and `"interactive"` need an adapter with transactions.
+
+`forceTransaction: true` on an operation family or variant runs a plain call of it as a one-step transaction, so its after hooks commit with the write ([Pipelines](/docs/pipelines#forcetransaction)). Under an effective `transactionsStyle: "none"` it is a startup error; under `"server"` it runs. See [Transactions](/docs/transactions).
 
 ## Fields: definitions and compute
 

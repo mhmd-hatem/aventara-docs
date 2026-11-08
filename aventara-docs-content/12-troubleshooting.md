@@ -274,7 +274,7 @@ The error carries `stage` and a `diagnostics` list, each with a `code`, a `path`
 configuration  CONFIG_INVALID_VALUE   entrypoint: entrypoint carries a query; a mount path is /-separated segments ...
 configuration  CONFIG_UNKNOWN_PROPERTY nope: unknown configuration property: nope
 configuration  CONFIG_INVALID_VALUE   limits.maxListLimit: limits.maxListLimit must be a finite non-negative integer
-configuration  CONFIG_INVALID_VALUE   transactionsStyle: transactionsStyle must be "none" or "interactive"
+configuration  CONFIG_INVALID_VALUE   transactionsStyle: transactionsStyle must be "none", "server" or "interactive"
 configuration  CONFIG_MOVED_PROPERTY  restrictions: restrictions moved in rc.1: use exposed + exemptions
 contract-compilation  COMPILER_DANGLING_RELATION  root.resources.User.fields.posts.target: relation target "Post" is not present in the active Contract
 contract-compilation  COMPILER_UNKNOWN_FIELD      root.resources.User.fields.nope: field "nope" is neither discovered by the adapter nor defined at the root
