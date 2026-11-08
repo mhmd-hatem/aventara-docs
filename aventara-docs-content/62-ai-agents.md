@@ -35,6 +35,7 @@ AGENTS.md
 - `reference/config.md`, `reference/stages.md` and `reference/recipes.md` are the detail the rules point to. Every code block in them is compiled against the release before it ships.
 - `reference/errors.md` is `ERRORS.md` from the installed `@aventara/core`: every code with its cause and fix, generated from the same catalog as [Error codes](/docs/error-codes).
 - `.aventara-skill.json` records what was written (a hash per file), so a refresh can tell which files you changed.
+- The commands in the skill follow the project's package manager: `npm run aventara:prepare` and `npx tsc` with npm, `pnpm run aventara:prepare` and `pnpm exec tsc` with pnpm (shown below in npm's form). `aventara new` and `aventara init` use the one they install with; `aventara skill` takes it from the nearest lockfile, up to the repository's root, so an app inside a pnpm workspace gets pnpm's forms. With no npm or pnpm lockfile it follows the package manager that ran it (`pnpm dlx` gives pnpm's forms, anything else npm's).
 
 To refresh them after upgrading, run `aventara skill` in the project, with the CLI at your `@aventara/core` version:
 
@@ -931,7 +932,7 @@ if (closed === null) {
 }
 ```
 
-`update.first` reads the row, then writes it with the same `where` asserted again: the second of two racing calls resolves `null` (no match) or throws `AvConflictError` `A2014` (the row changed between the read and the write); nothing is written either way. `A2013` and `A2014` may succeed if sent again. An `after` hook that must write the side effect (an event, a number from a counter) goes on `update.first` with `forceTransaction: true`. The update's answer is read before that hook runs: to answer with what the hook wrote, read the row again in an interceptor (`async (ctx, next) => { await next(); return ctx.Ticket.find.unique({ where: { id }, select }); }`), which runs inside the same transaction.
+`update.first` runs two statements in one transaction, a read and then a write with the same `where` asserted again: the second of two racing calls resolves `null` (no match) or throws `AvConflictError` `A2014` (the row changed between the read and the write); nothing is written either way. `A2013` and `A2014` may succeed if sent again. An `after` hook that must write the side effect (an event, a number from a counter) goes on `update.first` with `forceTransaction: true`. The update's answer is read before that hook runs. To answer with what the hook wrote, patch the result in an interceptor, which runs inside the same transaction: `const result = await next();`, read only the written field with `ctx` (`select: ["number"]`), and return `{ ...result, number }` when `result` holds that field. Never replace the result with a fresh `ctx` read: the answer is checked against the caller's own projection, and a `ctx` call is application-origin, so a read with the default fields carries fields the `client` layer hides and a remote caller gets `500 A3000`.
 
 ## Testing
 
