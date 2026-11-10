@@ -151,7 +151,7 @@ A call reads the database, so Next.js runs it at request time (Cache Components 
 | Share request information (the signed-in user) | `ctx.$state` | `AventaraModule`'s `state` option, or a call's `{ state }` |
 | Call another operation from a stage | `ctx.<Resource>.<family>.<variant>(args)` | the `ctx` every stage gets (compute can only read) |
 
-Order: framework validation → guards → pipes (operation, then field) → field validators and Json shapes on the values the caller sent (`A2004`) → write compute (create/update) → re-check (Aventara's checks on pipe and compute output: `A3004`, `A3000`; then the computed fields' validators and Json shapes: `A2004`) → interceptors → `hooks.before` → the operation (then compute read) → `hooks.after` → interceptors unwind; filters handle a failure. `ctx` calls are raw: they run validation, field pipes, compute and validators, and none of your guards, pipes, hooks, interceptors or filters.
+Order: framework validation → guards → pipes (operation, then field) → field validators and Json shapes on every value the caller sent, a field with a compute stage included (`A2004`) → write compute (create/update) → re-check (Aventara's checks on pipe and compute output: `A3004`, `A3000`; then validators and Json shapes on what compute set or changed: `A2004`) → interceptors → `hooks.before` → the operation (then compute read) → `hooks.after` → interceptors unwind; filters handle a failure. `ctx` calls are raw: they run validation, field pipes, compute and validators, and none of your guards, pipes, hooks, interceptors or filters.
 
 ## The shape of a configuration
 
@@ -581,9 +581,9 @@ The root's stages run for every origin; an overlay's only for its own (`ctx.$ori
 framework validation (required create fields included; a field compute.create fills is not required yet)
 -> guards       layer -> Resource -> family -> variant (root, then overlay, at each), then field write guards
 -> pipes        the same levels, then field pipes
--> validators   field validators and Json shapes on the values the caller sent (A2004); a field compute sets waits for compute
+-> validators   field validators and Json shapes on every value the caller sent, a field with a compute stage included (A2004)
 -> compute      create or update (write compute)
--> re-check     Aventara's own checks on the pipe and compute output (A3004, A3000), then the computed fields' validators and Json shapes (A2004)
+-> re-check     Aventara's own checks on the pipe and compute output (A3004, A3000), then validators and Json shapes on the values compute set or changed (A2004)
 -> interceptors enter, outer to inner
 -> hooks.before
 -> operation    one adapter call, then compute read on the returned rows
@@ -594,7 +594,7 @@ on a failure after validation: filters, inner to outer; the first that handles i
 
 A call refused by a guard, the re-check or a validator runs no interceptor and no hook. A `unique` operation that matches no row fails at the operation (`AvNotFoundError`, `A2003`); no `after` hook runs.
 
-With `forceTransaction` (or as a step of a transaction plan), guards, pipes and the validators of the caller's literal values run before the transaction; a refusal there opens nothing. Then: `BEGIN -> the Resource's transaction stages -> validators of $ref values (and of what a transaction pipe changed) -> write compute -> re-check (computed values) -> interceptors -> hooks.before -> adapter call -> hooks.after -> interceptors -> COMMIT`. A refusal inside rolls the transaction back. The hooks' `ctx` calls and `ctx.$sql` join it; the guards' and pipes' calls do not.
+With `forceTransaction` (or as a step of a transaction plan), guards, pipes and the validators of every literal value the caller sent run before the transaction; a refusal there opens nothing. Then: `BEGIN -> the Resource's transaction stages -> validators of $ref values (and of what a transaction pipe changed) -> write compute -> re-check (values compute set or changed) -> interceptors -> hooks.before -> adapter call -> hooks.after -> interceptors -> COMMIT`. A refusal inside rolls the transaction back. The hooks' `ctx` calls and `ctx.$sql` join it; the guards' and pipes' calls do not.
 
 ## Rules that are easy to miss
 
@@ -604,7 +604,7 @@ With `forceTransaction` (or as a step of a transaction plan), guards, pipes and 
 - `compute.read` gets the row (`record`) frozen, with its own copy of each `Date` or bytes value: return the field's value. Writing into `record` throws and answers `A3000`; the answer is built from the row as read.
 - Compute gets a read-only `ctx`: `find.*` calls only, no writes, no `$sql`, no `$transaction` (reaching one answers `A3000`). Effects on other rows belong in an `after` hook under `forceTransaction`.
 - A required create field the caller left out is refused before the guards; no pipe can fill it. Use `compute.create` or a database default.
-- Each value is judged once, right after the last stage that sets it. A value the caller sent is judged after its field pipes and before write compute, so compute never sees a value its own validators refuse. A field a `compute.create` or `compute.update` stage sets is judged after compute: a result that fails a validator answers `A2004`. Aventara's own re-check comes first: a pipe that returns a wrong type or an unknown key, or drops a required field, answers `A3004`, as does a pipe or compute that writes a reference twice; a compute that returns a wrong type or a value its field's `format` refuses (a relative path for `format: "url"`), or leaves a required field missing, answers `A3000`.
+- Each value is judged once. Every value the caller sent is judged after its field pipes and before write compute, a field with its own compute stage included, so compute never sees a value its own validators refuse; a bad value is refused even when compute would replace it. After compute, only a value compute set or changed is judged (a compute that returns `undefined` or the caller's value changes nothing): a result that fails a validator answers `A2004`. Aventara's own re-check comes first: a pipe that returns a wrong type or an unknown key, or drops a required field, answers `A3004`, as does a pipe or compute that writes a reference twice; a compute that returns a wrong type or a value its field's `format` refuses (a relative path for `format: "url"`), or leaves a required field missing, answers `A3000`.
 - Validators do not judge a directive's operand (`{ $increment: 500 }`); `$push` entries are judged.
 - `pipelines.cache` runs nothing: it is data that lets a read be served as a cacheable `GET` (`reference/config.md`, Caching reads), and the one `pipelines` key that does not add up across levels. Every stage runs on that `GET` as on the `POST`; `ctx.$transport.method` tells them apart.
 - Calls grouped into one `POST /_all` each run their own full pipeline, exactly as alone (`reference/client.md`).
