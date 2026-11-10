@@ -164,7 +164,7 @@ The same rule applies to the host's own `state` option and to every place that r
 - `@/aventara/universal` on the Next.js server, which answers `401` or `403` as a route does;
 - `avClient` in a Next.js Server Component or Server Action, and `framework.serverClient.$access.can` given `headers`. These run in process, so the call rejects with an `AvAuthError` whose `code` is `A4000` or `A4001` and whose message is `"Unauthenticated."` or `"Forbidden."`.
 
-In process, a thrown `AvError` and any other error reach your code as they were thrown.
+In process, a thrown `AvError` and any other error reach your code as they were thrown. So does a refusal when your own code calls the provider's `state`, as in `{ state: await tillAccess.state({ headers }) }` [above](#an-access-provider): Aventara does not run that call, so the library's error reaches your code unchanged.
 
 The rule reads the error, not where it came from. If `state` calls another service and that service's own 401 or 403 error escapes, the request answers `A4000` or `A4001` and nothing is sent to `diagnostics`. Catch the errors of such a call inside `state`, or throw an `AvError` of the code you mean.
 
