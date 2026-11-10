@@ -385,7 +385,7 @@ See [Transactions](/docs/transactions).
 | `maxNestingDepth` | `12` | Depth of nested projections, relation filters, `NOT`/`not` chains and writes. | `A2009` / `V1013` |
 | `maxListLimit` | `250` | The `limit` of a list or of a nested relation. | `A2009` / `V1014` |
 | `maxTransactionOperations` | `20` | Steps in one transaction plan, reads and `$sql` steps included. `POST /_all` is bound by `maxAll`, not by this. | `A2009` / `V1014` |
-| `maxTransactionWrites` | `20` | Write steps in one transaction plan: `create`, `update`, `upsert`, `delete`, and each `$sql` step (counted as a write). Reads are not counted. | `A2009` / `V1014` at `["operations"]` |
+| `maxTransactionWrites` | `20` | Write steps in one transaction plan: `create`, `update`, `upsert`, `delete`, and each `$sql` step (counted as a write). Reads are not counted. It defaults to `20` on its own, whatever `maxTransactionOperations` is set to: raising only the step limit still caps a plan at 20 writes, so raise both. It counts steps, not rows: a `create` step with nested `$create`s is one write. | `A2009` / `V1014` at `["operations"]` |
 | `maxBooleanNodes` | `50` | Nodes in a `where` boolean tree (`AND` / `OR` / `NOT`). | `A2009` / `V1015` |
 | `maxJsonDepth` | `64` | Levels of nesting inside a Json field's value. | `A2009` / `V1021` |
 | `maxAll` | `10` | Operations in one `POST /_all` ([Operation Sets](/docs/operation-sets)). In-process `all` is not bound by it. | `A2009` / `V1014` at `["operations"]` (HTTP only) |
