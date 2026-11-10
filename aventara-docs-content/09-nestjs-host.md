@@ -187,7 +187,7 @@ client: { pipelines: { guards: [(ctx: AvContext) => ctx.$state.user !== undefine
 
 - Run the middleware that finds the user with `app.use(...)`: it runs on Aventara routes on both platforms. Nest guards never do, and `MiddlewareConsumer` middleware does not on Express.
 - On Fastify, `app.use` middleware writes to the Node request, so read `request.raw.user`.
-- Throw `new AvError("A4001", "...")` from `state` to refuse the request with `403`; any other throw answers `500 A3000`.
+- Throw `new AvError("A4001", "...")` from `state` to refuse the request with `403`. A rejection whose `status` or `statusCode` is 401 or 403 (how an authentication library refuses a bad credential) answers `401 A4000` or `403 A4001` with Aventara's own message, not the library's ([Policies](/docs/policies#when-state-refuses-a-credential)). Any other throw answers `500 A3000`.
 - `forRootAsync`'s `useFactory` returns `state` beside `framework` or `config`.
 
 The same object reaches every stage of the request, a transaction's steps and the ctx calls they make. See [The pipeline context](/docs/pipeline-context#request-state).

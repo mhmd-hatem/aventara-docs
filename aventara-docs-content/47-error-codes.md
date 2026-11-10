@@ -252,20 +252,20 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 ### Authentication and authorization (A4xxx)
 
-Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework itself never authenticates. `A4002` is also what a configured policy answers when it refuses a request: see [Policies](/docs/policies).
+Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework itself never authenticates. `A4002` is also what a configured policy answers when it refuses a request: see [Policies](/docs/policies). `A4000` and `A4001` are also what a request answers when its `state` rejects with an authentication library's refusal, an error whose `status` or `statusCode` is 401 or 403: see [Policies](/docs/policies#when-state-refuses-a-credential).
 
 #### `A4000`
 
 **Unauthenticated.** HTTP 401, thrown as `AvAuthError`.
 
-- Cause: A guard threw new AvError("A4000", ...): authentication is required or failed. The framework never authenticates by itself.
+- Cause: A guard threw new AvError("A4000", ...), or the host's or access provider's state rejected with an object whose status or statusCode is 401 (an authentication library's refusal, answered with this message only): authentication is required or failed. The framework never authenticates by itself.
 - Fix: Send the credentials your guards expect, such as the Authorization header.
 
 #### `A4001`
 
 **Forbidden.** HTTP 403, thrown as `AvAuthError`.
 
-- Cause: A guard returned false ("Operation denied by a framework guard."), a field write guard or a nested write's target guard included, or a stage threw A4001.
+- Cause: A guard returned false ("Operation denied by a framework guard."), a field write guard or a nested write's target guard included, a stage threw A4001, or the host's or access provider's state rejected with an object whose status or statusCode is 403 (answered with this message only).
 - Fix: Call as a caller the guard admits, or stop sending the guarded field. To answer another code, throw an AvError from the guard.
 
 #### `A4002`

@@ -149,7 +149,7 @@ A guard decides whether a request may run. When you also want rows and fields ch
 createFramework({ ...aventaraConfig, adapter, access: memberAccess })   // instead of policy, and of the host's state option
 ```
 
-The host calls `state` once per request, so neither a guard nor the host's own `state` option has to read the headers. Guards still run, after the policy's admission, and read `ctx.$state.me`. With `access`, leave out `policy` and the host's `state` option: either one beside it is refused (at startup on NestJS, when `Aventara()` is called on Next.js), and is a type error. [Policies](/docs/policies#an-access-provider) has a complete hand-written provider (a till with PIN sign-in) and the rules.
+The host calls `state` once per request, so neither a guard nor the host's own `state` option has to read the headers. Guards still run, after the policy's admission, and read `ctx.$state.me`. When `state` rejects with an authentication library's refusal, an error whose `status` or `statusCode` is 401 or 403, the request answers `401` `A4000` or `403` `A4001` with Aventara's own message ([Policies](/docs/policies#when-state-refuses-a-credential)). With `access`, leave out `policy` and the host's `state` option: either one beside it is refused (at startup on NestJS, when `Aventara()` is called on Next.js), and is a type error. [Policies](/docs/policies#an-access-provider) has a complete hand-written provider (a till with PIN sign-in) and the rules.
 
 ## Typing a guard
 
