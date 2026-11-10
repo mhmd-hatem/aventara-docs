@@ -175,7 +175,7 @@ The framework was created with `prebuilt`, and the file no longer matches the co
 (node:1234) [AVENTARA_PRISMA_SQLITE_TRANSACTION_JOINED] AventaraWarning: Author create.many ran inside an open SQLite transaction (better-sqlite3) instead of waiting for it: ...
 ```
 
-With SQLite through better-sqlite3, a call made from inside a transaction's async context joins that transaction and commits or rolls back with it. If a stage calls the Framework instead of `ctx` on purpose, the warning is expected. If not, a helper shared across requests (a batcher, a queue, a timer first scheduled inside a transaction) is running another request's call inside this one: bind its callback with `AsyncResource.bind` where the helper is created, or schedule it from outside a transaction ([A call from inside a transaction joins it](/docs/transactions#a-call-from-inside-a-transaction-joins-it)). It warns once per Resource and operation.
+With SQLite through better-sqlite3, a call made from inside a transaction's async context joins that transaction and commits or rolls back with it. If a stage calls the Framework instead of `ctx` on purpose, the warning is expected. If not, a helper shared across requests (a batcher, a queue, a timer first scheduled inside a transaction) is running another request's call inside this one: bind its callback with `AsyncResource.bind` where the helper is created, or schedule it from outside a transaction ([A call from inside a transaction joins it](/docs/transactions#a-call-from-inside-a-transaction-joins-it)). The process warns once per Resource and operation (and once for `ctx.$sql`).
 
 ## `A4002` where nothing should be refused
 

@@ -163,9 +163,9 @@ What this means for you:
 
 #### A call from inside a transaction joins it
 
-A call made from inside a transaction's own stages, through the Framework instead of `ctx`, cannot wait for that transaction to end: it would wait on itself. So it joins the transaction instead and commits or rolls back with it. That is intended, but `ctx` makes it plain to read.
+A call made from inside a transaction's own stages, through the Framework instead of `ctx`, cannot wait for that transaction to end: it would wait on itself. So it joins the transaction instead and commits or rolls back with it. Inside a stage, prefer `ctx`. A call to the root Framework there is allowed, and it warns.
 
-The adapter tells which transaction a call belongs to by its async context (Node's `AsyncLocalStorage`): a call made anywhere in the async work a transaction started belongs to it. Each time a call joins this way, the server warns, once per Resource and operation:
+The adapter tells which transaction a call belongs to by its async context (Node's `AsyncLocalStorage`): a call made anywhere in the async work a transaction started belongs to it. The first time a given Resource and operation joins this way, the process warns once (and once for `ctx.$sql`):
 
 ```text
 (node:1234) [AVENTARA_PRISMA_SQLITE_TRANSACTION_JOINED] AventaraWarning: Author create.many ran inside an open SQLite transaction (better-sqlite3) instead of waiting for it: it was called from that transaction's async context, so it joined the transaction and commits or rolls back with it. ...
