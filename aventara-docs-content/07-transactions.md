@@ -141,7 +141,7 @@ The frontend client sends the plan as one `POST <api>/_transactions`. See [HTTP 
 
 Every step of a plan runs inside one database transaction, in order, so `$ref` values are available to later steps. With the Prisma adapter this is Prisma's interactive transaction. `maxWait`, `timeout` and `isolationLevel` are set on the adapter ([Configuration](/docs/configuration#adapter)). SQLite supports `Serializable` only.
 
-Before the transaction opens, every step in order runs its guards, its pipes and its field validators on its literal values that no compute stage changes. A `$ref` value is still the reference there; it is checked when it is resolved, at its step. A step refused at this point opens nothing and writes nothing, and the answer names the step (`cause.operation`).
+Before the transaction opens, every step in order runs its guards, its pipes and its field validators on every literal value it sent, a field with a compute stage included. A `$ref` value is still the reference there; it is checked when it is resolved, at its step. A step refused at this point opens nothing and writes nothing, and the answer names the step (`cause.operation`).
 
 Then, inside the transaction, each step resolves its `$ref`s and runs its interceptors and hooks around its adapter call, so an error one of them throws rolls the plan back. Such an error goes through the step's own filters first; if none of them handles it, it continues to the transaction filters of the Resources the plan touches, and only then is answered. Two more things run inside it ([Pipelines](/docs/pipelines#transactions)):
 
