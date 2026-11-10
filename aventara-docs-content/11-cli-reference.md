@@ -57,7 +57,7 @@ Run in a folder below a `pnpm-workspace.yaml` (a monorepo's `apps/`), with pnpm,
 - When the root's `packages` globs do not match the new folder, a warning says to add it there; until then the root's install does not install it.
 - When the root has its own Biome, ESLint or Prettier configuration, a one-line hint points at `--skip-lint`.
 
-`aventara init` in a workspace member does the same with `allowBuilds` and the install (`--skip-lint` and its hint are `new`'s only). A folder with its own `pnpm-workspace.yaml` is its own workspace root: the one above it is not touched. When the root's `packages` do not match the folder, the root's file is left alone too. When the root's `allowBuilds` is written in a way the CLI does not edit (inline `{ … }` style, or stated twice), the file is left as it is and the lines to add are printed.
+`aventara init` in a workspace member does the same with `allowBuilds` and the install (`--skip-lint` and its hint are `new`'s only). A folder with its own `pnpm-workspace.yaml` is its own workspace root: the one above it is not touched. When the root's `packages` do not match the folder, the root's file is left alone too. Entries already in the root's `allowBuilds` keep their value, an explicit `false` included. The CLI edits the file only when it is plain YAML it reads exactly: one document, `allowBuilds` once, as an unquoted top-level key whose block holds only `name: true` and `name: false` lines. Anything else (a quoted or `?` key, `{ … }` or `- ` style, anchors, aliases, merge keys or tags in `allowBuilds`, a `...` or second `---`) leaves the file as it is, and the lines to add are printed.
 
 ### aventara new --host next
 

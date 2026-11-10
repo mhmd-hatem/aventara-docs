@@ -126,7 +126,7 @@ A release-age delay also holds back a brand-new Aventara release, including a fr
 Aventara 1.0.0-rc.11 (newest: 1.0.0-rc.12, held back by a release-age delay or not yet in your registry; to take it: pnpm --config.minimum-release-age=0 dlx @aventara/cli@1.0.0-rc.12 new …)
 ```
 
-Naming the exact version is not enough: under a delay pnpm refuses a version that is too new (`ERR_PNPM_NO_MATURE_MATCHING_VERSION`). Exclude the Aventara packages from the delay instead:
+Naming the exact version does not get past a delay you set yourself (`minimumReleaseAge` in `pnpm-workspace.yaml` or in pnpm's global config): pnpm refuses a version that is too new (`ERR_PNPM_NO_MATURE_MATCHING_VERSION`). pnpm's built-in one-day delay lets an exact version through. To take new Aventara releases under your own delay, exclude the Aventara packages from it:
 
 ```yaml
 # pnpm-workspace.yaml (or pnpm's global config.yaml)
