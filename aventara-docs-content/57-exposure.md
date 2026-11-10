@@ -199,7 +199,7 @@ client: {
 
 Every field of `Category` can be selected, filtered on, sorted by and, for a relation, included and paged, as far as the root allows; none can be written. A field the root hid stays hidden, and a capability the root took away (a filter, say) does not come back: `"read"` only asks for what the layer above offers. A field whose every read capability the root hid (a write-only `passwordHash`) is left out.
 
-`fields: "read"` names every field, relations included. A relation into a Resource the layer does not expose then has no target, and startup fails with `COMPILER_DANGLING_RELATION`, as it would for `true` on that relation. Expose the target too, or list the fields one by one. A Resource whose fields are all read-only takes no nested `$create` either: a relation into it that offers `$create` in a layer that creates the other side is refused at startup (`COMPILER_HIDDEN_REQUIRED_FIELD`), so grant that relation `create: ["$connect"]`.
+`fields: "read"` names every field, relations included. A relation into a Resource the layer does not expose then has no target, and startup fails with `COMPILER_DANGLING_RELATION`, as it would for `true` on that relation. Expose the target too, or list the fields one by one. A read-only Resource takes no nested write either: a relation into it that still offers `$create` is refused at startup (`COMPILER_READ_ONLY_NESTED_WRITE`, see [Read-only means no nested write](#read-only-means-no-nested-write)), so grant that relation `create: ["$connect"]`.
 
 ## Layers: overlays only narrow
 
@@ -351,6 +351,32 @@ contract-compilation  COMPILER_HIDDEN_REQUIRED_FIELD  client.exemptions.resource
 Keep `authorId` exposed, give it a `compute.create`, or exempt the bulk variants in that layer: `Post: { fields: { authorId: true }, operations: { create: ["many", "count"] } }`. The client's `create.one` then takes `author`, and its bulk creates are gone. For a composite reference, every field you hide needs the same fix.
 
 A [pipe](/docs/pipelines) that fills the hidden field does not count: the compiler cannot see what a pipe writes. A nested create gets the relation it is nested through from its parent, so hiding `author` and `authorId` does not stop `User.posts.$create`. Under `exposed: false`, a required field you do not pick is hidden the same way. The layer that hides the field reports it, once: when the root hides it, the overlays do not repeat the error.
+
+## Read-only means no nested write
+
+A Resource a layer lets no caller create (no `create` or `upsert` operation, and no field writable on create) cannot be created through a relation either. A relation that still offers `$create`, `$connectOrCreate` or `$upsert` into it, in a layer that creates or updates the other side, is refused at startup. It does not matter how the Resource became read-only (`fields: "read"`, capability lists, or exempted operations), or whether it has required fields: without this rule a nested `category: { $create: {} }` into a Resource with no required field would create a row the layer never lets anyone write.
+
+```ts
+client: {
+  exposed: false,
+  exemptions: {
+    resources: {
+      Category: { operations: { find: true }, fields: "read" },
+      Post: {
+        operations: { create: ["one"] },
+        fields: { title: true, authorId: true, category: ["select", "create"] },
+      },
+    },
+  },
+},
+```
+
+```text
+contract-compilation  COMPILER_READ_ONLY_NESTED_WRITE  client.exemptions.resources.Post.fields.category
+  the client layer lets relation "Post.category" write rows of resource "Category" ($create, $connectOrCreate), but "Category" is read-only in that layer: it has no create operation and no field writable on create; take $create and $connectOrCreate off "Post.category" (keep only the directives it may use, such as $connect), or give "Category" a create operation or a field writable on create
+```
+
+Let the relation only link to existing rows, `category: { select: true, create: ["$connect"] }`, or give the target a create operation or a field writable on create in that layer. The same rule holds on the update side: a relation that offers `$update` or `$upsert` into a Resource the layer gives no `update` or `upsert` operation and no field writable on update is refused with the same code. Linking (`$connect`, `$disconnect`, `$set`) stays allowed. The layer that makes the Resource read-only reports it, once, and such a create is not also reported as a hidden required field.
 
 ## Every name must exist
 

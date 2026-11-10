@@ -704,6 +704,13 @@ When the configuration cannot be built into contracts, `createFramework` (and `A
 - Cause: A layer still creates the Resource (a create or upsert variant, or a nested create) while a required field, or a required relation's reference field, is hidden or has its create capability exempted, and no compute.create fills it.
 - Fix: Expose the field, give it a compute.create stage, or exempt the layer's create operations.
 
+#### `COMPILER_READ_ONLY_NESTED_WRITE`
+
+**A relation writes rows of a read-only Resource.**
+
+- Cause: A layer lets a relation create rows of a Resource it creates nothing of ($create, $connectOrCreate or $upsert into a Resource with no create or upsert operation and no field writable on create), or update rows of one it updates nothing of ($update or $upsert into a Resource with no update or upsert operation and no field writable on update). Read-only, by fields: "read" or by hand-listed capabilities, means no nested write either.
+- Fix: Narrow the relation to the directives it may use (author: { select: true, create: ["$connect"] }), or give the target Resource the create or update operation, or a field writable there.
+
 #### `COMPILER_INVALID_VALIDATOR`
 
 **A field validator cannot apply.**
@@ -740,7 +747,7 @@ Two conditions are not errors. The server starts and answers correctly. Each pri
 
 **The generated types are stale.** Printed at startup when the computed fields the discovery artifact was typed with differ from the configuration's `compute.create` and `compute.update` stages.
 
-- Cause: A compute stage was added, moved or removed since `aventara:prepare` last ran. The message lists each field that differs.
+- Cause: A compute stage was added, moved or removed since `aventara:prepare` last ran. The message lists each field that differs. Until then the pre-compute stages and the creates a stage writes through `ctx` are typed with the old computed fields; a create that leaves out a field the configuration does not compute is still refused at runtime (`A2004`).
 - Fix: Run `npm run aventara:prepare`. The warning changes nothing at runtime.
 
 ### Example startup messages
@@ -758,6 +765,7 @@ Two conditions are not errors. The server starts and answers correctly. Each pri
 | `COMPILER_UNAVAILABLE_CAPABILITY` | `field "User.passwordHash" is hidden by the root, and an overlay only narrows the root's view; expose it at the root and hide it in application instead` |
 | `COMPILER_MISSING_IDENTIFIER` | ``client.exemptions.resources.User.operations.find.unique needs an identifier field; pick `id` (or another complete identifier) too`` |
 | `COMPILER_HIDDEN_REQUIRED_FIELD` | `the client layer still creates resource "Post" (create.one, ...) but hides its required field "title", which every create must write; expose "title", give "title" a compute.create, or exempt the create operation` |
+| `COMPILER_READ_ONLY_NESTED_WRITE` | `the client layer lets relation "Post.category" write rows of resource "Category" ($create, $connectOrCreate), but "Category" is read-only in that layer: it has no create operation and no field writable on create; take $create and $connectOrCreate off "Post.category" (keep only the directives it may use, such as $connect), or give "Category" a create operation or a field writable on create` |
 | `COMPILER_DANGLING_RELATION` | `relation target "Post" is not present in the active Contract` |
 | `COMPILER_RESERVED_RESOURCE_NAME` | `resource "$jobs" starts with "$", which is reserved for the framework's own names` |
 | `COMPILER_INVALID_VALIDATOR` | `relation field "Post.category" takes write guards only; validators check a scalar field's value` |
