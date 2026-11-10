@@ -188,9 +188,9 @@ client: {
   exemptions: {
     resources: {
       Category: { operations: { find: true }, fields: "read" },
-      Product: {
+      Post: {
         operations: { find: true },
-        fields: { id: "read", name: "read", category: "read" },
+        fields: { id: "read", title: "read", category: "read" },
       },
     },
   },
@@ -271,12 +271,12 @@ The application layer is untouched, so your own server code can still delete use
 {"data":null,"code":"A2002","cause":{"message":"The requested operation is not available on this Resource.","issues":[{"path":["family"],"code":"V1006","message":"Operation \"delete.unique\" is not available on Resource \"User\"."}]}}
 ```
 
-The route is not mounted, and the regenerated frontend client has no `avClient.User.delete`, so a call to it does not compile. A family with no variant left is omitted from the contract.
+The route is not mounted, and the regenerated frontend client has no `avClient.User.delete`, so a call to it does not compile. A family with no variant left is omitted from the contract. A relation into `User` loses its nested `$delete` in that layer too, so no client deletes a user through another Resource (see [No nested `$delete` without a delete operation](#no-nested-delete-without-a-delete-operation)).
 
 | Goal | Configuration |
 |---|---|
 | Remote callers read only | `client`, `exposed: true`: `operations: ["create", "update", "delete", "upsert"]` on each Resource; or `exposed: false` and grant only `find` variants. |
-| Nobody deletes | Root: `operations: { delete: true }`. |
+| Nobody deletes | Root: `operations: { delete: true }`. The relations into the Resource lose `$delete` with it. |
 | Only the server deletes | `client`, `exposed: true`: `operations: { delete: true }`; leave the root alone. |
 | The server may not bulk-update | `application`, `exposed: true`: `operations: { update: ["many", "count"] }`. |
 
@@ -377,6 +377,37 @@ contract-compilation  COMPILER_READ_ONLY_NESTED_WRITE  client.exemptions.resourc
 ```
 
 Let the relation only link to existing rows, `category: { select: true, create: ["$connect"] }`, or give the target a create operation or a field writable on create in that layer. The same rule holds on the update side: a relation that offers `$update` or `$upsert` into a Resource the layer gives no `update` or `upsert` operation and no field writable on update is refused with the same code. Linking (`$connect`, `$disconnect`, `$set`) stays allowed. The layer that makes the Resource read-only reports it, once, and such a create is not also reported as a hidden required field.
+
+### No nested `$delete` without a delete operation
+
+A relation's `$delete` deletes rows of the Resource it points at, so a layer that gives that Resource no `delete` operation does not offer it through a relation either. What happens depends on the style of the layer that leaves the delete out. Each layer goes by its own `exposed`, never by its parent's.
+
+- **`exposed: true`.** A relation inherits every directive the layer above offers, so you never chose `$delete` for it. The framework drops `$delete` from each relation into the Resource, and startup succeeds. The contract the layer serves lists one directive fewer on those relations, so a client-side change moves the ClientContract hash: regenerate the frontend client. A call that sends `$delete` there anyway gets `A2004` with `V1006` at the directive.
+- **`exposed: false`.** A relation carries only what you grant it: `true` on the Resource or the field, the relation's `update`, or `$delete` by name. Granting `$delete` into a Resource with no delete operation, on a relation callers can reach, is refused at startup with the same `COMPILER_READ_ONLY_NESTED_WRITE`.
+
+```ts
+client: {
+  exposed: false,
+  exemptions: {
+    resources: {
+      User: {
+        operations: { find: ["unique"], update: ["unique"] },
+        fields: { id: ["select", "filter"], posts: { select: true, update: ["$connect", "$delete"] } },
+      },
+      Post: { operations: { find: ["many"] }, fields: { id: ["select", "filter"], title: ["select"] } },
+    },
+  },
+},
+```
+
+```text
+contract-compilation  COMPILER_READ_ONLY_NESTED_WRITE  client.exemptions.resources.User.fields.posts
+  the client layer lets relation "User.posts" delete rows of resource "Post" ($delete), but "Post" has no delete operation in that layer; take $delete off "User.posts" (keep only the directives it may use, such as $connect), or give "Post" a delete operation
+```
+
+Grant the relation only what links rows, `posts: { select: true, update: ["$connect", "$disconnect", "$set"] }`, or give `Post` a delete operation in that layer.
+
+A layer starts from what the layer above it serves. Under a root with `exposed: true` that dropped `$delete`, a client with `exposed: false` that grants `posts: ["select", "update"]` gets the relation's update directives without `$delete`, and starts. Naming `$delete` there is refused with `COMPILER_READ_ONLY_NESTED_WRITE`, not as a widening, since the root left `$delete` out only because it deletes no posts. A `$delete` the root hid on purpose (`posts: { update: ["$delete"] }` under `exposed: true`) is a widening, as for any other hidden token.
 
 ## Every name must exist
 

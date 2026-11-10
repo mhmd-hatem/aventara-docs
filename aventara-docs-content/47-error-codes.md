@@ -708,8 +708,8 @@ When the configuration cannot be built into contracts, `createFramework` (and `A
 
 **A relation writes rows of a read-only Resource.**
 
-- Cause: A layer lets a relation create rows of a Resource it creates nothing of ($create, $connectOrCreate or $upsert into a Resource with no create or upsert operation and no field writable on create), or update rows of one it updates nothing of ($update or $upsert into a Resource with no update or upsert operation and no field writable on update). Read-only, by fields: "read" or by hand-listed capabilities, means no nested write either.
-- Fix: Narrow the relation to the directives it may use (author: { select: true, create: ["$connect"] }), or give the target Resource the create or update operation, or a field writable there.
+- Cause: A layer lets a relation create rows of a Resource it creates nothing of ($create, $connectOrCreate or $upsert into a Resource with no create or upsert operation and no field writable on create), or update rows of one it updates nothing of ($update or $upsert into a Resource with no update or upsert operation and no field writable on update). Read-only, by fields: "read" or by hand-listed capabilities, means no nested write either. Under exposed: false the same holds for a $delete the layer grants into a Resource with no delete operation; under exposed: true that $delete is dropped from the relation instead.
+- Fix: Narrow the relation to the directives it may use (author: { select: true, create: ["$connect"] }), or give the target Resource the create, update or delete operation, or a field writable there.
 
 #### `COMPILER_INVALID_VALIDATOR`
 
