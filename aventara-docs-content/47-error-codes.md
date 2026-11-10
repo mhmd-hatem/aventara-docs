@@ -708,7 +708,7 @@ When the configuration cannot be built into contracts, `createFramework` (and `A
 
 **A relation writes rows of a read-only Resource.**
 
-- Cause: A layer lets a relation create rows of a Resource it creates nothing of ($create, $connectOrCreate or $upsert into a Resource with no create or upsert operation and no field writable on create), or update rows of one it updates nothing of ($update or $upsert into a Resource with no update or upsert operation and no field writable on update). Read-only, by fields: "read" or by hand-listed capabilities, means no nested write either. Under exposed: false the same holds for a $delete the layer grants into a Resource with no delete operation; under exposed: true that $delete is dropped from the relation instead.
+- Cause: A layer with exposed: false grants a relation a write into a Resource it cannot write: $create, $connectOrCreate or $upsert into a Resource with no create or upsert operation and no field writable on create, $update or $upsert into one with no update or upsert operation and no field writable on update, or $delete into one with no delete operation. Read-only, by fields: "read" or by hand-listed capabilities, means no nested write either. Under exposed: true those directives are dropped from the relation instead, and startup succeeds.
 - Fix: Narrow the relation to the directives it may use (author: { select: true, create: ["$connect"] }), or give the target Resource the create, update or delete operation, or a field writable there.
 
 #### `COMPILER_INVALID_VALIDATOR`
@@ -765,7 +765,7 @@ Two conditions are not errors. The server starts and answers correctly. Each pri
 | `COMPILER_UNAVAILABLE_CAPABILITY` | `field "User.passwordHash" is hidden by the root, and an overlay only narrows the root's view; expose it at the root and hide it in application instead` |
 | `COMPILER_MISSING_IDENTIFIER` | ``client.exemptions.resources.User.operations.find.unique needs an identifier field; pick `id` (or another complete identifier) too`` |
 | `COMPILER_HIDDEN_REQUIRED_FIELD` | `the client layer still creates resource "Post" (create.one, ...) but hides its required field "title", which every create must write; expose "title", give "title" a compute.create, or exempt the create operation` |
-| `COMPILER_READ_ONLY_NESTED_WRITE` | `the client layer lets relation "Post.category" write rows of resource "Category" ($create, $connectOrCreate), but "Category" is read-only in that layer: it has no create operation and no field writable on create; take $create and $connectOrCreate off "Post.category" (keep only the directives it may use, such as $connect), or give "Category" a create operation or a field writable on create` |
+| `COMPILER_READ_ONLY_NESTED_WRITE` | `the client layer lets relation "Post.category" write rows of resource "Category" ($create and $connectOrCreate), but "Category" is read-only in that layer: it has no create operation and no field writable on create; take $create and $connectOrCreate off "Post.category" (keep only the directives it may use, such as $connect), or give "Category" a create operation or a field writable on create` |
 | `COMPILER_DANGLING_RELATION` | `relation target "Post" is not present in the active Contract` |
 | `COMPILER_RESERVED_RESOURCE_NAME` | `resource "$jobs" starts with "$", which is reserved for the framework's own names` |
 | `COMPILER_INVALID_VALIDATOR` | `relation field "Post.category" takes write guards only; validators check a scalar field's value` |

@@ -199,7 +199,7 @@ client: {
 
 Every field of `Category` can be selected, filtered on, sorted by and, for a relation, included and paged, as far as the root allows; none can be written. A field the root hid stays hidden, and a capability the root took away (a filter, say) does not come back: `"read"` only asks for what the layer above offers. A field whose every read capability the root hid (a write-only `passwordHash`) is left out.
 
-`fields: "read"` names every field, relations included. A relation into a Resource the layer does not expose then has no target, and startup fails with `COMPILER_DANGLING_RELATION`, as it would for `true` on that relation. Expose the target too, or list the fields one by one. A read-only Resource takes no nested write either: a relation into it that still offers `$create` is refused at startup (`COMPILER_READ_ONLY_NESTED_WRITE`, see [Read-only means no nested write](#read-only-means-no-nested-write)), so grant that relation `create: ["$connect"]`.
+`fields: "read"` names every field, relations included. A relation into a Resource the layer does not expose then has no target, and startup fails with `COMPILER_DANGLING_RELATION`, as it would for `true` on that relation. Expose the target too, or list the fields one by one. A read-only Resource takes no nested write either: under `exposed: false` a relation into it that you grant `$create` is refused at startup (`COMPILER_READ_ONLY_NESTED_WRITE`, see [Read-only means no nested write](#read-only-means-no-nested-write)), so grant that relation `create: ["$connect"]`.
 
 ## Layers: overlays only narrow
 
@@ -271,7 +271,7 @@ The application layer is untouched, so your own server code can still delete use
 {"data":null,"code":"A2002","cause":{"message":"The requested operation is not available on this Resource.","issues":[{"path":["family"],"code":"V1006","message":"Operation \"delete.unique\" is not available on Resource \"User\"."}]}}
 ```
 
-The route is not mounted, and the regenerated frontend client has no `avClient.User.delete`, so a call to it does not compile. A family with no variant left is omitted from the contract. A relation into `User` loses its nested `$delete` in that layer too, so no client deletes a user through another Resource (see [No nested `$delete` without a delete operation](#no-nested-delete-without-a-delete-operation)).
+The route is not mounted, and the regenerated frontend client has no `avClient.User.delete`, so a call to it does not compile. A family with no variant left is omitted from the contract. A relation into `User` loses its nested `$delete` in that layer too, so no client deletes a user through another Resource (see [Read-only means no nested write](#read-only-means-no-nested-write)).
 
 | Goal | Configuration |
 |---|---|
@@ -354,7 +354,25 @@ A [pipe](/docs/pipelines) that fills the hidden field does not count: the compil
 
 ## Read-only means no nested write
 
-A Resource a layer lets no caller create (no `create` or `upsert` operation, and no field writable on create) cannot be created through a relation either. A relation that still offers `$create`, `$connectOrCreate` or `$upsert` into it, in a layer that creates or updates the other side, is refused at startup. It does not matter how the Resource became read-only (`fields: "read"`, capability lists, or exempted operations), or whether it has required fields: without this rule a nested `category: { $create: {} }` into a Resource with no required field would create a row the layer never lets anyone write.
+A relation does not write rows of a Resource its layer cannot write. The Resource decides, by three tests:
+
+| The target Resource, in that layer | Nested directives it cannot take |
+|---|---|
+| Creates nothing: no `create` or `upsert` operation, and no field writable on create | `$create`, `$connectOrCreate`, `$upsert` |
+| Updates nothing: no `update` or `upsert` operation, and no field writable on update | `$update`, `$upsert` |
+| Deletes nothing: no `delete` operation | `$delete` |
+
+For creates and updates the fields count with the operations. A Resource whose create operation you hide but whose fields stay writable on create still takes nested creates: that is how you say a row is created only through its parent (`Order.lines: { $create: [...] }` with no `OrderLine.create`). It does not matter how the Resource became read-only (`fields: "read"`, capability lists, or exempted operations), or whether it has required fields: without this rule a nested `category: { $create: {} }` into a Resource with no required field would create a row the layer never lets anyone write. Linking (`$connect`, `$disconnect`, `$set`) is never affected.
+
+What happens depends on the style of the layer. Each layer goes by its own `exposed`, never by its parent's.
+
+| | `exposed: true` (the relation inherits its directives) | `exposed: false` (the relation has what you grant it) |
+|---|---|---|
+| At startup | The framework drops those directives from every relation into the Resource, and starts. | A grant of one (by `true` on the Resource or the field, by the relation's `create` or `update`, or by name) on a relation callers can reach is refused with `COMPILER_READ_ONLY_NESTED_WRITE`. |
+| In the contract | Fewer directives on those relations; a member left with none is removed. A client-side change moves the ClientContract hash: regenerate the frontend client. | As granted. |
+| A call that sends one | `A2004` with `V1006` at the directive, or `Relation "lines" is not writable during update.` at the relation when the member went. | Not reached: the server does not start. |
+
+Under `exposed: true` the dropping repeats until nothing changes. Dropping a directive can leave another Resource with nothing writable on create or update (its only way was a nested write that went), and the nested writes into it go too, so the layer still starts.
 
 ```ts
 client: {
@@ -373,17 +391,10 @@ client: {
 
 ```text
 contract-compilation  COMPILER_READ_ONLY_NESTED_WRITE  client.exemptions.resources.Post.fields.category
-  the client layer lets relation "Post.category" write rows of resource "Category" ($create, $connectOrCreate), but "Category" is read-only in that layer: it has no create operation and no field writable on create; take $create and $connectOrCreate off "Post.category" (keep only the directives it may use, such as $connect), or give "Category" a create operation or a field writable on create
+  the client layer lets relation "Post.category" write rows of resource "Category" ($create and $connectOrCreate), but "Category" is read-only in that layer: it has no create operation and no field writable on create; take $create and $connectOrCreate off "Post.category" (keep only the directives it may use, such as $connect), or give "Category" a create operation or a field writable on create
 ```
 
-Let the relation only link to existing rows, `category: { select: true, create: ["$connect"] }`, or give the target a create operation or a field writable on create in that layer. The same rule holds on the update side: a relation that offers `$update` or `$upsert` into a Resource the layer gives no `update` or `upsert` operation and no field writable on update is refused with the same code. Linking (`$connect`, `$disconnect`, `$set`) stays allowed. The layer that makes the Resource read-only reports it, once, and such a create is not also reported as a hidden required field.
-
-### No nested `$delete` without a delete operation
-
-A relation's `$delete` deletes rows of the Resource it points at, so a layer that gives that Resource no `delete` operation does not offer it through a relation either. What happens depends on the style of the layer that leaves the delete out. Each layer goes by its own `exposed`, never by its parent's.
-
-- **`exposed: true`.** A relation inherits every directive the layer above offers, so you never chose `$delete` for it. The framework drops `$delete` from each relation into the Resource, and startup succeeds. The contract the layer serves lists one directive fewer on those relations, so a client-side change moves the ClientContract hash: regenerate the frontend client. A call that sends `$delete` there anyway gets `A2004` with `V1006` at the directive. When `$delete` was the relation's only update directive, its update goes with it, and the call gets `V1006` `Relation "posts" is not writable during update.` at the relation. If that leaves a Resource with nothing writable on update, the nested `$update` and `$upsert` into it go the same way, so the layer still starts. A layer below with `exposed: false` that names one of those (`author: { update: ["$update"] }`) is refused at startup with `COMPILER_READ_ONLY_NESTED_WRITE`: the message says the target updates nothing in the layer above. Give the target an update operation or a field writable on update there, or leave the directive out.
-- **`exposed: false`.** A relation carries only what you grant it: `true` on the Resource or the field, the relation's `update`, or `$delete` by name. Granting `$delete` into a Resource with no delete operation, on a relation callers can reach, is refused at startup with the same `COMPILER_READ_ONLY_NESTED_WRITE`.
+Let the relation only link to existing rows, `category: { select: true, create: ["$connect"] }`, or give the target a create operation or a field writable on create in that layer. The same `client` with `exposed: true` and `Category: { operations: ["create", "upsert"], fields: { id: ["create"], name: ["create"], posts: ["create"] } }` starts, and its `Post.category` has no `$create`. A delete grant is refused the same way:
 
 ```ts
 client: {
@@ -405,9 +416,11 @@ contract-compilation  COMPILER_READ_ONLY_NESTED_WRITE  client.exemptions.resourc
   the client layer lets relation "User.posts" delete rows of resource "Post" ($delete), but "Post" has no delete operation in that layer; take $delete off "User.posts" (keep only the directives it may use, such as $connect), or give "Post" a delete operation
 ```
 
-Grant the relation only what links rows, `posts: { select: true, update: ["$connect", "$disconnect", "$set"] }`, or give `Post` a delete operation in that layer.
+The layer that grants the write reports it, once, and such a create is not also reported as a hidden required field.
 
-A layer starts from what the layer above it serves. Under a root with `exposed: true` that dropped `$delete`, a client with `exposed: false` that grants `posts: ["select", "update"]` gets the relation's update directives without `$delete`, and starts. Naming `$delete` there is refused with `COMPILER_READ_ONLY_NESTED_WRITE`, not as a widening, since the root left `$delete` out only because it deletes no posts. The same holds further down, for an agent that extends that client. If `$delete` was the relation's only update directive, there is no update left to grant, and `posts: ["select", "update"]` is refused the same way: grant `posts: ["select"]`. A `$delete` the root hid on purpose (`posts: { update: ["$delete"] }` under `exposed: true`) is a widening, as for any other hidden token.
+### Layers above and below
+
+A layer starts from what the layer above it serves. Under a root with `exposed: true` that dropped `$delete` from `User.posts`, a client with `exposed: false` that grants `posts: ["select", "update"]`, and lets callers create and update posts, gets the relation's update directives without `$delete`, and starts. Naming a dropped directive there (`posts: { update: ["$delete"] }`, or a `$create` or `$update` the root dropped) is refused with `COMPILER_READ_ONLY_NESTED_WRITE`, not as a widening: the message says the target deletes, creates or updates nothing in the layer above. Give the target the operation or a field writable there, or leave the directive out. The same holds further down, for an agent that extends that client. If the relation's member lost everything, there is nothing left to grant, and `posts: ["select", "update"]` is refused the same way: grant `posts: ["select"]`. A directive the root hid on purpose (`posts: { update: ["$delete"] }` under `exposed: true`) is a widening, as for any other hidden token.
 
 ## Every name must exist
 
