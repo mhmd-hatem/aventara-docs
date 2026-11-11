@@ -260,8 +260,31 @@ const [posts, published] = await Promise.all([
 - Each call runs exactly as alone: validation, exposure, policy, limits and pipelines are those of its own route, and so is its answer.
 - Not atomic and in no order: the calls run concurrently, and a write that ran stays written whatever the others answered. Writes that must hold together, or a call that needs another's result, belong in a transaction (`avClient.transaction([avClient.tx.Post.create.one(…), …])`, `POST /_transactions`).
 - Reads and writes mix. A group larger than `limits.maxAll` (10) or `limits.maxRequestBytes` is split by the client.
-- Always sent alone: a call with `headers` or `requestId` in its options, a call or client with `grouping: false`, a transaction, and a cached read (a `GET`).
+- Always sent alone: a call with `headers` or `requestId` in its options, a call or client with `grouping: false`, a transaction, and a cached read (a `GET`). Headers every call needs (a token) go in `onCall`, set once, `new AvClient({ onCall })`, so the calls still group (see "Hooks" below); calls whose `onCall` additions differ never share a request.
 - A server older than rc.11 answers `/_all` with `A2002`; the client resends the calls one by one and stops grouping.
+
+## Hooks: `onCall`, `onSuccess`, `onError`
+
+Three `AvClient` options see every call: operations, cached reads, a transaction (once), `$access` calls. `onCall` adds to the request; `onSuccess` and `onError` only watch.
+
+```ts
+import { AvAuthError, AvClient } from "./api/AvClient";
+
+export const authed = new AvClient({
+  onCall: () => ({ headers: { Authorization: `Bearer ${localStorage.getItem("token") ?? ""}` }, credentials: "include" }),
+  onError: (_call, error) => {
+    if (error instanceof AvAuthError) location.assign("/login");
+  },
+});
+```
+
+- `onCall(call)` runs when the call is made, before grouping, and may return or resolve to `{ headers, credentials, cache, keepalive, priority, referrerPolicy }`. Calls with equal additions share one `/_all`. An async one holds back only its own call: it is sent when its `onCall` settles, with the calls queued then, so calls group when their `onCall` settles together with equal additions. An `onCall` doing its own I/O per call (reading the token again each time) sends each call alone; to keep grouping, await one shared in-flight promise, cleared once it settles: `let inFlight; const token = () => (inFlight ??= readToken().finally(() => { inFlight = undefined; }));`. A call made inside a hook never waits on the call that ran it.
+- Order: `onCall`'s headers, then the call's own `headers` option (wins), then the client's own (always win). `Content-Type`, `Accept` and the `Aventara-*` headers (canonical or lower-case), and `method`, `body`, `signal`, `redirect`, `mode`, are type errors in `onCall`; at runtime those headers in any case, invalid names and values with a line break or a character outside Latin-1 are dropped with a warning (`AVENTARA_CLIENT_HOOK_HEADER_DROPPED`), once per header name for each `onCall`.
+- `call` is `{ kind, label, resource, family, variant, requestId? }` for an operation (`kind: "transaction"` or `"access"` with `verb` otherwise); never the arguments.
+- `onSuccess(call, result)` and `onError(call, error)` are sinks returning `void` (any function fits, async too): side effects only, what they return is ignored and never awaited, so they never delay the caller, and they cannot swallow, change or retry a call. `onError` sees refusals, validation errors, transport failures and aborts, grouped or alone.
+- A hook that throws is reported once as a warning (`AVENTARA_CLIENT_HOOK_THREW`) and skipped; the call goes on.
+- `fetch` only swaps the transport (tests, another runtime's fetch): it must return the `Response` unread. Do not put headers in it.
+- Next.js: put the hooks in `src/aventara/client-options.ts` (or `.js`; no other extension) as `export default { onCall, onSuccess, onError } satisfies Pick<AvClientOptions, "onCall" | "onSuccess" | "onError">` (type from `@/aventara/client`), then run `aventara:prepare` (it runs `aventara-build --client`). Both `@/aventara/client` and `@/aventara/universal` use them, reading the default export when a hook runs, so the file may value-import from `@/aventara/client` (an error class); `fetch`, `grouping` and `entrypoint` there are type errors. The file is bundled into the browser: no secrets or server-only imports; branch on `typeof window`. On the server, onCall's headers reach the in-process request but not `ctx.$state`, which comes from the request being served. `@/aventara/server` is not an AvClient and takes no hooks.
 
 ## Calls run when you make them
 
