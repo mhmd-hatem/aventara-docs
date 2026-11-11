@@ -64,7 +64,9 @@ publishedAt: { pipelines: { validators: [AvZ.gte(new Date("2020-01-01T00:00:00.0
 views:       { pipelines: { validators: [AvZ.nonnegative()] } },
 ```
 
-There are no refinements, no custom check functions and no transforms (`trim`, `toLowerCase`). Rules a check cannot state, such as a database lookup or a rule across two fields, belong in a [pipe or a guard](/docs/pipelines). To normalize a value (trim it, lower-case it), use a [field pipe](/docs/pipelines#field-pipes-and-field-write-guards).
+There are no refinements, no custom check functions and no transforms (`trim`, `toLowerCase`). A rule across two fields of the call belongs in a [pipe or a guard](/docs/pipelines). To normalize a value (trim it, lower-case it), use a [field pipe](/docs/pipelines#field-pipes-and-field-write-guards).
+
+A rule that reads the database (an order must still be open, a shift may close once) needs more care. Guards and pipes run before the transaction opens, and their `ctx` reads do not join it, so between the guard's check and the write another request can change the row (check-then-act). A rule that must still hold when the write commits goes in a `hooks.before` stage of the operation with `forceTransaction: true`, or in the Resource's [transaction stages](/docs/pipelines#resource-transaction-stages): both run inside the transaction, and a throw there rolls it back. A guard may check the same rule first, for a quick refusal, but never as the only check. See [Check, then act](/docs/pipelines#check-then-act).
 
 ### List fields
 

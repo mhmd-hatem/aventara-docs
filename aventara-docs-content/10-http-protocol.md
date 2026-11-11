@@ -117,7 +117,7 @@ The full tables with typical causes and fixes are on [Error codes](/docs/error-c
 | `A3004` | PIPE_OUTPUT_INVALID | 500 | A server pipe returned arguments the server's own contract refuses. Always the generic message `A server pipeline produced invalid arguments.` |
 | `A4000` | UNAUTHENTICATED | 401 | Authentication required or failed. |
 | `A4001` | FORBIDDEN | 403 | Not permitted (including a guard that returned `false`). |
-| `A4002` | POLICY_DENIED | 403 | The configuration's [policy](/docs/policies) refused the request, or a guard denied it with a policy reason. |
+| `A4002` | POLICY_DENIED | 403 | The configuration's [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine) refused the request, or a guard denied it with a policy reason. |
 
 Raw database errors, SQL, connection strings and stack traces are never put in `cause`.
 

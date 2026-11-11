@@ -39,12 +39,25 @@ aventara: committed the scaffold: "Initial Aventara Scaffold".
 
 The run then prints its closing line and, last of all, the next steps ([What it prints next](#what-it-prints-next)), so they are what is on screen when it ends.
 
-It is skipped, with one line saying why and what to do, when `git` is not installed, when git has no `user.name` and `user.email`, when the new project is inside a git repository already, or with `--skip-git` (passed to `nest new`, which then creates no repository). `.env` is not committed: the scaffold's `.gitignore` lists it. The messages:
+It is skipped, with one line saying why and what to do, when `git` is not installed, when git has no `user.name` and `user.email`, when the new project is inside a git repository already, or with `--skip-git` (passed to `nest new`, which then creates no repository). Inside a git repository, `nest new` is given `--skip-git` without you passing it (create-next-app `--disable-git`), so the project gets no `.git` of its own. `.env` is not committed: the scaffold's `.gitignore` lists it. The messages:
 
 ```text
 aventara: no initial commit: /path/to/repo is inside a git repository already; commit the project there.
 aventara: no initial commit: git has no user.name and user.email set; set them, then commit the project yourself.
 ```
+
+Every `new` and `init` run prints the version it pins first: `Aventara 1.0.0-rc.12`. When the registry's tag for that channel (`rc` or `latest`) names a newer release, the line says so and gives a command that takes it; a release-age delay is the usual cause ([Installation](/docs/installation)). The lookup happens once the run passes its checks, reads the registry's tags only, gives up after a moment, and prints nothing more when offline. The frontend's next step names `@aventara/client` at the same exact version.
+
+#### Inside a pnpm workspace
+
+Run in a folder below a `pnpm-workspace.yaml` (a monorepo's `apps/`), with pnpm, the project is one of that workspace's members:
+
+- The scaffold's `allowBuilds` (the packages whose install scripts must run) go into the root's `pnpm-workspace.yaml`, after you confirm it like any change to existing content (`--yes` confirms it). The project gets no `pnpm-workspace.yaml` of its own.
+- The install runs at the root, into the root's `pnpm-lock.yaml`. The project gets no lockfile of its own.
+- When the root's `packages` globs do not match the new folder, a warning says to add it there; until then the root's install does not install it.
+- When the root has its own Biome, ESLint or Prettier configuration, a one-line hint points at `--skip-lint`.
+
+`aventara init` in a workspace member does the same with `allowBuilds` and the install (`--skip-lint` and its hint are `new`'s only). A folder with its own `pnpm-workspace.yaml` is its own workspace root: the one above it is not touched. When the root's `packages` do not match the folder, the root's file is left alone too. Entries already in the root's `allowBuilds` keep their value, an explicit `false` included. The CLI edits the file only when it is plain YAML it reads exactly: one document, `allowBuilds` once, as an unquoted top-level key whose block holds only `name: true` and `name: false` lines. Anything else (a quoted or `?` key, `{ … }` or `- ` style, anchors, aliases, merge keys or tags in `allowBuilds`, a `...` or second `---`) leaves the file as it is, and the lines to add are printed.
 
 ### aventara new --host next
 
@@ -75,7 +88,8 @@ Writes or refreshes the agent skill (`.claude/skills/aventara/`) and the Aventar
 | `--prisma-service <path#Export>` | `init` | Your Prisma service (`src/prisma.service.ts#PrismaService`), when more than one or none is found. | the one found; none found: writes `src/prisma.service.ts` |
 | `--prisma-module <path#Export>` | `init` | The Nest module that provides and exports it. | the one found |
 | `--skip-install` | both | Write the files and print the install command instead of running it. | |
-| `--skip-git` | `new` | Create no repository and make no initial commit (passed to `nest new`). | |
+| `--skip-git` | `new` | Create no repository and make no initial commit (passed to `nest new`). Implied inside a git repository. | |
+| `--skip-lint` | `new` | Leave out `nest new`'s linter and formatter: `.oxlintrc.json`, `.prettierrc`, the `lint` and `format` scripts and the `oxlint`, `oxlint-tsgolint` and `prettier` devDependencies. Refused with `--host next` (create-next-app asks about its own linter). | |
 | `-y`, `--yes` | both | Accept every unanswered default and replace existing content that differs. | |
 | `--verbose` | both | Show the output of `nest new` and of the install as it runs, instead of only when one fails. | |
 | `-- <args>` | `new --host next` | Passed to create-next-app as they are, after its own flags. | |
@@ -134,7 +148,7 @@ Next:
   1. Enter the project: cd blog
   2. Create the database tables: npx prisma db push
   3. Start the server: npm run start:dev
-  4. In your frontend: npx @aventara/client@rc init
+  4. In your frontend: npx @aventara/client@<version> init
   5. Call the API with curl: see "Calling the API over HTTP" in .claude/skills/aventara/SKILL.md
 ```
 
@@ -148,7 +162,7 @@ Next:
   4. Call the API with curl: see "Calling the API over HTTP" in .claude/skills/aventara/SKILL.md
 ```
 
-With `--skip-install` there is one more step, `Install, which also runs aventara:prepare: npm install`, after entering the project. Under pnpm the commands read `pnpm exec prisma db push` and `pnpm dlx @aventara/client@rc init`.
+With `--skip-install` there is one more step, `Install, which also runs aventara:prepare: npm install`, after entering the project. Under pnpm the commands read `pnpm exec prisma db push` and `pnpm dlx @aventara/client@<version> init`, where `<version>` is the CLI's own (the frontend gets the same release).
 
 The runner (`npx` or `pnpm dlx`) matches your package manager. The server answers `GET http://localhost:3000/api/_contract` once it runs. With PostgreSQL, set `DATABASE_URL` in `.env` first. `init` writes Prisma's placeholder and never asks for a secret.
 
@@ -162,7 +176,8 @@ avclient generate [--yes]   Read framework.client.ts (or .mts, .cts, .js, .mjs, 
                             <entrypoint>/_contract, and write AvClient.ts and generated/ into
                             generateAt, its imports spelled as the project's tsconfig.json says.
 avclient --help             Print usage and exit 0.
-avclient <command> --help   Print that command's usage (init, generate) and exit 0.
+avclient skill [--force]    Write or refresh the client skill (.claude/skills/aventara-client/).
+avclient <command> --help   Print that command's usage (init, generate, skill) and exit 0.
 avclient --version, -v      Print this generator's version and exit 0.
 ```
 
@@ -180,7 +195,7 @@ avclient --version, -v      Print this generator's version and exit 0.
 | `-y`, `--yes` | Accept every default and replace differing content. | |
 | `--verbose` | Show the install's output as it runs. | |
 
-It first checks that the project has a `tsconfig.json`: a plain JavaScript project is refused before anything is written ([Troubleshooting](/docs/troubleshooting#avclient-init-refuses-no-tsconfigjson)). Then it writes `framework.client.ts`, the variable into `.env` (only with an env var), the script, an exact devDependency on `@aventara/client`, and `.env` in the frontend's `.gitignore`, installs, then generates, type-checking the output with the project's own TypeScript. A `framework.client.mts` from `0.1.0-pilot.1` is kept and keeps working. The config may be `.ts`, `.mts`, `.cts`, `.js`, `.mjs` or `.cjs`, in ESM or CommonJS syntax. If the server is not answering, the files are left in place and the message tells you to run `avclient generate` later.
+It first checks that the project has a `tsconfig.json`: a plain JavaScript project is refused before anything is written ([Troubleshooting](/docs/troubleshooting#avclient-init-refuses-no-tsconfigjson)). Then it writes `framework.client.ts`, the variable into `.env` (only with an env var), the script, an exact devDependency on `@aventara/client`, `.env` in the frontend's `.gitignore` and the client skill (`.claude/skills/aventara-client/`, [avclient skill](#avclient-skill)), installs, then generates, type-checking the output with the project's own TypeScript. A `framework.client.mts` from `0.1.0-pilot.1` is kept and keeps working. The config may be `.ts`, `.mts`, `.cts`, `.js`, `.mjs` or `.cjs`, in ESM or CommonJS syntax. If the server is not answering, the files are left in place and the message tells you to run `avclient generate` later.
 
 ### Environment
 
@@ -202,6 +217,10 @@ avclient: generated 39 files into /path/to/project/src/api (checked: types).
 ```
 
 When nothing changed, `avclient generate` ends with `avclient: up to date: … already holds this deployment's client; nothing was written.`
+
+### avclient skill
+
+Writes or refreshes the frontend's agent skill, `.claude/skills/aventara-client/SKILL.md`: how the generated client calls the API, for the installed `@aventara/client`. `avclient init` writes it too. Run it after upgrading `@aventara/client`. A file you changed is kept with a warning unless you pass `--force`. The skill is development guidance: the generated client still needs no `@aventara/client` at run time.
 
 ### avclient generate
 

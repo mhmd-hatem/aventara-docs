@@ -22,6 +22,7 @@ The object has a root, two overlays, `application` (your server-side code) and `
 | `adapter` | yes | no | no | no | Required by `createFramework`. |
 | `prebuilt` | yes | no | no | no | Root only; optional. Contracts compiled ahead of time. |
 | `policy` | yes | no | no | no | Root only; optional. In an overlay it is `CONFIG_UNKNOWN_PROPERTY`. |
+| `access` | yes | no | no | no | Root only; optional. Not together with `policy`, nor with the host's `state` option. |
 | `diagnostics` | yes | no | no | no | Root only. |
 | `misuse` | yes | no | no | no | Root only; optional. |
 | `extends` | no | no | no | yes | Agent only: `"client"` (default), `"application"` or `"root"`. |
@@ -208,7 +209,7 @@ One event per refused value, never the value itself. The operation members are p
 | Default | none: no policy, and nothing below runs |
 | Layer | root only |
 
-The policy engine that client and agent requests are checked against, and the function that derives a request's principal from its `ctx.$state`. Core never imports an engine: any object with the right shape satisfies `AvPolicyEngine`. The guide is [Policies](/docs/policies).
+The policy engine that client and agent requests are checked against, and the function that derives a request's principal from its `ctx.$state`. Core never imports an engine: any object with the right shape satisfies `AvPolicyEngine`. The guide is [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) in the `@aventara/core` README.
 
 ```ts
 const framework = await createFramework({
@@ -235,6 +236,30 @@ const framework = await createFramework({
 `governed`, `paths` and `afterChecks` are checked against the Core Contract when the framework is constructed. A name or path the Contract does not have is `CONFIG_INVALID_VALUE`, naming the Resource or the rule. A missing `policy.engine` or `policy.principal` is `CONFIG_REQUIRED`. Only `governed` reaches a Contract (a `governed: true` mark on each such field and relation), so the Contract hash changes only when that set changes. Policies never reach the ClientContract.
 
 A refusal answers `403` `A4002` ([Error codes](/docs/error-codes#a4002)).
+
+### `access`
+
+| | |
+|---|---|
+| Type | `AvAccessProvider`: `{ policy: AvPolicyEngine; state(input: { headers, request? }): AvState & { me }; client? }` |
+| Default | none |
+| Layer | root only |
+
+The policy engine and the request state from one object. Aventara Access provides one, and you can write your own. `policy` is the engine, as `policy.engine` takes it. `state` is called once per request by the host and seeds `ctx.$state`; its `me` is the principal the engine is asked about (`null` for an anonymous caller). See [An access provider](/docs/authentication-and-guards#an-access-provider-sign-in-and-policy-from-one-object).
+
+```text
+createFramework({ ...aventaraConfig, adapter, access: memberAccess })
+```
+
+It replaces two other keys, and is refused beside either:
+
+| Beside `access` | What happens |
+|---|---|
+| `policy` | `CONFIG_INVALID_VALUE` at `policy`: "policy cannot be configured with access: access.policy is the policy engine, and ctx.$state.me the principal; remove policy" |
+| `AventaraModule`'s `state` option (NestJS) | a type error when the configuration's type shows `access`; at startup, "AventaraModule: the Framework is built with `access`, whose `state` seeds each request's state; remove the module's `state` option." |
+| `Aventara()`'s `state` (Next.js) | a type error; when `Aventara()` is called, "Aventara: the options carry both `access` and `state`; `access` seeds each request's state, so remove `state`." |
+
+`access` that is not `{ policy, state }` is `CONFIG_INVALID_VALUE` (`access.state must be a function`, `access.policy is required`). Server code that calls the framework directly passes the state itself: `{ state: await access.state({ headers }) }`. The `@aventara/core` README has a hand-written provider ([An access provider](https://www.npmjs.com/package/@aventara/core#an-access-provider)).
 
 ### `application` and `client`
 
@@ -353,7 +378,7 @@ See [Transactions](/docs/transactions).
 | `maxRequestBytes` | `1048576` | Decoded size of a request body. | `413 A2010` (HTTP only) |
 | `maxNestingDepth` | `12` | Depth of nested projections, relation filters, `NOT`/`not` chains and writes. | `A2009` / `V1013` |
 | `maxListLimit` | `250` | The `limit` of a list or of a nested relation. | `A2009` / `V1014` |
-| `maxTransactionOperations` | `20` | Steps in one transaction plan. | `A2009` / `V1014` |
+| `maxTransactionOperations` | `20` | Steps in one transaction plan, reads and `$sql` steps included. `POST /_all` is bound by `maxAll`, not by this. | `A2009` / `V1014` |
 | `maxBooleanNodes` | `50` | Nodes in a `where` boolean tree (`AND` / `OR` / `NOT`). | `A2009` / `V1015` |
 | `maxJsonDepth` | `64` | Levels of nesting inside a Json field's value. | `A2009` / `V1021` |
 | `maxAll` | `10` | Operations in one `POST /_all` ([Operation Sets](/docs/operation-sets)). In-process `all` is not bound by it. | `A2009` / `V1014` at `["operations"]` (HTTP only) |
@@ -392,6 +417,7 @@ Everything about one Resource. Keyed by your model names.
 
 ```ts
 type AvConfigResource = {
+  managedElsewhere?: boolean;                     // root only: true when another service owns and migrates the table
   pipelines?: AvPipeline;                         // every operation of the Resource
   operations?: {
     [family]?: {
@@ -422,10 +448,24 @@ type AvConfigResource = {
 | `fields.<f>.pipelines.validators` | Additive | `AvZ` checks. See [Field validators](/docs/field-validators). |
 | `fields.<f>.pipelines.compute` | Chained: the root's stage, then the overlay's with the root's result as `value` | See [Computed fields](/docs/computed-fields). |
 | `fields.<f>.definition` | Root only | In an overlay: `CONFIG_FORBIDDEN_IN_OVERLAY`. |
+| `managedElsewhere` | Root only | `true` when another service owns and migrates the table: Aventara reads it and joins through it, and no standard operation writes it. In an overlay: `CONFIG_FORBIDDEN_IN_OVERLAY`. See [A model managed elsewhere](#a-model-managed-elsewhere). |
 
 A relation field takes `guards` only: `pipes` or `compute` on one is `COMPILER_RELATION_FIELD_CONFIG_UNSUPPORTED`, `validators` `COMPILER_INVALID_VALIDATOR`. Every name must exist: an unknown Resource (`COMPILER_UNKNOWN_RESOURCE`), family or variant (`COMPILER_UNAVAILABLE_OPERATION`) or field (`COMPILER_UNKNOWN_FIELD`) stops startup. Configuring a level never exposes it.
 
 `defineResource<Model>()(name, rootBlock, { application?, client? })` from `@aventara/core` returns `{ root, application?, client? }`, each `{ [name]: block }`, typed exactly as `resources.<name>` in place at that layer, to spread into each layer's `resources` (`resources: { ...post.root }`, `client: { resources: { ...post.client } }`); a layer given no block is left out ([Configuration](/docs/configuration#one-resource-per-file-defineresource)).
+
+#### A model managed elsewhere
+
+When another service owns a table and migrates it (Better Auth's `user`, say), mark its model `managedElsewhere: true` at the root. Aventara reads it and joins through it, and no standard operation writes it:
+
+- it has no `create`, `update`, `delete` or `upsert`, and its fields take no write;
+- a relation into it keeps only `$connect`/`$disconnect`, and only where your model holds the key;
+- the `client` and `agent` layers leave it out, with every relation into it; your server code reads and joins it;
+- a stage on one of its write families is refused at startup (`COMPILER_UNAVAILABLE_OPERATION`), and so is a `client.resources` or `agent.resources` entry for it (`COMPILER_UNKNOWN_RESOURCE`);
+- a delete whose `onDelete` would cascade into it or null its reference is refused at startup (`CONFIG_INVALID_VALUE`): hide that delete at the root or make the reference `onDelete: Restrict`;
+- a create only the hidden relation could satisfy is refused (`COMPILER_HIDDEN_REQUIRED_FIELD`): expose the reference field.
+
+A value other than a boolean is `CONFIG_INVALID_TYPE`. `ctx.$sql`, or a stage calling Prisma, can still write the table. Keep Prisma from migrating it too: list it in `prisma.config.ts` as an external table (Prisma 7.10: `experimental: { externalTables: true }`, `tables: { external: ["auth.user"] }`), and give the model its `@@schema("auth")` when the owner keeps it in another PostgreSQL schema.
 
 ### Fields
 
@@ -566,8 +606,8 @@ From `@aventara/prisma7-adapter`. It is `async` and returns the `adapter`. Sprea
 | `client` | your `PrismaClient` | required | A client you have already constructed, with a driver adapter. The adapter never builds one or reads the environment. |
 | `discovery` | `AvPrismaDiscoveryArtifact` | required | The generated artifact (`src/generated/aventara/discovery.artifact.ts`), produced by `aventara:prepare`. |
 | `provider` | `"sqlite" \| "postgresql"` | required | Declared, never sniffed. |
-| `driver` | `"@prisma/adapter-better-sqlite3" \| "@prisma/adapter-pg" \| "@prisma/adapter-d1"` | required | Declared, never sniffed. The driver decides whether transactions are offered; `@prisma/adapter-d1` offers none. This release is tested on SQLite (`better-sqlite3`), PostgreSQL (`pg`) and D1 (`@prisma/adapter-d1`, through Miniflare's local D1). On D1 there are no transactions and no `update.first`/`delete.first`, and a nested write is not atomic (Prisma's D1 adapter runs it as separate statements). A `BigInt` must lie within ±(2^53 − 1) on D1; beyond it is `422` `A2004` / `V1004` at the value. |
-| `transactionOptions` | `{ maxWait?: number; timeout?: number; isolationLevel?: ... }` | Prisma's defaults (`maxWait` 2000 ms, `timeout` 5000 ms) | Owned by the adapter, not by Aventara's configuration. |
+| `driver` | `"@prisma/adapter-better-sqlite3" \| "@prisma/adapter-pg" \| "@prisma/adapter-d1"` | required | Declared, never sniffed, and checked: a Prisma client built with another driver adapter refuses to start. The driver decides whether transactions are offered; `@prisma/adapter-d1` offers none. This release is tested on SQLite (`better-sqlite3`), PostgreSQL (`pg`) and D1 (`@prisma/adapter-d1`, through Miniflare's local D1). On D1 there are no transactions and no `update.first`/`delete.first`, and a nested write is not atomic (Prisma's D1 adapter runs it as separate statements). A `BigInt` must lie within ±(2^53 − 1) on D1; beyond it is `422` `A2004` / `V1004` at the value. |
+| `transactionOptions` | `{ maxWait?: number; timeout?: number; isolationLevel?: ... }` | Prisma's defaults (`maxWait` 2000 ms, `timeout` 5000 ms) | Owned by the adapter, not by Aventara's configuration. With SQLite through better-sqlite3 they also apply to each plain operation, which runs in a transaction of its own ([SQLite: one connection](/docs/transactions#sqlite-one-connection)). |
 
 `isolationLevel` values: `"ReadUncommitted"`, `"ReadCommitted"`, `"RepeatableRead"`, `"Snapshot"`, `"Serializable"`. SQLite supports `Serializable` only; PostgreSQL supports all of them except `Snapshot`.
 

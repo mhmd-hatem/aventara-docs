@@ -252,7 +252,7 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 ### Authentication and authorization (A4xxx)
 
-Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework itself never authenticates. `A4002` is also what a configured policy answers when it refuses a request: see [Policies](/docs/policies). `A4000` and `A4001` are also what a request answers when its `state` rejects with an authentication library's refusal, an error whose `status` or `statusCode` is 401 or 403: see [Policies](/docs/policies#when-state-refuses-a-credential).
+Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework itself never authenticates. `A4002` is also what a configured policy answers when it refuses a request: see [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) (the `@aventara/core` README). `A4000` and `A4001` are also what a request answers when its `state` rejects with an authentication library's refusal, an error whose `status` or `statusCode` is 401 or 403: see [Policies](/docs/policies#when-state-refuses-a-credential).
 
 #### `A4000`
 
@@ -769,4 +769,4 @@ More on each: [Configuration reference](/docs/config-reference#startup-diagnosti
 - [HTTP protocol](/docs/http-protocol): the envelope and the curl walkthrough.
 - [Troubleshooting](/docs/troubleshooting): the errors people hit first.
 - [Frontend client](/docs/client-errors) and [Client API reference](/docs/client-api-reference).
-- Guides: [Authentication and guards](/docs/authentication-and-guards), [Policies](/docs/policies), [Limits and safety](/docs/limits-and-safety), [Request IDs and diagnostics](/docs/request-ids-and-diagnostics)
+- Guides: [Authentication and guards](/docs/authentication-and-guards), [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) (the `@aventara/core` README), [Limits and safety](/docs/limits-and-safety), [Request IDs and diagnostics](/docs/request-ids-and-diagnostics)
