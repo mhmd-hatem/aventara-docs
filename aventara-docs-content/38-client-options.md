@@ -137,7 +137,7 @@ export const appClient = new AvClient({
 const posts = await appClient.Post.find.many({}, { signal: AbortSignal.timeout(5000) });
 ```
 
-The wrapper reads the token on every request, so a token stored after sign-in is sent from the next call on. `entrypoint` is only needed when the client calls a deployment other than the one it was generated from.
+The wrapper adds to what the client sends and leaves the rest alone: it keeps the client's own headers (its identity headers among them; never overwrite those), passes method, body and signal through, returns the `Response` without reading its body (read a `response.clone()` if you must), and lets a failed `fetch` throw, which the client turns into an `AvTransportError` or the abort reason. It reads the token on every request, so a token stored after sign-in is sent from the next call on. `entrypoint` is only needed when the client calls a deployment other than the one it was generated from.
 
 The wrapper sees the status of the whole request. A `POST /_all` is answered `200` even when one of its calls is refused; that call rejects with `AvAuthError` (`A4000`) on its own. To react to every refused call, also catch `AvAuthError` where you make the call.
 
