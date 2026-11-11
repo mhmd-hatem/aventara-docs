@@ -117,12 +117,12 @@ A complete Express host is in [HTTP protocol](/docs/http-protocol#custom-hosts-w
 ## AvProtocol.fingerprint
 
 ```ts
-fingerprint(node: {
+declare function fingerprint(node: {
   readonly resource: string;
   readonly family: string;
   readonly variant: string;
   readonly args: unknown;
-}): Promise<`fp1:${string}`>
+}): Promise<`fp1:${string}`>;
 ```
 
 A transaction plan step's `fingerprint`: the function the server checks each step of `POST /_transactions` with. Pass the step as it is sent, `args` in wire forms and any `$ref` with its own `fingerprint`. The rule (RFC 8785 canonical JSON, SHA-256, the first 16 bytes in base64url, `fp1:`) is written out in [HTTP protocol](/docs/http-protocol#transactions). It rejects when `args` is not JSON: a lone surrogate, a non-finite number, a `bigint`, or an object that is not a plain object or array.
