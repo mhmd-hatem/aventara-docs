@@ -169,6 +169,14 @@ A `CONFIG_...` or `COMPILER_...` problem fails the build with the same diagnosti
 
 The framework was created with `prebuilt`, and the file no longer matches the configuration, the database model or the installed `@aventara/core`. Nothing is wrong with the answers: the Contracts are compiled at startup, as if there were no file. Run `npm run aventara:prepare` and redeploy. If the message says `the configuration or model outside the Resources changed`, a root key (`policy`, `limits`, `api`, ...) differs between what `aventara-build` ran and what `createFramework` received. Keep such keys in `aventaraConfig`, not only where the framework is created. A value read from `process.env` in the configuration is read when the build runs, so a different value at runtime has the same effect. [Deploying](/docs/deploying#build-time-contracts) has the rest.
 
+## Warning: a call joined an open SQLite transaction
+
+```text
+(node:1234) [AVENTARA_PRISMA_SQLITE_TRANSACTION_JOINED] AventaraWarning: Author create.many ran inside an open SQLite transaction (better-sqlite3) instead of waiting for it: ...
+```
+
+With SQLite through better-sqlite3, a call made from inside a transaction's async context joins that transaction and commits or rolls back with it. If a stage calls the Framework instead of `ctx` on purpose, the warning is expected. If not, a helper shared across requests (a batcher, a queue, a timer first scheduled inside a transaction) is running another request's call inside this one: bind its callback with `AsyncResource.bind` where the helper is created, or schedule it from outside a transaction ([A call from inside a transaction joins it](/docs/transactions#a-call-from-inside-a-transaction-joins-it)). The process warns once per Resource and operation (and once for `ctx.$sql`).
+
 ## `A4002` where nothing should be refused
 
 A [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine) is configured and refused the request. `cause.message` says what: the operation, a field, a row, or a change that would leave the caller's read scope. The usual surprises:

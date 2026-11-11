@@ -212,9 +212,9 @@ It answers `201` with `{"data":{"email":"ada@example.com","id":"cmhfa2k1x0000l8v
 
 ## Before you finish
 
-- `npx tsc --noEmit` passes with no casts added.
+- `npm run typecheck` passes with no casts added (the scaffold's script: `tsc --noEmit`, after `next typegen` in Next.js).
 - The server starts: an `AvConstructionError` lists each problem as `{ code, path, message, docs }`; fix the key at `path`.
-- After a schema or compute change you ran `npm run aventara:prepare`, and the frontend regenerated its client.
+- After a schema or compute change you ran `npm run aventara:prepare`, and the frontend regenerated its client. `Type 'AvModel' does not satisfy the constraint 'AvAdapterModel'` in every Resource file means prepare failed: run it and fix the first error it prints.
 - An answer of `500 A3000` hides the real error: it went to the configuration's `diagnostics` function (root key, `(d) => …`). Read it there.
 - Tests: `reference/recipes.md`, Testing.
 
