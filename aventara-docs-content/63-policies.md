@@ -90,7 +90,7 @@ A guard can still read `ctx.$state.user`, and verifying the token stays your mid
 | Member | What it is |
 |---|---|
 | `policy` | The engine, as `policy.engine` takes it. |
-| `state({ headers, request })` | Seeds each request's `ctx.$state`. Its `me` is the principal the engine is asked about, `null` for an anonymous caller. It may answer with a promise. A throw is answered like any failure of your code: a thrown `AvError` as its own code, anything else as `500` `A3000`. |
+| `state({ headers, request })` | Seeds each request's `ctx.$state`. Its `me` is the principal the engine is asked about, `null` for an anonymous caller. It may answer with a promise. A thrown `AvError` answers as its own code. A rejection that carries `status` or `statusCode` 401 or 403 answers `401` `A4000` or `403` `A4001` ([below](#when-state-refuses-a-credential)). Anything else answers `500` `A3000`. |
 
 A third member, `client`, is optional. Aventara Access fills it, and its own documentation covers it. A provider written by hand leaves it out.
 
@@ -149,6 +149,14 @@ Rules:
 - A provider whose `policy` is not an engine, or whose `state` is not a function, is refused at startup, member by member. The engine's `governed`, `paths`, `afterChecks` and `unheld` are checked as under `policy`, and reported under `access.policy`.
 - A field the engine governs is left out of the default projection's type, as with `policy`.
 - Keep `access` in the configuration if you use [build-time Contracts](/docs/deploying#build-time-contracts), as with `policy`: the prebuilt file records the engine's governed fields.
+
+### When `state` refuses a credential
+
+An authentication library refuses a bad credential by throwing its own error. Better Auth, for one, throws an `APIError` with `statusCode: 401` for a wrong API key. When `state` passes such an error on, Aventara reads only its shape: an object whose `status` or `statusCode` is the number 401 answers `401` `A4000`, and 403 answers `403` `A4001`.
+
+The answer is Aventara's own envelope, `{"data":null,"code":"A4000","cause":{"message":"Unauthenticated."}}` (`"Forbidden."` for `A4001`). Nothing of the library's error reaches the caller, neither its message nor its code. The refusal is not sent to `diagnostics`, the same as a thrown `AvError("A4000", ...)`. To send your own message, throw `new AvError("A4000", "...")` instead.
+
+A string status (`"401"`), any other number, or an error carrying both 401 and 403 is not read as a refusal and answers `500` `A3000`. The same rule applies to the host's own `state` option and to every route that seeds state: operations, cached reads, `/_transactions`, `/_all`, `/_access/can` and MCP tool calls. A call in process is not a route: when `avClient` runs `state` from a Server Component or a Server Action, the library's error is thrown to your code as it is.
 
 ## What the engine answers
 

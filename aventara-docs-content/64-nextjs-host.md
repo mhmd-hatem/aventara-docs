@@ -216,7 +216,7 @@ It is called with `{ headers, request? }`:
 
 Without `state`, every request starts from `{}` and no headers are read. A call that passes its own `state` in its options uses it as given. With or without `state`, a call runs at request time: see [Server Components and Server Actions](#server-components-and-server-actions).
 
-A `state` that is not a function is refused when `Aventara()` is called. Throw `new AvError("A4001", "...")` from `state` to refuse a request (`403`); any other throw is `500` `A3000`.
+A `state` that is not a function is refused when `Aventara()` is called. Throw `new AvError("A4001", "...")` from `state` to refuse a request (`403`). On a route, a rejection whose `status` or `statusCode` is 401 or 403 (how an authentication library refuses a bad credential) is `401` `A4000` or `403` `A4001`, with Aventara's own message, not the library's ([Policies](/docs/policies#when-state-refuses-a-credential)). Any other throw is `500` `A3000`.
 
 ### An access provider
 
