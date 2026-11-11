@@ -157,7 +157,7 @@ So with SQLite through better-sqlite3, the Prisma adapter runs each operation th
 What this means for you:
 
 - Operations and transactions queue for the connection and run one at a time. A long transaction (a slow hook, an external call inside it) holds up every other operation until it ends.
-- `maxWait` on the adapter (Prisma's default is 2000 ms) is how long an operation waits for the connection. Past it, the operation answers `A3002`.
+- `maxWait` on the adapter is how long an operation waits for the connection; unset, Prisma waits 2000 ms. Past it, the operation answers `A3002`.
 - `timeout` on the adapter (Prisma's default is 5000 ms) limits a single plain operation too, not only a transaction.
 - Calls you make on your Prisma client directly are outside Aventara: Prisma runs them inside whatever transaction is open. Make them through the Framework, or wrap them in `prisma.$transaction`.
 
