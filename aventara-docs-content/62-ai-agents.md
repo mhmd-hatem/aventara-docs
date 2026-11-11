@@ -40,7 +40,7 @@ AGENTS.md
 To refresh them after upgrading, run `aventara skill` in the project, with the CLI at your `@aventara/core` version:
 
 ```bash
-npx @aventara/cli@1.0.0-rc.12 skill
+npx @aventara/cli@1.0.0-rc.13 skill
 ```
 
 It reads the installed `@aventara/core`'s version and `ERRORS.md` (it runs none of your packages), then:
@@ -73,7 +73,7 @@ description: Build and change this project's Aventara API (NestJS or Next.js, Pr
 
 # Aventara
 
-Aventara turns the Prisma schema into a typed API: every model is a Resource with standard operations (`find`, `create`, `update`, `delete`, `upsert`), served at `api` (`/api`) and called from the generated frontend client. You configure the models' operations; you do not wrap them in controllers. Logic that is not one of those operations (a health check, a report, a webhook) goes in your own Nest controller or service, which calls `framework.application` and sits behind Nest guards. Written for `@aventara/core` 1.0.0-rc.12.
+Aventara turns the Prisma schema into a typed API: every model is a Resource with standard operations (`find`, `create`, `update`, `delete`, `upsert`), served at `api` (`/api`) and called from the generated frontend client. You configure the models' operations; you do not wrap them in controllers. Logic that is not one of those operations (a health check, a report, a webhook) goes in your own Nest controller or service, which calls `framework.application` and sits behind Nest guards. Written for `@aventara/core` 1.0.0-rc.13.
 
 There is one way to do each task. Follow these rules; the reference files hold the detail:
 
