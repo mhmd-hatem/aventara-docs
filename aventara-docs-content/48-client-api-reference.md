@@ -89,6 +89,7 @@ Never edit them: output is deterministic (two runs over one contract write the s
 | `avLazy` | function | `avLazy(() => call)`: makes the call on its first `then`, `catch` or `finally`, once. See [Operation Sets](/docs/operation-sets#calls-run-when-you-make-them). |
 | `AvClientOptions` | type | See below. |
 | `AvCallOptions` | type | See below. |
+| `AvCall`, `AvCallAdditions` | types | What the hooks see and what `onCall` returns. See below. |
 | `AvFetch` | type | The platform's `fetch` type. |
 | `AvOperation` | type | A deferred transaction handle. |
 | named Resource types | types | `User`, `UserWhere`, ... See [Named types](#named-types). |
@@ -128,17 +129,46 @@ Values are application values: `bigint`, `Date`, `Uint8Array`, the client's `AvD
 | Option | Type | Default | Meaning |
 |---|---|---|---|
 | `entrypoint` | `string` | the entrypoint the client was generated from | Another deployment that serves exactly the same client contract (tests, SSR). Re-binds nothing: the hash still decides whether it accepts you. |
-| `fetch` | `AvFetch` | the platform's `fetch`, read when a call is made | A custom fetch: authentication, tests, retries. |
+| `fetch` | `AvFetch` | the platform's `fetch`, read when a call is made | The fetch every request is sent with, in place of the platform's (a test's fake, a runtime's own). It must return the `Response` unread: the client reads the body itself, an Operation Set's as it streams. Headers or credentials for every call go in `onCall`. |
 | `grouping` | `boolean` | `true` | `false` sends every call of this client on its own route, never in a `POST /_all`. |
+| `onCall` | `(call: AvCall) => AvCallAdditions \| void \| PromiseLike<AvCallAdditions \| void>` | none | Runs once for every call, when it is made: before it is sent and before the calls made with it are grouped. It may return, or resolve to, additions for that call's request. Calls share an Operation Set only when their additions are equal. The call's own `headers` option wins over a header added here, and avClient's own headers always win. A throw is reported as a warning, and the call goes on with no additions. |
+| `onSuccess` | `(call: AvCall, result: unknown) => void` | none | A sink for a call that resolved, and its result: side effects only. What it returns is ignored, an async one is not awaited, and a throw or a rejection is reported as a warning and ignored. |
+| `onError` | `(call: AvCall, error: unknown) => void` | none | A sink for a call that rejected (a refusal, a validation error, a transport failure, an abort), sent alone or in an Operation Set: side effects only. The caller still gets the same rejection, never delayed. |
 
 If no `fetch` is available a call throws `No fetch is available here; pass one: new AvClient({ fetch })`. Importing the client never fails.
 
 ```ts
 const client = new AvClient({
-  fetch: (input, init) =>
-    fetch(input, { ...init, headers: { ...init?.headers, Authorization: `Bearer ${token}` } }),
+  onCall: () => ({ headers: { Authorization: `Bearer ${token}` } }),
 });
 ```
+
+How an async `onCall` affects grouping, and the shared in-flight token recipe: [Client options: hooks](/docs/client-options#hooks-oncall-onsuccess-onerror).
+
+### AvCall
+
+One call, as the hooks see it: what it is, never its arguments. A union on `kind`; the `"transaction"` member exists only when the contract advertises interactive transactions, the `"access"` member only when the client has the `access` section.
+
+| `kind` | Members |
+|---|---|
+| `"operation"` | `resource` (the Resource key), `family` (`AvOperationFamily`), `variant` (`string`), `label` (`string`, how errors and warnings name it: `"Post" find.many`), `requestId?` (`string`, when it sends one) |
+| `"transaction"` | `label` (`"the transaction"`), `requestId?`. One call, whatever its steps. |
+| `"access"` | `verb` (`"can"` or one of the client's `$access` verbs), `label` (`$access.can`, `$access.me`, …), `requestId?` (`can` alone sends one) |
+
+### AvCallAdditions
+
+What `onCall` may return for one call's request. All members are optional.
+
+| Member | Type | Meaning |
+|---|---|---|
+| `headers` | `{ readonly [name: string]: string }` | Headers to send with the call. avClient's own (`Content-Type`, `Accept`, `Aventara-Protocol-Version`, `Aventara-Contract-Hash`, `Aventara-Request-Id`) are its to set, in any case: in canonical or lower-case spelling they are type errors, and at runtime they are dropped with a warning. |
+| `credentials` | `"omit" \| "same-origin" \| "include"` | Sent only when `onCall` adds it. |
+| `cache` | `"default" \| "no-store" \| "reload" \| "no-cache" \| "force-cache" \| "only-if-cached"` | Sent only when `onCall` adds it. |
+| `keepalive` | `boolean` | Sent only when `onCall` adds it. |
+| `priority` | `"high" \| "low" \| "auto"` | Sent only when `onCall` adds it. |
+| `referrerPolicy` | the platform's `ReferrerPolicy` values (`""`, `"no-referrer"`, … `"unsafe-url"`) | Sent only when `onCall` adds it. |
+
+`method`, `body`, `signal`, `redirect` and `mode` are each typed as the sentence that refuses them (`"Error: onCall cannot set method: avClient sends each call with its protocol's own"`), so setting one is a type error.
 
 ### AvCallOptions
 

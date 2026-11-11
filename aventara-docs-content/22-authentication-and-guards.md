@@ -82,7 +82,7 @@ Your message reaches the caller, so keep it free of secrets. A guard can also th
 
 ## From the generated client
 
-The client adds no headers of its own beyond the protocol's. Add the token with a custom `fetch`:
+Add the token in the client's `onCall` hook, which returns the headers for every call:
 
 ```ts
 import avClient, { AvClient, AvAuthError } from "./api/AvClient";
@@ -94,8 +94,7 @@ try {
 }
 
 const asGrace = new AvClient({
-  fetch: (input, init) =>
-    fetch(input, { ...init, headers: { ...init?.headers, Authorization: "Bearer grace-token" } }),
+  onCall: () => ({ headers: { Authorization: "Bearer grace-token" } }),
 });
 
 await asGrace.Category.create.one({ data: { name: "Grace's" } });   // { id: 3, name: "Grace's" }
@@ -107,7 +106,7 @@ try {
 }
 ```
 
-Every refusal (`A4000`, `A4001`, `A4002`) throws `AvAuthError`. The `fetch` function runs on every call, so it can read the current token each time.
+Every refusal (`A4000`, `A4001`, `A4002`) throws `AvAuthError`. `onCall` runs on every call, so it can read the current token each time. To react to a refusal in one place, give the client an `onError` hook that checks `error instanceof AvAuthError` ([Client options: hooks](/docs/client-options#hooks-oncall-onsuccess-onerror)).
 
 Guards run for every step of a transaction as well, with the transaction request's headers. An unauthenticated plan is refused at its first step, and the error carries `operation: 0`:
 

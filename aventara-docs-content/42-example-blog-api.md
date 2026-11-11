@@ -144,8 +144,7 @@ import avClient, { AvClient, AvConflictError, AvAuthError } from "./api/AvClient
 
 // Signed-in client: the server's guard wants an Authorization header on writes.
 const api = new AvClient({
-  fetch: (input, init) =>
-    fetch(input, { ...init, headers: { ...init?.headers, Authorization: `Bearer ${getToken()}` } }),
+  onCall: () => ({ headers: { Authorization: `Bearer ${getToken()}` } }),
 });
 ```
 
