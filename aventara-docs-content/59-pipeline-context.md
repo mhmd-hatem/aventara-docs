@@ -70,7 +70,7 @@ resources: {
 
 ## Request state
 
-`ctx.$state` is the one place a stage can write during a request. Every stage of the request gets the same object: a guard can put the signed-in user there for the pipes, hooks and later stages (a configured [policy](/docs/policies#where-the-principal-comes-from) does not see it: it reads `$state` before any guard runs, so fill the principal from the host's `state` option instead), and the hooks, a nested write's guards, the Resource transaction stages and the ctx calls they make read it.
+`ctx.$state` is the one place a stage can write during a request. Every stage of the request gets the same object: a guard can put the signed-in user there for the pipes, hooks and later stages (a configured [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine) does not see it: it reads `$state` before any guard runs, so fill the principal from the host's `state` option instead), and the hooks, a nested write's guards, the Resource transaction stages and the ctx calls they make read it.
 
 Declare what it holds once, anywhere in your project:
 
@@ -132,7 +132,7 @@ A ctx call behaves like this:
 - It is raw: it runs the framework's validation, [field pipes](/docs/pipelines#field-pipes-and-field-write-guards), [field validators](/docs/field-validators) and [compute](/docs/computed-fields), and no developer stage: no guards, pipes, hooks, interceptors or filters at any level, no field write guards, no nested-target guards and no Resource transaction stages. A hook's call therefore never runs the hook that made it.
 - It joins the current transaction when there is one: in a transaction step's interceptors and hooks, in a [forced operation](/docs/pipelines#forcetransaction)'s interceptors and hooks, in a Resource transaction stage, and inside `ctx.$transaction`. A step's guards and pipes run before the transaction opens, so their calls run on their own, as every call outside a transaction does. A ctx call to an operation that has `forceTransaction` is not wrapped in a transaction of its own.
 - It carries the request id and the `ctx.$state` of the stage that made it, and takes no per-call options.
-- It is not checked by the configuration's [policy](/docs/policies#who-is-checked), whatever the request that runs the stage was. A stage's ctx call is server code.
+- It is not checked by the configuration's [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine), whatever the request that runs the stage was. A stage's ctx call is server code.
 
 ### Typing ctx calls
 
@@ -163,7 +163,7 @@ const rows = await ctx.$sql<{ total: bigint }>`select count(*) as total from aud
 ```
 
 - It resolves the rows the statement returned, typed by `ctx.$sql<Row>` (`unknown[]` without `Row`).
-- Inside a transaction (a step's interceptors and hooks, a forced call's, a Resource transaction stage, a `ctx.$transaction` callback) it runs on that transaction and commits or rolls back with it. Outside one it is a plain statement: no transaction is opened around it. `transactionsStyle: "none"` does not affect it (only `ctx.$transaction` needs transactions).
+- Inside a transaction (a step's interceptors and hooks, a forced call's, a Resource transaction stage, a `ctx.$transaction` callback) it runs on that transaction and commits or rolls back with it. Outside one it is a plain statement: no transaction is opened around it. The exception is SQLite with better-sqlite3, where it runs in a transaction of its own that holds only that statement ([SQLite: one connection](/docs/transactions#sqlite-one-connection)). `transactionsStyle: "none"` does not affect it (only `ctx.$transaction` needs transactions).
 - A value is a string, number, boolean, `bigint`, `null`, `Date`, `AvDecimal`, bytes or a JSON value (bound as JSON text, so cast it: `${value}::jsonb`). The SQL text is static: a table or column name cannot come from a value. A plain string call is refused.
 - It needs an adapter that runs SQL statements (the Prisma 7 adapter does). Otherwise it throws `A2002`.
 - Only server code can use it. No contract and no generated client carries it.
@@ -340,6 +340,86 @@ client: {
 What it guarantees: as long as likes are written through Aventara, `likeCount` equals the post's number of `Like` rows. It does not cover writes that skip the hooks or Aventara: a `ctx` call (`ctx.Like.create.one()` runs no developer stage, so no counter hook; write likes from a pipeline through the caller's operation, never through `ctx`), `ctx.$sql`, your Prisma client used directly, a migration or a seed script, and a `likeCount` your own server code writes through the application layer. After any of those, recount (`likeCount` = `Like.find.count({ where: { postId } })`).
 
 A counter that only needs to be read can also be a `$count` [reducer](/docs/counting), with no stored column at all.
+
+## Recipe: a status transition with a side effect
+
+Publishing a post moves its `status` from `"draft"` to `"published"`, stamps `publishedAt` and writes an outbox event. The rule (only a draft can be published) must hold when the update commits, and the caller should get the post as it stands after the side effects. Four pieces do it:
+
+- `forceTransaction` makes the update one transaction, with its hooks and interceptors inside it.
+- A `before` hook re-reads the post inside that transaction and refuses anything but a draft. A guard runs before `BEGIN`, so it could only pre-check ([Check, then act](/docs/pipelines#check-then-act)).
+- An `after` hook writes the side effects through `ctx`, in the same transaction.
+- The update's answer is read before the `after` hook runs, so an interceptor puts the value the hook wrote into it.
+
+```ts
+// src/resources/post.resource.ts
+import { AvError, defineResource } from "@aventara/core";
+import { discovery } from "../generated/aventara/discovery.artifact.js";
+
+type Model = typeof discovery.model;
+
+export const post = defineResource<Model>()("Post", {
+  operations: {
+    update: {
+      unique: {
+        forceTransaction: true,
+        pipelines: {
+          hooks: {
+            before: [
+              async (ctx) => {
+                if (ctx.$args.data.status !== "published") return;
+                // Hooks run after a plan's $refs are resolved: the type allows one, the value is never one.
+                const { id } = ctx.$args.where;
+                if (typeof id === "object") throw new Error("unresolved $ref");
+                const current = await ctx.Post.find.unique({ where: { id }, select: ["status"] });
+                if (current.status !== "draft") throw new AvError("A4001", "Only a draft can be published.");
+              },
+            ],
+            after: [
+              async (_result, ctx) => {
+                if (ctx.$args.data.status !== "published") return;
+                const { id } = ctx.$args.where;
+                if (typeof id === "object") throw new Error("unresolved $ref");
+                await ctx.Post.update.unique({ where: { id }, data: { publishedAt: new Date() } });
+                await ctx.OutboxEvent.create.one({ data: { topic: "post.published", payload: { postId: id } } });
+              },
+            ],
+          },
+          interceptors: [
+            async (ctx, next) => {
+              const result = await next();
+              // Only when the caller's projection holds the field.
+              if (typeof result !== "object" || result === null || !("publishedAt" in result)) return result;
+              const { id } = ctx.$args.where;
+              if (typeof id === "object") throw new Error("unresolved $ref");
+              // Inside the same transaction: this read sees what the after hook wrote.
+              const { publishedAt } = await ctx.Post.find.unique({ where: { id }, select: ["publishedAt"] });
+              return { ...result, publishedAt };
+            },
+          ],
+        },
+      },
+    },
+  },
+});
+```
+
+- The `before` hook, the `after` hook and the interceptor's read all run inside the transaction, so a refusal or a failed event write rolls the status change back.
+- Patch the result `next()` resolved; do not replace it with a fresh read. The answer is checked against the caller's own projection (its `select` or `include`, or the default fields of the caller's layer), and a `ctx` call is application-origin: a read with the application's default fields would carry fields the `client` layer hides, and a remote caller would get `500` `A3000`.
+- The hooks' and the interceptor's `ctx` calls are raw: they run none of your stages, so the `after` hook's own update does not run these hooks again.
+- A value that depends only on the row being written is simpler as [write compute](/docs/computed-fields) (`compute.update` on `publishedAt`). The `after` hook is for values that need other rows: a number taken from a counter row, an event.
+
+The re-check reads under the database's isolation level. On PostgreSQL's default, two requests that publish the same draft at the same moment can both read `"draft"`. When that matters, make the write itself the check (compare-and-set): `update.first` with the expected status in its `where`.
+
+```ts
+const published = await framework.application.Post.update.first({
+  where: { id: 7, status: "draft" },
+  data: { status: "published" },
+  select: ["id", "status"],
+});
+// null: no draft with that id. A2014 (AvConflictError): the row changed between the read and the write.
+```
+
+`update.first` runs two statements in one transaction: it reads the row, then writes it with its `where` asserted again in the write, so the second of two racing requests writes nothing ([Resources and operations](/docs/resources-and-operations#what-is-not-offered-and-why)).
 
 ## See also
 

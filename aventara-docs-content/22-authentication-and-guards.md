@@ -76,7 +76,7 @@ A guard's outcome:
 | throws `AvError("A4001", message)` | `A4001` FORBIDDEN, your message | 403 |
 | throws `AvError("A4002", message)` | `A4002` POLICY_DENIED, your message | 403 |
 
-A configured [policy engine](/docs/policies) answers `A4002` too, for rows, fields and writes it refuses, and runs before your guards. Your guards can assume the policy already admitted the request.
+A configured [policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) answers `A4002` too, for rows, fields and writes it refuses, and runs before your guards. Your guards can assume the policy already admitted the request.
 
 Your message reaches the caller, so keep it free of secrets. A guard can also throw `AvError("A2004", { message, issues })` with issues whose paths name request arguments (for example `["arguments", "data", "email"]`); each issue's message is sent as written, if it is non-blank and at most 1,000 characters ([Pipelines](/docs/pipelines#what-a-pipe-may-and-may-not-do)). Any other thrown error is an unplanned failure: the caller gets a generic `A3000` ("Internal framework error.", HTTP 500) and your [diagnostics reporter](/docs/request-ids-and-diagnostics) receives the real error.
 
@@ -138,7 +138,7 @@ A guard receives a `ctx` ([The pipeline context](/docs/pipeline-context)):
 
 ## An access provider: sign-in and policy from one object
 
-A guard decides whether a request may run. When you also want rows and fields checked per caller, use a [policy](/docs/policies). The framework's `access` option takes both halves of that from one object, an `AvAccessProvider` exported from `@aventara/core`:
+A guard decides whether a request may run. When you also want rows and fields checked per caller, use a [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine). The framework's `access` option takes both halves of that from one object, an `AvAccessProvider` exported from `@aventara/core`:
 
 | Member | What it does |
 |---|---|
@@ -149,7 +149,7 @@ A guard decides whether a request may run. When you also want rows and fields ch
 createFramework({ ...aventaraConfig, adapter, access: memberAccess })   // instead of policy, and of the host's state option
 ```
 
-The host calls `state` once per request, so neither a guard nor the host's own `state` option has to read the headers. Guards still run, after the policy's admission, and read `ctx.$state.me`. When `state` rejects with an authentication library's refusal, an error whose `status` or `statusCode` is 401 or 403, the request answers `401` `A4000` or `403` `A4001` with Aventara's own message ([Policies](/docs/policies#when-state-refuses-a-credential)). With `access`, leave out `policy` and the host's `state` option: either one beside it is refused (at startup on NestJS, when `Aventara()` is called on Next.js), and is a type error. [Policies](/docs/policies#an-access-provider) has a complete hand-written provider (a till with PIN sign-in) and the rules.
+The host calls `state` once per request, so neither a guard nor the host's own `state` option has to read the headers. Guards still run, after the policy's admission, and read `ctx.$state.me`. When `state` rejects with an authentication library's refusal, an error whose `status` or `statusCode` is 401 or 403, the request answers `401` `A4000` or `403` `A4001` with Aventara's own message ([Policies](/docs/policies#when-state-refuses-a-credential)). With `access`, leave out `policy` and the host's `state` option: either one beside it is refused (at startup on NestJS, when `Aventara()` is called on Next.js), and is a type error. [An access provider](https://www.npmjs.com/package/@aventara/core#an-access-provider) in the `@aventara/core` README has a complete hand-written provider (a till with PIN sign-in) and the rules.
 
 ## Typing a guard
 
@@ -169,7 +169,7 @@ A guard written inline in a configuration that is an `as const` object (the scaf
 - Authorization needs data as well as a token: a guard may call your own services (the session store, a user service). It is the right place to look up the current user.
 - Row-level rules: a guard sees the operation's arguments. It can read a row it needs through `ctx` (`await ctx.Post.find.unique({ where, select: ["authorId"] })`, a raw read that runs no guards). To limit a user to their own records in a list, add a pipe that rewrites `where` ([Pipelines](/docs/pipelines)).
 - Next.js: the host's `state` option reads the request's headers, and `avClient` from `@/aventara/server` passes the headers of `next/headers`, so a guard reads the same `ctx.$state.user` from a browser request and from a Server Component ([Next.js host](/docs/nextjs-host#request-state)).
-- Passport, or any middleware that finds the user: run it with `app.use(...)` and hand what it found to the stages with `AventaraModule`'s `state` option, `state: (req) => ({ user: req.user })`. A guard then reads `ctx.$state.user` ([NestJS host](/docs/nestjs-host#request-state-what-your-middleware-found)). A guard can also put the user it verified into `ctx.$state` itself, for the later stages of the request. A configured [policy](/docs/policies#where-the-principal-comes-from) reads `$state` before any guard runs, so it never sees that user.
+- Passport, or any middleware that finds the user: run it with `app.use(...)` and hand what it found to the stages with `AventaraModule`'s `state` option, `state: (req) => ({ user: req.user })`. A guard then reads `ctx.$state.user` ([NestJS host](/docs/nestjs-host#request-state-what-your-middleware-found)). A guard can also put the user it verified into `ctx.$state` itself, for the later stages of the request. A configured [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine) reads `$state` before any guard runs, so it never sees that user.
 
 ## See also
 
