@@ -35,7 +35,7 @@ Next:
   1. Enter the project: cd my-api
   2. Create the database tables: npx prisma db push
   3. Start the server: npm run start:dev
-  4. In your frontend: npx @aventara/client@rc init
+  4. In your frontend: npx @aventara/client@<version> init
   5. Call the API with curl: see "Calling the API over HTTP" in .claude/skills/aventara/SKILL.md
 ```
 
