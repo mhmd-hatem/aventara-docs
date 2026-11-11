@@ -45,7 +45,7 @@ Errors, one sentence and exit code 1 (verified):
 
 ```text
 avclient: entrypoint must use http: or https:, not ftp:
-avclient: entrypoint must not carry credentials: the platform's fetch refuses a URL that includes them, and the entrypoint is embedded in the generated client, which ships — authenticate through a custom fetch instead.
+avclient: entrypoint must not carry credentials: the platform's fetch refuses a URL that includes them, and the entrypoint is embedded in the generated client, which ships — add credentials through onCall instead.
 avclient: entrypoint reads AVENTARA_API_URL, which is not set in the process environment or in any of .env.development.local, .env.development, .env.local, .env (mode "development").
 avclient: Could not fetch the ClientContract from http://localhost:3999/api/_contract: fetch failed (connect ECONNREFUSED 127.0.0.1:3999). Check that the deployment is running and that the entrypoint is its origin plus mount path.
 ```
@@ -188,6 +188,16 @@ await avClient.User.find.count({}, { requestId: "from-client-1", signal });
 ### AvFetch
 
 `typeof globalThis.fetch` when your TypeScript `lib` declares one (DOM, `@types/node`); otherwise a structural `(url, init) => Promise<response>` type. The platform `fetch` therefore needs no cast.
+
+### Hook warnings
+
+Not errors: the call goes on. Each is printed through `process.emitWarning` as an `AventaraWarning` with its code as the warning's `code`, or through `console.warn` where there is no `process.emitWarning`.
+
+| Code | Printed when |
+|---|---|
+| `AVENTARA_CLIENT_HOOK_THREW` | A hook threw or rejected. Reported once, naming the hook and the call, and the hook is skipped: the call goes on, with no additions when it was `onCall`. A hook's failure never reaches the call, the calls sent with it or the process. |
+| `AVENTARA_CLIENT_HOOK_HEADER_DROPPED` | `onCall` returned a header avClient sets itself (in any spelling), a name that is not a valid header name, or a value no request can carry (a line break, or a character outside Latin-1). The header is dropped, with the warning naming the header and the call, once per header name for each `onCall`. |
+| `AVENTARA_CLIENT_OPTIONS_NO_DEFAULT` | In a Next.js app, `src/aventara/client-options.ts` (or `.js`) has no default export. The client works without hooks; printed once. |
 
 ## Transactions
 
