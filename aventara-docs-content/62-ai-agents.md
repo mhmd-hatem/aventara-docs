@@ -411,8 +411,8 @@ root
   -- the six layer keys, at the root and in every overlay --
   exposed            true: exemptions hide; false: exemptions are all that is exposed
   exemptions         { resources: { <R>: true | { operations?, fields? } } }
-  transactionsStyle  "interactive" | "none"
-  limits             { maxListLimit, maxNestingDepth, maxTransactionOperations, maxBooleanNodes, maxJsonDepth, maxRequestBytes, maxAll, maxAllConcurrency }
+  transactionsStyle  "interactive" | "server" | "none"   (see Transactions)
+  limits             { maxListLimit, maxNestingDepth, maxTransactionOperations, maxTransactionWrites, maxBooleanNodes, maxJsonDepth, maxRequestBytes, maxAll, maxAllConcurrency }
   pipelines          { guards, pipes, hooks: { before, after }, interceptors, filters, cache }   cache: find only, never in application or agent (see Caching reads)
   resources
     <Resource>
@@ -513,10 +513,23 @@ sits in a schema your datasource lists, list it as external as well, or `prisma 
 | `maxNestingDepth` | `12` | `A2009` / `V1013` |
 | `maxListLimit` | `250` | `A2009` / `V1014` |
 | `maxTransactionOperations` | `20` | steps in one transaction plan, reads and `$sql` steps included: `A2009` / `V1014` (`POST /_all` is bound by `maxAll` instead, and is not atomic) |
+| `maxTransactionWrites` | `20` | `create`/`update`/`upsert`/`delete` steps in one plan, each `$sql` step counted as a write: `A2009` / `V1014` |
 | `maxBooleanNodes` | `50` | `A2009` / `V1015` |
 | `maxJsonDepth` | `64` | `A2009` / `V1021` |
 | `maxAll` | `10` | operations in one `POST /_all`: `A2009` / `V1014` (the generated client splits; in-process `all` ignores it) |
 | `maxAllConcurrency` | `4` | operations of one set running at once; the rest wait (at least `1`) |
+
+`POST /_all` is not a transaction: `maxAll` bounds it, not the two plan limits, and its writes do not roll back together.
+
+## Transactions
+
+| `transactionsStyle` | The server opens transactions (`forceTransaction`, a policy-checked write, `ctx.$transaction`) | Callers send plans (`/_transactions`, `avClient.transaction`, `framework.transaction`) |
+|---|---|---|
+| `"interactive"` (the adapter's default) | yes | yes |
+| `"server"` | yes | no: no `/_transactions` route, no generated `tx`, a plan answers `404 A2002` |
+| `"none"` | no: `forceTransaction` is a startup error | no |
+
+To keep remote callers from sending multi-step plans while forced writes still run atomically, set `client: { transactionsStyle: "server" }`. Keep each invariant in a `before` hook of the forced operation, inside its transaction; a guard runs before `BEGIN`.
 
 ## Caching reads
 

@@ -91,7 +91,7 @@ There is one tool per operation family the agent layer exposes. A family that no
 
 - `resource` and `variant` are lists of allowed values built from the agent layer, so an agent only sees resources and variants it may use. Each tool's description also lists which variants each resource offers.
 - `args` is the same object a frontend sends: `where`, `select`, `include`, `orderBy`, `limit`, `offset`, `cursor`, `data`, and `create`/`update` for `upsert`. See [Querying](/docs/querying).
-- `transaction` appears when the agent layer's transactions are interactive. A step can use a value from an earlier step with `{ "$ref": { "operation": 0, "path": ["id"] } }`. The agent does not compute fingerprints; the server adds them. See [Transactions with $ref](/docs/transactions-with-ref).
+- `transaction` appears when the agent layer's transactions are interactive (not under `"server"` or `"none"`). Its description states the plan limits: the steps, and the write steps when `maxTransactionWrites` is the lower. A step can use a value from an earlier step with `{ "$ref": { "operation": 0, "path": ["id"] } }`. The agent does not compute fingerprints; the server adds them. See [Transactions with $ref](/docs/transactions-with-ref).
 
 A call looks like this:
 

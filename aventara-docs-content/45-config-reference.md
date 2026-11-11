@@ -353,14 +353,20 @@ The client contract then has no `delete` family on `User`, `passwordHash` carrie
 
 | | |
 |---|---|
-| Type | `"none" \| "interactive"` |
+| Type | `"none" \| "server" \| "interactive"` |
 | Default | what the adapter provides (`"interactive"` for the Prisma adapter on SQLite and PostgreSQL, `"none"` with `@prisma/adapter-d1`) |
-| Layer | root, `application`, `client` (override) |
+| Layer | root, `application`, `client`, `agent` (override) |
 
-`"interactive"` mounts `POST <api>/_transactions` and gives the generated client `avClient.tx` and `avClient.transaction`, and allows `forceTransaction`. `"none"` removes them for that layer. Any other value fails startup: `transactionsStyle must be "none" or "interactive"`. A layer cannot offer transactions the adapter cannot perform.
+| Value | Transactions the server opens: `forceTransaction`, a write the policy checks after it runs, `ctx.$transaction` | Plans: `POST <api>/_transactions`, the generated client's `avClient.tx` and `avClient.transaction`, `framework.transaction`, the MCP `transaction` tool |
+|---|---|---|
+| `"interactive"` | run | accepted |
+| `"server"` | run | refused: no route, no `tx`, no tool; a plan answers `404 A2002` / `V1006` at `["operations"]` |
+| `"none"` | `forceTransaction` fails startup; `ctx.$transaction` throws `A2002`; a write that could only be checked after it runs is refused | refused, as under `"server"` |
+
+Any other value fails startup: `transactionsStyle must be "none", "server" or "interactive"`. A layer cannot offer transactions the adapter cannot perform: `"server"` and `"interactive"` on an adapter without them fail with `COMPILER_UNAVAILABLE_CAPABILITY`. The ClientContract's `transactions` carries the value, so changing it changes the contract hash.
 
 ```ts
-client: { transactionsStyle: "none" },   // remote callers cannot run transaction plans
+client: { transactionsStyle: "server" },   // forced writes stay atomic; remote callers send no plans
 ```
 
 See [Transactions](/docs/transactions).
@@ -379,6 +385,7 @@ See [Transactions](/docs/transactions).
 | `maxNestingDepth` | `12` | Depth of nested projections, relation filters, `NOT`/`not` chains and writes. | `A2009` / `V1013` |
 | `maxListLimit` | `250` | The `limit` of a list or of a nested relation. | `A2009` / `V1014` |
 | `maxTransactionOperations` | `20` | Steps in one transaction plan, reads and `$sql` steps included. `POST /_all` is bound by `maxAll`, not by this. | `A2009` / `V1014` |
+| `maxTransactionWrites` | `20` | Write steps in one transaction plan: `create`, `update`, `upsert`, `delete`, and each `$sql` step (counted as a write). Reads are not counted. It defaults to `20` on its own, whatever `maxTransactionOperations` is set to: raising only the step limit still caps a plan at 20 writes, so raise both. It counts steps, not rows: a `create` step with nested `$create`s is one write. | `A2009` / `V1014` at `["operations"]` |
 | `maxBooleanNodes` | `50` | Nodes in a `where` boolean tree (`AND` / `OR` / `NOT`). | `A2009` / `V1015` |
 | `maxJsonDepth` | `64` | Levels of nesting inside a Json field's value. | `A2009` / `V1021` |
 | `maxAll` | `10` | Operations in one `POST /_all` ([Operation Sets](/docs/operation-sets)). In-process `all` is not bound by it. | `A2009` / `V1014` at `["operations"]` (HTTP only) |
@@ -444,7 +451,7 @@ type AvConfigResource = {
 | Key | Combines across layers by | Notes |
 |---|---|---|
 | `pipelines` at every level, field `pipes` and `guards`, `transactions.pipelines` | Additive, level by level | See [Pipelines](/docs/pipelines). |
-| `forceTransaction` | Any layer forces it | Runs a plain call as a one-step transaction. Refused under an effective `transactionsStyle: "none"` (`CONFIG_INVALID_VALUE`). |
+| `forceTransaction` | Any layer forces it | Runs a plain call as a one-step transaction. Refused under an effective `transactionsStyle: "none"` (`CONFIG_INVALID_VALUE`); runs under `"server"` and `"interactive"`. |
 | `fields.<f>.pipelines.validators` | Additive | `AvZ` checks. See [Field validators](/docs/field-validators). |
 | `fields.<f>.pipelines.compute` | Chained: the root's stage, then the overlay's with the root's result as `value` | See [Computed fields](/docs/computed-fields). |
 | `fields.<f>.definition` | Root only | In an overlay: `CONFIG_FORBIDDEN_IN_OVERLAY`. |

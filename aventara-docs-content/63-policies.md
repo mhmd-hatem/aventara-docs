@@ -516,7 +516,7 @@ Where the adapter can link the row inside the write, the check runs there. The P
 
 ### Transactions: what runs where
 
-When the operation's `transactionsStyle` is `"interactive"` (PostgreSQL and SQLite), a write that has a check after it runs in a transaction of its own: an update (its after check and move-out re-read), an upsert, a created row held to a write grant, a nested write, or returned rows checked by `exists`. A plain checked create or delete is one statement, and its interceptors and hooks run outside any transaction.
+When the operation's `transactionsStyle` is `"interactive"` or `"server"` (PostgreSQL and SQLite), a write that has a check after it runs in a transaction of its own: an update (its after check and move-out re-read), an upsert, a created row held to a write grant, a nested write, or returned rows checked by `exists`. A plain checked create or delete is one statement, and its interceptors and hooks run outside any transaction.
 
 Where it is `"none"` (Cloudflare D1), a write that can only be checked after it runs is refused before it runs, with `A4002` saying the change cannot be verified on this database. That covers a move-out, an update that `afterChecks` lists, a created row held to a write grant, returned rows checked by `exists`, and any nested write. Every other write runs: a create looks up before it inserts, and an update `afterChecks` does not list runs without the after check.
 

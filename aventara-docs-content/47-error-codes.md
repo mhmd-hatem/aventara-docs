@@ -413,7 +413,7 @@ Example: the second step sends a number as a title.
 
 **Configured limit exceeded.**
 
-- Cause: A limit above maxListLimit, or more steps than maxTransactionOperations.
+- Cause: A limit above maxListLimit, more steps than maxTransactionOperations, or more write steps than maxTransactionWrites.
 - Fix: Paginate or split the plan, or raise the limit.
 
 #### `V1015`
@@ -486,7 +486,7 @@ Real messages, as a running server sends them:
 | `V1010` | `Transaction reference path is not present in the source projection.` / `Transaction reference names an operation that is not in this transaction.` / `Transaction reference source has no addressable single-row projection.` |
 | `V1011` | `Transaction reference source type is not assignable to its destination.` |
 | `V1013` | `Request nesting exceeds maxNestingDepth (12).` |
-| `V1014` | `limit exceeds maxListLimit (250).` / `Transaction operation count exceeds maxTransactionOperations (20).` |
+| `V1014` | `limit exceeds maxListLimit (250).` / `Transaction operation count exceeds maxTransactionOperations (20).` / `Transaction write count exceeds maxTransactionWrites (20).` |
 | `V1015` | `Boolean/filter node count exceeds maxBooleanNodes (50).` |
 | `V1016` | `Transaction reference operation index is invalid.` |
 | `V1017` | `Operation fingerprint does not match its arguments.` |
@@ -749,7 +749,7 @@ Two conditions are not errors. The server starts and answers correctly. Each pri
 |---|---|
 | `CONFIG_REQUIRED` | `api is required` / `client.exposed is required when client.exemptions is set: true makes the exemptions hide, false makes them the only entries exposed` |
 | `CONFIG_UNKNOWN_PROPERTY` | `unknown configuration property: nope` |
-| `CONFIG_INVALID_VALUE` | `transactionsStyle must be "none" or "interactive"` |
+| `CONFIG_INVALID_VALUE` | `transactionsStyle must be "none", "server" or "interactive"` |
 | `CONFIG_MOVED_PROPERTY` | `restrictions moved in rc.1: use exposed + exemptions` |
 | `CONFIG_FORBIDDEN_IN_OVERLAY` | `client.resources.Post.fields.url.definition: definition is only allowed at root; a field is defined once and overlays only choose its visibility (define it at resources.Post.fields.url.definition)` |
 | `COMPILER_UNKNOWN_RESOURCE` | `resource "Nope" is not present in the canonical adapter model` |

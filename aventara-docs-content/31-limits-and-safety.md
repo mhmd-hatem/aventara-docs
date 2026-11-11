@@ -18,6 +18,7 @@ An API that accepts a query language needs ceilings, or one request can ask for 
 | `maxListLimit` | `250` | The `limit` of a list or of a nested relation. | `422` `A2009` / `V1014` |
 | `maxBooleanNodes` | `50` | Nodes in a `where` tree (`AND`/`OR`/`NOT` and conditions). | `422` `A2009` / `V1015` |
 | `maxTransactionOperations` | `20` | Steps in one transaction plan, every step counted: reads and `$sql` steps as well as writes. `POST /_all` is not a transaction and is bound by `maxAll` instead. | `422` `A2009` / `V1014` |
+| `maxTransactionWrites` | `20` | Write steps in one transaction plan: each `create`, `update`, `upsert` and `delete` step, and each `$sql` step (a statement cannot be classed as a read, so it counts as a write). Reads are not counted. It defaults to `20` on its own, whatever `maxTransactionOperations` is set to: raising only the step limit still caps a plan at 20 writes, so raise both. It counts steps, not rows: a `create` step with nested `$create`s is one write. | `422` `A2009` / `V1014` |
 | `maxJsonDepth` | `64` | Levels of nesting inside a Json field's value. | `422` `A2009` / `V1021` |
 | `maxAll` | `10` | Operations in one [Operation Set](/docs/operation-sets) (`POST /_all`). | `422` `A2009` / `V1014`, for the whole request |
 | `maxAllConcurrency` | `4` | Operations of one Operation Set running at once. | none: the rest wait their turn |
@@ -25,7 +26,7 @@ An API that accepts a query language needs ceilings, or one request can ask for 
 All of them are in the contract you can read at `GET /api/_contract` under `limits`:
 
 ```json
-"limits": {"maxAll":10,"maxAllConcurrency":4,"maxBooleanNodes":50,"maxJsonDepth":64,"maxListLimit":250,"maxNestingDepth":12,"maxRequestBytes":1048576,"maxTransactionOperations":20}
+"limits": {"maxAll":10,"maxAllConcurrency":4,"maxBooleanNodes":50,"maxJsonDepth":64,"maxListLimit":250,"maxNestingDepth":12,"maxRequestBytes":1048576,"maxTransactionOperations":20,"maxTransactionWrites":20}
 ```
 
 ## Changing them
@@ -64,7 +65,9 @@ Each limit, as a caller sees it with that configuration:
 {"data":null,"code":"A2010","cause":{"message":"The request body exceeds the maximum request size."}}      // HTTP 413
 ```
 
-Nesting depth counts relation levels: three levels (`posts` -> `author` -> `posts`) pass with `maxNestingDepth: 3`, a fourth is refused. A plan of 21 steps is refused with `A2009` before anything runs.
+Nesting depth counts relation levels: three levels (`posts` -> `author` -> `posts`) pass with `maxNestingDepth: 3`, a fourth is refused. A plan of 21 steps is refused with `A2009` before anything runs, and so is a plan with 21 write steps under the default `maxTransactionWrites`. Raising `maxTransactionOperations` alone does not lift the write limit; raise `maxTransactionWrites` with it. The write count is per step: one `create` with nested `$create`s counts once, however many rows it writes. To let remote callers read in a plan but write only a little, lower `maxTransactionWrites` on the `client` layer (`0` allows read-only plans); to take plans away from them while forced writes still run in a transaction, use `transactionsStyle: "server"` ([Configuration](/docs/configuration#transactions)).
+
+`POST /_all` (an [Operation Set](/docs/operation-sets)) is not a transaction. `maxAll` bounds it, not the two plan limits, and a write in it that ran stays written whatever the others answered.
 
 The value of a [Json field](/docs/json-fields) has its own limit, `maxJsonDepth`. Each object or array inside the value is one level, counted from the value itself, so the same value has the same room at the top of `data`, inside a nested write, or in a `where` filter. With the default of 64, a value 64 levels deep is accepted; one more level is refused with `A2009` at the field, before anything is written:
 

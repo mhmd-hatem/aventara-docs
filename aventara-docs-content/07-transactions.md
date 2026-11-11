@@ -11,7 +11,7 @@ A transaction runs a list of operations atomically: either every step is committ
 
 For worked recipes (parent and child, preconditions, conditional steps, rollback) see [Transactions with $ref](/docs/transactions-with-ref).
 
-Transactions are available when the contract advertises `transactions: "interactive"` (the default with the Prisma adapter). If a layer is configured with `transactionsStyle: "none"`, the transaction builders and the `POST /_transactions` route do not exist for it.
+Transaction plans are available when the contract advertises `transactions: "interactive"` (the default with the Prisma adapter). If a layer is configured with `transactionsStyle: "server"` or `"none"`, the `POST /_transactions` route does not exist for it, and the generated client has no transaction builders. On the server, `framework.clientTx`, `framework.transaction` and Next's `avClient.tx` are still typed as plan builders under a client `"server"` or `"none"`, but every plan they run is refused with `A2002`. Under `"server"` the server still opens transactions of its own: a [`forceTransaction`](/docs/pipelines#forcetransaction) call, a write a policy checks after it runs, and `ctx.$transaction` ([Configuration](/docs/configuration#transactions)).
 
 ## From the frontend
 
@@ -87,7 +87,7 @@ This is the case when your Prisma relation has `onDelete: Cascade`. Reorder the 
 
 ### Limits
 
-A plan may hold at most `limits.maxTransactionOperations` steps (20 by default; `A2009`).
+A plan may hold at most `limits.maxTransactionOperations` steps (20 by default; `A2009`), reads and `$sql` steps included, and at most `limits.maxTransactionWrites` write steps (20 by default; `A2009`): each `create`, `update`, `upsert` and `delete` step, and each `$sql` step, which counts as a write because a statement cannot be classed as a read. Both are checked before anything runs.
 
 ## From the server
 
