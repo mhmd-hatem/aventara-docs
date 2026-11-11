@@ -1,6 +1,6 @@
 ---
 title: Protocol API reference
-description: The @aventara/core/protocol entry point - AvProtocol.bind and its members, request and response types, headers, httpStatus, scalarFormats, isOperationResponse and normalizeEntrypoint.
+description: The @aventara/core/protocol entry point - AvProtocol.bind and its members, request and response types, fingerprint, headers, httpStatus, scalarFormats, isOperationResponse and normalizeEntrypoint.
 order: 84
 section: reference
 ---
@@ -14,7 +14,7 @@ import { AvProtocol } from "@aventara/core/protocol";
 import type { AvProtocolRequest, AvProtocolResponse, AvProtocolBinding } from "@aventara/core/protocol";
 ```
 
-The main `@aventara/core` entry exports no protocol names. `AvProtocol` is a namespace with exactly these members (verified): `bind`, `headers`, `httpStatus`, `isOperationResponse`, `normalizeEntrypoint`, `scalarFormats`.
+The main `@aventara/core` entry exports no protocol names. `AvProtocol` is a namespace with exactly these members (verified): `bind`, `fingerprint`, `headers`, `httpStatus`, `isOperationResponse`, `normalizeEntrypoint`, `scalarFormats`.
 
 ## Types
 
@@ -76,7 +76,7 @@ type AvProtocolBinding = {
 
 | Member | Use it to | Notes |
 |---|---|---|
-| `surface()` | List the routes to mount. | Each entry is `{ kind: "operation", method: "POST", path: "/_resources/<Resource>/<family>/<variant>", resource, family, variant }` (a read with a `cache` stage has a second one with `method: "GET"`, right after it), then `{ kind: "contract", method: "GET", path: "/_contract" }`, then `{ kind: "transactions", method: "POST", path: "/_transactions" }` only when the client contract is `interactive`, and `{ kind: "all", method: "POST", path: "/_all" }` whenever an operation is advertised. Only advertised operations appear, so a hidden Resource has no route. Paths are relative to the `api` mount path. Frozen. |
+| `surface()` | List the routes to mount. | Each entry is `{ kind: "operation", method: "POST", path: "/_resources/<Resource>/<family>/<variant>", resource, family, variant }` (a read with a `cache` stage has a second one with `method: "GET"`, right after it), then `{ kind: "contract", method: "GET", path: "/_contract" }`, then `{ kind: "transactions", method: "POST", path: "/_transactions" }` only when the client contract is `interactive` (not under `server` or `none`), and `{ kind: "all", method: "POST", path: "/_all" }` whenever an operation is advertised. Only advertised operations appear, so a hidden Resource has no route. Paths are relative to the `api` mount path. Frozen. |
 | `handleOperation(request)` | Decode, execute and encode one operation request, a cached read's `GET` included. | Resolves to a response; never rejects. |
 | `handleTransaction(request)` | The same for `/_transactions`. | |
 | `handleAll(request, { signal })` | The same for `/_all` ([Operation Sets](/docs/http-protocol#operation-sets)). | `body` is a string, or, when the request sent `Accept: application/x-ndjson`, an async iterable of lines: write each as it comes. Abort `signal` when the client disconnects: operations not yet started never start. |
@@ -113,6 +113,26 @@ protocol.failure("A2012", "rid-1", ["POST"]);
 Authentication stays a pipeline: pass what it needs through `headers`; a guard reads `ctx.$transport.headers`.
 
 A complete Express host is in [HTTP protocol](/docs/http-protocol#custom-hosts-with-aventaracoreprotocol).
+
+## AvProtocol.fingerprint
+
+```ts
+declare function fingerprint(node: {
+  readonly resource: string;
+  readonly family: string;
+  readonly variant: string;
+  readonly args: unknown;
+}): Promise<`fp1:${string}`>;
+```
+
+A transaction plan step's `fingerprint`: the function the server checks each step of `POST /_transactions` with. Pass the step as it is sent, `args` in wire forms and any `$ref` with its own `fingerprint`. The rule (RFC 8785 canonical JSON, SHA-256, the first 16 bytes in base64url, `fp1:`) is written out in [HTTP protocol](/docs/http-protocol#transactions). It rejects when `args` is not JSON: a lone surrogate, a non-finite number, a `bigint`, or an object that is not a plain object or array.
+
+```ts
+const step = { resource: "User", family: "find", variant: "many", args: {} };
+await AvProtocol.fingerprint(step);   // "fp1:" and 22 base64url characters
+```
+
+Tests that run in process can build plans with `framework.clientTx` and `framework.transaction` instead ([Transactions with $ref](/docs/transactions-with-ref)).
 
 ## AvProtocol.headers
 

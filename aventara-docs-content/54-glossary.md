@@ -41,7 +41,7 @@ section: about
 
 **Resource tree.** Each layer's `resources` tree, assembled by `aventara-build` from every `defineResource` result in `src/resources/**/*.resource.ts` and written to `resources.generated.ts` as `aventaraResources`. See [Configuration](/docs/configuration#the-generated-resource-tree).
 
-**Policy.** The configuration's root `policy` key: a policy engine and a function that derives a request's principal. Core asks the engine which operations, rows and fields a caller may use, and refuses with `A4002`. See [Policies](/docs/policies).
+**Policy.** The configuration's root `policy` key: a policy engine and a function that derives a request's principal. Core asks the engine which operations, rows and fields a caller may use, and refuses with `A4002`. See [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) (the `@aventara/core` README).
 
 **Principal.** Who a request is made as, derived from `ctx.$state` by `policy.principal` (`null` for an anonymous caller), or named by `{ as }` on an application call.
 

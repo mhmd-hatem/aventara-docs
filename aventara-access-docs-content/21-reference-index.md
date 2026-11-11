@@ -93,4 +93,4 @@ Find a name, then follow the link to the page that defines it.
 | A default, bound or timing | [Limits and defaults](/docs/limits-and-defaults) |
 | A word I do not know | [Glossary](/docs/glossary) |
 | A message I see | [Troubleshooting](/docs/troubleshooting) |
-| What the framework does with the answers | [Policies](https://aventara.razor34.dev/framework/docs/policies) in the framework docs |
+| What the framework does with the answers | [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) in the `@aventara/core` README |

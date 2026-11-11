@@ -114,7 +114,7 @@ const post = await avClient.Post.find.first({
 });
 ```
 
-It works at every nesting level, beside `"$count"`: `{ posts: { select: ["$defaults", "$count"] } }` returns each post's default fields and the count. Its main use is a [governed field](/docs/policies#governed-fields-and-defaults), one a [policy](/docs/policies) leaves out of every default projection: `select: ["$defaults", "email"]` is the defaults plus `email`. It is valid in `select` only. In `include` it is refused with `V1008`, because `include` already returns the default fields.
+It works at every nesting level, beside `"$count"`: `{ posts: { select: ["$defaults", "$count"] } }` returns each post's default fields and the count. Its main use is a [governed field](https://www.npmjs.com/package/@aventara/core#a-policy-engine), one a [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine) leaves out of every default projection: `select: ["$defaults", "email"]` is the defaults plus `email`. It is valid in `select` only. In `include` it is refused with `V1008`, because `include` already returns the default fields.
 
 ## orderBy
 

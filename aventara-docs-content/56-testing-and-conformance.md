@@ -23,6 +23,43 @@ Node `^22.23.4 || >=24.22.1`. The package is ES modules, and it also loads from 
 | `AvProtocolFixtures` | The corpus rows, as data. |
 | `@aventara/testing/fixtures/protocol-v1.json` | The same corpus as plain JSON, for a client or host written in any language. |
 
+## A framework without a database
+
+`createFakeAdapter(options)` returns an adapter that keeps no data of its own. Your test answers each operation, and the adapter records what it was asked. Build the framework from your own configuration and your model, and run the same calls your server makes:
+
+```ts
+// src/post-list.check.ts
+import assert from "node:assert/strict";
+import { createFramework } from "@aventara/core";
+import { createFakeAdapter } from "@aventara/testing";
+import { aventaraConfig } from "./aventara.config.js";
+import { discovery } from "./generated/aventara/discovery.artifact.js";
+
+const adapter = createFakeAdapter({
+  model: discovery.model,
+  execute: (operation) =>
+    operation.family === "find" && operation.variant === "many" ? [{ id: 1, title: "Hello" }] : null,
+});
+const framework = await createFramework({ ...aventaraConfig, adapter });
+
+const posts = await framework.application.Post.find.many({ select: ["id", "title"] });
+assert.deepEqual(posts, [{ id: 1, title: "Hello" }]);
+assert.equal(adapter.operations[0]?.resource, "Post");
+```
+
+| Option | What it does |
+|---|---|
+| `model` (required) | The adapter model the fake reports, usually your discovery artifact's `discovery.model`. Its `transactions` decides whether the fake offers transactions: with `"interactive"` it does, with `"none"` it has no `transaction` and the framework runs none. |
+| `execute(operation)` | Answers each operation, now or as a promise. `operation` is `{ resource, family, variant, arguments }`, the arguments already validated, after your pipes and compute. Left out, every operation resolves `undefined`. |
+| `rollback: { snapshot, restore }` | Rolls back state your test keeps (an in-memory table, say): `snapshot()` when a transaction begins, `restore(snapshot)` when its work throws. Without it, a rolled-back transaction keeps what `execute` changed. |
+
+The adapter it returns has two read-only records beside the adapter members:
+
+- `operations`: every operation it ran, in order, inside a transaction or not.
+- `transactions`: one entry per finished transaction, `{ operations, outcome }`, where `operations` is what ran inside it and `outcome` is `"committed"` or `"rolled-back"`. Use it to check that a `forceTransaction` operation and its hook's `ctx` writes ran in one transaction, or that a refusal rolled them back.
+
+The fake runs no SQL: `ctx.$sql` answers `A2002` with it. It checks nothing your database would (unique keys, foreign keys), and it returns what `execute` returns, so a test of database behaviour belongs on a real database. For tests through Nest and HTTP, see [NestJS host](/docs/nestjs-host#testing); for in-process calls checked as a remote caller, see [Server-side usage](/docs/server-side-usage).
+
 ## The protocol corpus
 
 The corpus is a list of rows. Each row is an HTTP request a host receives, the answer the host must give, and what a generated client does with that answer:

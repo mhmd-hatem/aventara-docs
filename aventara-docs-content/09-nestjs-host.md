@@ -130,6 +130,43 @@ export const aventaraConfig = { api: "/api" } as const;
 
 Your own controllers may live beside it, for example `GET /api/health`, as long as they are outside the protocol's reserved `_` paths (`/api/_contract`, `/api/_resources/...`, `/api/_transactions`, and any other `/api/_*`).
 
+## Serving a frontend beside the API
+
+The same Nest process can serve a built single-page app (a Vite or React build, the files of a desktop shell) beside the protocol. Serve its files, and answer `index.html` to a browser asking for any other page, so the app's own routes load on refresh.
+
+The fallback is `app.use` middleware, and on Express that runs before every route Nest registers: Aventara's ([What runs on Aventara routes](#what-runs-on-aventara-routes)) and your own controllers'. So it answers only a browser's page request (`GET`, `Accept` naming `text/html`, no file extension), and it skips every path something else owns: `<api>` and everything under it, the MCP path and `/.well-known/` (the MCP endpoint's OAuth metadata lives there), and each of your own controllers outside `<api>`.
+
+```ts
+// src/main.ts (Express)
+import { extname, join } from "node:path";
+import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
+import type { NextFunction, Request, Response } from "express";
+import { AppModule } from "./app.module.js";
+
+// Paths the fallback leaves alone: the API, MCP and its OAuth metadata, and your own controllers.
+const notPages = ["/api", "/mcp", "/.well-known", "/status"];
+
+async function bootstrap() {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const client = join(process.cwd(), "client");   // the built frontend: index.html and its assets
+  app.useStaticAssets(client);
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const owned = notPages.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`));
+    const page = req.method === "GET" && req.accepts("html") === "html" && extname(req.path) === "";
+    if (page && !owned) {
+      res.sendFile(join(client, "index.html"));
+      return;
+    }
+    next();
+  });
+  await app.listen(3000);
+}
+void bootstrap();
+```
+
+Checked on a running app with this setup: a browser's `/` and `/orders/42` get `index.html`, `/assets/app.js` its file and a missing `/assets/nope.js` `404`; `/api/_contract`, `/api/health`, `/status` (a controller of the app) and `/.well-known/...` reach their own routes; a request for `/orders/42` that accepts only JSON gets `404`. Point the frontend's generated client at the same origin's `<api>` ([Client setup](/docs/client-setup)). The example is Express; on Fastify, keep the same rules for a static plugin's fallback.
+
 ## The MCP endpoint
 
 With `mcp` in the configuration, `AventaraModule` also mounts the MCP endpoint of `@aventara/mcp` at that path, on Express and Fastify alike, and logs `Aventara mounted the MCP endpoint at /mcp (...)`. Like `api`, the path is absolute and Nest's global prefix does not move it. Install `@aventara/mcp` at the same exact version as `@aventara/core` (`npm install --save-exact @aventara/mcp@<version>`); with `mcp` set and the package missing, the application refuses to start and prints that command with your version filled in. Your `state` option seeds each tool call's `ctx.$state`. See [MCP](/docs/mcp).
@@ -187,7 +224,7 @@ client: { pipelines: { guards: [(ctx: AvContext) => ctx.$state.user !== undefine
 
 - Run the middleware that finds the user with `app.use(...)`: it runs on Aventara routes on both platforms. Nest guards never do, and `MiddlewareConsumer` middleware does not on Express.
 - On Fastify, `app.use` middleware writes to the Node request, so read `request.raw.user`.
-- Throw `new AvError("A4001", "...")` from `state` to refuse the request with `403`; any other throw answers `500 A3000`.
+- Throw `new AvError("A4001", "...")` from `state` to refuse the request with `403`. A rejection whose `status` or `statusCode` is 401 or 403 (how an authentication library refuses a bad credential) answers `401 A4000` or `403 A4001` with Aventara's own message, not the library's ([Policies](/docs/policies#when-state-refuses-a-credential)). Any other throw answers `500 A3000`.
 - `forRootAsync`'s `useFactory` returns `state` beside `framework` or `config`.
 
 The same object reaches every stage of the request, a transaction's steps and the ctx calls they make. See [The pipeline context](/docs/pipeline-context#request-state).

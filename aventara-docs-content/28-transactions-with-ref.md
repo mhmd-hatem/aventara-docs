@@ -22,7 +22,7 @@ const results = await avClient.transaction([stepA, stepB]);   // one request; on
 - The source step must produce one row: a `unique`, `first` or `create.one`. A `many` or a `count` step has no single row to refer to, and a `$ref` to one is refused (`A2007` / `V1010`: "Transaction reference source has no addressable single-row projection.").
 - The reference must point to an earlier step in the list. A step that is not in the list is `A2007` / `V1010`, and a step that comes later is `A2007` / `V1016` ("Transaction reference operation index is invalid.").
 - Its type must fit the destination, and the plan is checked before any statement runs: a mismatch answers `A2007` with `V1011` ("Transaction reference source type is not assignable to its destination.") and nothing is written ([Types and null](#types-and-null)).
-- Other mistakes refused before anything runs: the same step listed twice (`A2004`), more than `maxTransactionOperations` steps (`A2009`, 20 by default), an empty list (`A2004`).
+- Other mistakes refused before anything runs: the same step listed twice (`A2004`), more than `maxTransactionOperations` steps or more than `maxTransactionWrites` write steps (`A2009`, 20 each by default), an empty list (`A2004`).
 
 ### Where a `$ref` can go
 
@@ -380,7 +380,7 @@ See [Server-side usage](/docs/server-side-usage).
 
 - A single operation is already atomic.
 - A transaction holds a database transaction open for its whole run. Keep plans short, and do not call slow external services from a pipeline inside one.
-- `transactionsStyle: "none"` switches the feature off for a layer ([Configuration](/docs/configuration#transactions)).
+- `transactionsStyle: "server"` takes plans away from a layer's callers while forced calls still run in a transaction; `"none"` switches transactions off for the layer ([Configuration](/docs/configuration#transactions)).
 - A plan has one origin: on the server, `appTx` and `clientTx` steps cannot be mixed. TypeScript flags such a list, and a list that gets past the types is refused (`A2004` / `V1020`).
 - Isolation level, `maxWait` and `timeout` are set on the adapter ([Configuration](/docs/configuration#adapter)). SQLite supports `Serializable` only.
 
