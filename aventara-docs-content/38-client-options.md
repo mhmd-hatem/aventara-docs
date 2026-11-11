@@ -109,6 +109,42 @@ Aborting stops waiting for the answer. A write that already reached the server m
 
 Each call has its own abort, also when it went out in one `POST /_all` with other calls: aborted before it is sent, it is never sent; aborted after, it rejects at once and the others go on, and the request itself is aborted only once every call in it has been. `avClient.all({ ... }, { signal })` aborts every call in that `all`. The full table: [Several operations in one round trip](/docs/operation-sets#aborting).
 
+## Recipe: send the same headers on every call
+
+Headers that every request needs, such as an auth token, belong in a custom `fetch` that you set once when you create the client. Every request goes through it, the grouped `POST /_all` included, so every call carries the headers and calls still group.
+
+Per-call `headers` are for one-offs. A call with `headers` is sent alone, never in a `POST /_all` with the calls beside it, so putting the token there on every call turns grouping off.
+
+```ts
+import { AvClient } from "./api/AvClient";
+
+const appFetch: typeof fetch = async (input, init) => {
+  const headers = new Headers(init?.headers);
+  const token = localStorage.getItem("token");
+  if (token !== null) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(input, { ...init, headers });
+  if (response.status === 401) window.location.assign("/sign-in");
+  return response;
+};
+
+export const appClient = new AvClient({
+  entrypoint: "https://api.example.com/api",
+  fetch: appFetch,
+});
+
+// A timeout is per call, and aborts that call only.
+const posts = await appClient.Post.find.many({}, { signal: AbortSignal.timeout(5000) });
+```
+
+The wrapper reads the token on every request, so a token stored after sign-in is sent from the next call on. `entrypoint` is only needed when the client calls a deployment other than the one it was generated from.
+
+The wrapper sees the status of the whole request. A `POST /_all` is answered `200` even when one of its calls is refused; that call rejects with `AvAuthError` (`A4000`) on its own. To react to every refused call, also catch `AvAuthError` where you make the call.
+
+A call that runs out of time rejects with the signal's reason, a `TimeoutError` (a `DOMException`), whether it went out alone or in a `POST /_all`. The other calls in that request go on.
+
+In a native shell such as Capacitor, the same wrapper can send the request through the platform's native HTTP instead of `fetch`, as long as it returns a `Response`.
+
 ## See also
 
 - [Client errors](/docs/client-errors)
