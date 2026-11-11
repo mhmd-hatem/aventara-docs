@@ -151,6 +151,10 @@ const countPost: AvAfterHook<Model> = async (_post, ctx) => {
 
 A stage written inline in `createFramework({ ... })`, or in a [`defineResource`](/docs/configuration#one-resource-per-file-defineresource) block, gets the model from where it is written. The executor is typed from the application view of the model with no configuration applied: a call the `application` overlay's exposure removed still type-checks, and is refused at runtime (`A2001` or `A2002`).
 
+One fact of the configuration does reach it: which fields `compute.create` fills. A ctx call runs the root's compute and the `application` overlay's, so a ctx create may leave out a field either of them fills, in its `data`, an upsert's `create` and a nested create. `aventara-build` reads those fields from your configuration's type (the same statement the guards and pipes are typed with, above), so run `aventara:prepare` after changing a compute stage. A field that only the `client` or `agent` overlay computes is still required: that compute does not run for a ctx call. Without the generated statement (a model you typed by hand), every required field stays required.
+
+Json shapes and fields your definitions add are not in these types yet: `ctx.Product.find.many({ select: ["name"] })` types a shaped `name` as a plain JSON value, and a variant's `ctx.$args.data` does not list an added field. Narrow such a value with a type guard rather than a cast.
+
 ## `ctx.$sql`
 
 `ctx.$sql` runs a SQL statement right away. It is written only as a tagged template, and every interpolated value is a bound parameter, never part of the SQL text:

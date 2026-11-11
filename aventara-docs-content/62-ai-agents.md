@@ -462,6 +462,7 @@ An override wins when present, not when truthy (`false` overrides). An explicit 
 | `false` | nothing (same as leaving it out) | nothing |
 | a list | hide the listed entries one level down | expose only the listed entries |
 | an object | go one level deeper | go one level deeper |
+| `"read"` (a field, or a Resource's `fields`) | hide every read capability of the field (each field's, on `fields`); its writes stay | expose every read capability the layer above offers, and no write |
 
 | Level | Names you can list |
 |---|---|
@@ -469,13 +470,16 @@ An override wins when present, not when truthy (`false` overrides). An explicit 
 | a family | `find`: `first`, `unique`, `many`, `count`; `create`: `one`, `many`, `count`; `update`: `first`, `unique`, `many`, `count`; `delete`: `first`, `unique`, `count`; `upsert`: `unique` |
 | a scalar field | `select`, `filter`, `order`, `orderNulls`, `create`, `update` |
 | a relation field | `select`, `include`, `filter`, `order`, `pagination`, `reducers`, `create`, `update` |
+| `"read"` names | a scalar's `select`, `filter`, `order`, `orderNulls`; a relation's `select`, `include`, `filter`, `order`, `pagination`, `reducers` |
 | a capability's tokens | `filter`: operators (`equals`, `in`, `contains`, …); `create`/`update`: directives (`$increment`, `$push`, …); relation `create`/`update`: `$create`, `$connect`, `$connectOrCreate`, `$disconnect`, `$set`, `$update`, `$delete`, `$upsert` |
 
 Prisma has no `delete.many`. Common shapes:
 
-- Write-only field: `fields: { passwordHash: ["select", "filter", "order"] }`.
+- Write-only field: `fields: { passwordHash: "read" }`.
 - Read-only for remote callers: `client.exemptions…fields: { likeCount: ["create", "update"] }`.
 - Hide a Resource from remote callers: `client.exemptions.resources.AuditLog: true`. Hide the relations that point at it too, or startup fails with `COMPILER_DANGLING_RELATION`.
+- Read-only Resource for remote callers (Pick): `client: { exposed: false, exemptions: { resources: { Category: { operations: { find: true }, fields: "read" } } } }`. `fields: "read"` names every field, relations included: expose the Resources its relations point at too (or list the fields instead), or startup fails with `COMPILER_DANGLING_RELATION`. Under `exposed: false` a relation into it that you grant `$create`, `$connectOrCreate`, `$upsert` or `$update` is refused at startup (`COMPILER_READ_ONLY_NESTED_WRITE`), so let the relation only link (`author: { select: true, create: ["$connect"] }`).
+- No nested write into a Resource the layer cannot write. The fields decide with the operations: no create operation and no field writable on create means no `$create`/`$connectOrCreate`/`$upsert` into it, the same on update for `$update`/`$upsert`; no delete operation means no `$delete`. Hiding only the create operation keeps nested creates ("created only through its parent"). Under `exposed: true` the relations into it lose those directives on their own (startup succeeds; the Contract and hash change; a directive sent anyway is `V1006`). Under `exposed: false` a grant of one (by `true`, the member, or naming it) fails startup with `COMPILER_READ_ONLY_NESTED_WRITE`: grant only the linking directives, `posts: { update: ["$connect", "$disconnect", "$set"] }`.
 - A public client that reaches only what the frontend calls: `client: { exposed: false, exemptions: { resources: { Post: { operations: { find: ["many", "unique"] }, fields: { id: ["select", "filter"], title: ["select"] } } } } }`. A unique operation needs its identifier exposed with its `filter`, since a unique `where` filters on it (`COMPILER_MISSING_IDENTIFIER`); a field a layer may not filter on, a write-only secret say, is no identifier there.
 
 A hidden field disappears from that layer's inputs, outputs, filters, ordering and the generated client. A client exemption changes the contract hash: regenerate the frontend client.
@@ -677,7 +681,7 @@ export const onePostDeletePerPlan: AvTransactionGuard = (ctx) =>
 
 ## Rules that are easy to miss
 
-- `ctx` calls (`ctx.<Resource>.<family>.<variant>(args)`) are raw: validation, field pipes, compute and validators run; guards, pipes, hooks, interceptors, filters and transaction stages do not. They are application-origin: the `application` overlay's exposure applies, the `client` overlay's does not. They resolve data directly and throw the `AvError` subclass of a failure.
+- `ctx` calls (`ctx.<Resource>.<family>.<variant>(args)`) are raw: validation, field pipes, compute and validators run; guards, pipes, hooks, interceptors, filters and transaction stages do not. They are application-origin: the `application` overlay's exposure applies, the `client` overlay's does not. They resolve data directly and throw the `AvError` subclass of a failure. A `ctx` create need not write a field the root's or the `application` overlay's `compute.create` fills: the generated types state those fields (run `aventara:prepare` after changing compute); a field only the `client` or `agent` overlay computes is still required.
 - `ctx.$args` is frozen. A pipe returns new arguments; an `after` hook gets a frozen result. To answer with a different result, use an interceptor. A `Date` or bytes value cannot be frozen, so each stage gets its own copy: changing one in place changes nothing another stage sees, what is written or what the caller receives.
 - `ctx.$state` is the only thing a stage writes in place: one object per request, shared by every stage and inherited by `ctx` calls. Compute can read it, not write it.
 - `compute.read` gets the row (`record`) frozen, with its own copy of each `Date` or bytes value: return the field's value. Writing into `record` throws and answers `A3000`; the answer is built from the row as read.
