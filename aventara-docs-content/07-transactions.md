@@ -168,7 +168,7 @@ A call made from inside a transaction's own stages, through the Framework instea
 The adapter tells which transaction a call belongs to by its async context (Node's `AsyncLocalStorage`): a call made anywhere in the async work a transaction started belongs to it. The first time a given Resource and operation joins this way, the process warns once (and once for `ctx.$sql`):
 
 ```text
-(node:1234) [AVENTARA_PRISMA_SQLITE_TRANSACTION_JOINED] AventaraWarning: Author create.many ran inside an open SQLite transaction (better-sqlite3) instead of waiting for it: it was called from that transaction's async context, so it joined the transaction and commits or rolls back with it. ...
+(node:1234) [AVENTARA_PRISMA_SQLITE_TRANSACTION_JOINED] AventaraWarning: User create.many ran inside an open SQLite transaction (better-sqlite3) instead of waiting for it: it was called from that transaction's async context, so it joined the transaction and commits or rolls back with it. ...
 ```
 
 If you meant the join, the warning is expected and you can leave it. If you did not, look for a helper shared across requests that keeps the async context it was first called in: a batcher, a queue, or a timer first scheduled from inside a transaction. Here request A's after hook schedules the flush, and request B adds to the batch before it runs:
@@ -177,15 +177,15 @@ If you meant the join, the warning is expected and you can leave it. If you did 
 let pending: { email: string }[] = [];
 let flushing: ReturnType<typeof setTimeout> | undefined;
 
-export function addAuthor(email: string) {
+export function addUser(email: string) {
   pending.push({ email });
   // Scheduled inside request A's transaction, the timer keeps A's context:
-  // B's author is written inside A's transaction and rolls back if A does.
+  // B's user is written inside A's transaction and rolls back if A does.
   flushing ??= setTimeout(() => {
     const data = pending;
     pending = [];
     flushing = undefined;
-    void framework.application.Author.create.many({ data });
+    void framework.application.User.create.many({ data });
   }, 50);
 }
 ```
@@ -202,16 +202,16 @@ const flush = AsyncResource.bind(() => {
   const data = pending;
   pending = [];
   flushing = undefined;
-  void framework.application.Author.create.many({ data });
+  void framework.application.User.create.many({ data });
 });
 
-export function addAuthor(email: string) {
+export function addUser(email: string) {
   pending.push({ email });
   flushing ??= setTimeout(flush, 50);
 }
 ```
 
-The bound flush waits for A like any other call, and B's author commits on its own. Scheduling the helper's timers from outside a transaction works too.
+The bound flush waits for A like any other call, and B's user commits on its own. Scheduling the helper's timers from outside a transaction works too.
 
 PostgreSQL uses a pool: each transaction gets its own connection, and plain operations run beside it as plain statements. Nothing joins there, and nothing warns.
 
