@@ -252,20 +252,20 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 ### Authentication and authorization (A4xxx)
 
-Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework itself never authenticates. `A4002` is also what a configured policy answers when it refuses a request: see [Policies](/docs/policies).
+Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework itself never authenticates. `A4002` is also what a configured policy answers when it refuses a request: see [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) (the `@aventara/core` README). `A4000` and `A4001` are also what a request answers when its `state` rejects with an authentication library's refusal, an error whose `status` or `statusCode` is 401 or 403: see [Policies](/docs/policies#when-state-refuses-a-credential).
 
 #### `A4000`
 
 **Unauthenticated.** HTTP 401, thrown as `AvAuthError`.
 
-- Cause: A guard threw new AvError("A4000", ...): authentication is required or failed. The framework never authenticates by itself.
+- Cause: A guard threw new AvError("A4000", ...), or the host's or access provider's state rejected with an object whose status or statusCode is 401 (an authentication library's refusal, answered with this message only): authentication is required or failed. The framework never authenticates by itself.
 - Fix: Send the credentials your guards expect, such as the Authorization header.
 
 #### `A4001`
 
 **Forbidden.** HTTP 403, thrown as `AvAuthError`.
 
-- Cause: A guard returned false ("Operation denied by a framework guard."), a field write guard or a nested write's target guard included, or a stage threw A4001.
+- Cause: A guard returned false ("Operation denied by a framework guard."), a field write guard or a nested write's target guard included, a stage threw A4001, or the host's or access provider's state rejected with an object whose status or statusCode is 403 (answered with this message only).
 - Fix: Call as a caller the guard admits, or stop sending the guarded field. To answer another code, throw an AvError from the guard.
 
 #### `A4002`
@@ -413,7 +413,7 @@ Example: the second step sends a number as a title.
 
 **Configured limit exceeded.**
 
-- Cause: A limit above maxListLimit, or more steps than maxTransactionOperations.
+- Cause: A limit above maxListLimit, more steps than maxTransactionOperations, or more write steps than maxTransactionWrites.
 - Fix: Paginate or split the plan, or raise the limit.
 
 #### `V1015`
@@ -486,7 +486,7 @@ Real messages, as a running server sends them:
 | `V1010` | `Transaction reference path is not present in the source projection.` / `Transaction reference names an operation that is not in this transaction.` / `Transaction reference source has no addressable single-row projection.` |
 | `V1011` | `Transaction reference source type is not assignable to its destination.` |
 | `V1013` | `Request nesting exceeds maxNestingDepth (12).` |
-| `V1014` | `limit exceeds maxListLimit (250).` / `Transaction operation count exceeds maxTransactionOperations (20).` |
+| `V1014` | `limit exceeds maxListLimit (250).` / `Transaction operation count exceeds maxTransactionOperations (20).` / `Transaction write count exceeds maxTransactionWrites (20).` |
 | `V1015` | `Boolean/filter node count exceeds maxBooleanNodes (50).` |
 | `V1016` | `Transaction reference operation index is invalid.` |
 | `V1017` | `Operation fingerprint does not match its arguments.` |
@@ -756,7 +756,7 @@ Two conditions are not errors. The server starts and answers correctly. Each pri
 |---|---|
 | `CONFIG_REQUIRED` | `api is required` / `client.exposed is required when client.exemptions is set: true makes the exemptions hide, false makes them the only entries exposed` |
 | `CONFIG_UNKNOWN_PROPERTY` | `unknown configuration property: nope` |
-| `CONFIG_INVALID_VALUE` | `transactionsStyle must be "none" or "interactive"` |
+| `CONFIG_INVALID_VALUE` | `transactionsStyle must be "none", "server" or "interactive"` |
 | `CONFIG_MOVED_PROPERTY` | `restrictions moved in rc.1: use exposed + exemptions` |
 | `CONFIG_FORBIDDEN_IN_OVERLAY` | `client.resources.Post.fields.url.definition: definition is only allowed at root; a field is defined once and overlays only choose its visibility (define it at resources.Post.fields.url.definition)` |
 | `COMPILER_UNKNOWN_RESOURCE` | `resource "Nope" is not present in the canonical adapter model` |
@@ -777,4 +777,4 @@ More on each: [Configuration reference](/docs/config-reference#startup-diagnosti
 - [HTTP protocol](/docs/http-protocol): the envelope and the curl walkthrough.
 - [Troubleshooting](/docs/troubleshooting): the errors people hit first.
 - [Frontend client](/docs/client-errors) and [Client API reference](/docs/client-api-reference).
-- Guides: [Authentication and guards](/docs/authentication-and-guards), [Policies](/docs/policies), [Limits and safety](/docs/limits-and-safety), [Request IDs and diagnostics](/docs/request-ids-and-diagnostics)
+- Guides: [Authentication and guards](/docs/authentication-and-guards), [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) (the `@aventara/core` README), [Limits and safety](/docs/limits-and-safety), [Request IDs and diagnostics](/docs/request-ids-and-diagnostics)

@@ -73,7 +73,7 @@ Written into `generateAt`:
 | `generated/types.d.ts` | The named Resource types. |
 | `generated/enums.ts` | Each enum as a union type and a same-named `as const` object. |
 | `generated/contract.ts`, `metadata.ts` | The contract the client was generated against; the hash, protocol version and default entrypoint it is bound to. |
-| `generated/runtime/*` | Codecs, `AvDecimal`, errors, transport, field-validator checks (when the contract carries any), and (when transactions are interactive) fingerprints and transaction handling. |
+| `generated/runtime/*` | Codecs, `AvDecimal`, errors, transport, field-validator checks (when the contract carries any), and (when transactions are interactive, not `server` or `none`) fingerprints and transaction handling. |
 | `generated/derivation/**` | Type declarations that derive argument and result types from the contract. |
 
 Every file is TypeScript source. The files import each other the way the project's `tsconfig.json` says (extensionless, `.js` or `.ts`; see [Client setup](/docs/client-setup#what-is-generated)), and you import `AvClient` the same way ([Importing the client](/docs/client-setup#importing-the-client)).

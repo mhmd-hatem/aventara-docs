@@ -19,7 +19,7 @@ Aventara is a release candidate (`1.0.0-rc.12`). It works end to end today. Unti
 | Runtime | Node `^22.23.4` or `>=24.22.1` |
 | Operations | `find`, `create`, `update`, `delete` (`first`, `unique`, `count`; `many` where the ORM allows it), `upsert`, interactive transactions |
 | Cold starts | `aventara-build` compiles the Contracts at build time, for serverless and edge ([Deploying](/docs/deploying#build-time-contracts)) |
-| Authorization | A policy seam: bring your own policy engine for rows, fields and writes ([Policies](/docs/policies)) |
+| Authorization | A policy seam: bring your own policy engine for rows, fields and writes ([A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) (the `@aventara/core` README)) |
 
 ## Toward 1.0
 

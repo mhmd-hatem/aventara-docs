@@ -265,6 +265,34 @@ Each step of a [transaction plan](/docs/transactions) runs its own operation sta
 
 A step's guards and pipes run outside the transaction, so their `ctx` calls do not join it. The interceptors' and hooks' calls do.
 
+### Check, then act
+
+Because a guard runs before `BEGIN`, a rule it checks against the database can change before the write commits. Two requests that close the same ticket can both pass a guard that reads `status: "OPEN"`. A client plan can close a ticket in step 1 and change it again in step 2, because every step's guards ran before any step wrote.
+
+Put a rule that must hold at commit where the transaction already is:
+
+- in a `hooks.before` stage of the operation, with `forceTransaction: true` on it ([`forceTransaction`](#forcetransaction)), where `ctx` reads join the transaction and a throw rolls it back;
+- or in the Resource's [transaction stages](#resource-transaction-stages), which see the whole plan.
+
+```ts
+resources: {
+  Ticket: {
+    operations: {
+      update: {
+        unique: {
+          forceTransaction: true,
+          pipelines: { hooks: { before: [ticketStillOpen] } },   // reads the row through ctx, inside the transaction
+        },
+      },
+    },
+  },
+},
+```
+
+A guard may check the same rule first, to refuse early with a clear answer, but not as the only check.
+
+A re-check inside the transaction still reads under your database's isolation level. Under PostgreSQL's default (`Read Committed`), two transactions can both read the row before either writes it. When two requests can race on one row, make the write itself conditional: `update.first` with the state you expect in its `where` (`{ id, status: "OPEN" }`) answers `null` when no row matches, and `A2014` when the row changed between its read and its write; either way nothing is written ([Resources and operations](/docs/resources-and-operations#what-is-not-offered-and-why)). A database constraint, or `isolationLevel: "Serializable"` in `createPrismaAdapter`'s `transactionOptions` ([Configuration reference](/docs/config-reference#createprismaadapter)), also closes it. The [status transition recipe](/docs/pipeline-context#recipe-a-status-transition-with-a-side-effect) puts these together.
+
 ### Resource transaction stages
 
 `resources.<R>.transactions.pipelines` gives a transaction its own lifecycle for Resource R, with every stage kind. They run once per transaction that has a top-level step on R, however many steps there are:
@@ -346,7 +374,7 @@ resources: {
 - The after hook's `ctx` calls and `ctx.$sql` join the transaction, so a side effect on other rows (an outbox event, a counter on another Resource) commits with the write or not at all. See the [recipes](/docs/pipeline-context#recipe-an-outbox-that-commits-with-the-write).
 - The operation is forced when any layer sets it, the root or the operation's overlay. Nothing below unforces it.
 - As a step of a plan, a forced operation is just a step: the plan's transaction already wraps it.
-- It needs transactions. Under an effective `transactionsStyle: "none"` it is a startup error (`CONFIG_INVALID_VALUE`), and a type error where the types know the style is `"none"`.
+- It needs transactions. Under an effective `transactionsStyle: "none"` it is a startup error (`CONFIG_INVALID_VALUE`), and a type error where the types know the style is `"none"`. Under `"server"` it runs: that style keeps the transactions the server opens and takes plans away from callers ([Configuration](/docs/configuration#transactions)).
 - Operations without it stay unwrapped. Force only the operations whose hooks write.
 
 ### One origin per plan

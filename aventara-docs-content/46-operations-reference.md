@@ -320,7 +320,7 @@ The same code (`A1008`, 200) whether it created or updated. `where` must be an i
 | `A2009` | 422 | A limit was exceeded. |
 | `A2010` / `A2011` / `A2012` | 413 / 415 / 405 | Body too large, wrong media type, wrong method. |
 | `A3000`, `A3001`, `A3004` | 500 | Unexpected failure, a database failure that is not a caller error, or a server pipe that returned invalid arguments. |
-| `A4000`, `A4001`, `A4002` | 401, 403, 403 | A pipeline guard or the configuration's [policy](/docs/policies) refused. |
+| `A4000`, `A4001`, `A4002` | 401, 403, 403 | A pipeline guard or the configuration's [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine) refused. |
 
 Writes can additionally return `A2003` (404, a `$connect` to a record that does not exist), `A2008` (409, a uniqueness or reference conflict), `A2013` and `A2014` (409, retryable concurrency outcomes: nothing was written). Full table with causes and fixes: [Error codes](/docs/error-codes).
 

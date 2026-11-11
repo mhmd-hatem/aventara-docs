@@ -210,8 +210,8 @@ Reasons to do it:
 | One operation uses another's result (`$ref`) | no | yes |
 | A failure | answered on its own key; the others go on | the whole plan rolls back and answers the failing step's code |
 | Answer | `200 A1000`, each key holding its own envelope | `200 A1009` with an array of results, or the failing step's status |
-| Limit | `limits.maxAll` (10) | `limits.maxTransactionOperations` (20) |
-| Available | whenever the contract advertises an operation | only with `interactive` transactions |
+| Limit | `limits.maxAll` (10) | `limits.maxTransactionOperations` (20 steps) and `limits.maxTransactionWrites` (20 write steps) |
+| Available | whenever the contract advertises an operation | only with `interactive` transactions (not `server` or `none`) |
 
 Use `/_all` (or just `Promise.all`) to load a page. Use a transaction when the writes must hold together: an order and its lines, a transfer between two accounts.
 

@@ -44,14 +44,14 @@ Pick the narrowest one that is true:
 
 - `"user"` fits anything a signed-in user reads about themselves: their orders, their drafts, their settings. It still saves requests, in that user's browser.
 - `"anonymous"` fits pages that look the same to every visitor who is not signed in, and may differ once they are: a product list with member prices, a feed that hides drafts from strangers.
-- `"everyone"` fits data that never depends on who asks: categories, a public price list, a published article. Use it only where nothing makes the answer differ by caller: no guard or pipe that reads the caller, no [computed field](/docs/computed-fields) that does, no [policy](/docs/policies) that scopes the rows or fields. If one does, a CDN serves one caller's answer to everybody.
+- `"everyone"` fits data that never depends on who asks: categories, a public price list, a published article. Use it only where nothing makes the answer differ by caller: no guard or pipe that reads the caller, no [computed field](/docs/computed-fields) that does, no [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine) that scopes the rows or fields. If one does, a CDN serves one caller's answer to everybody.
 
 ### Who counts as anonymous
 
 - **With a policy** (the `policy` key, or an access provider's), a caller is anonymous when the principal the policy derives from the request's state is `null` or `undefined`.
 - **Without a policy**, a request that sends no `Cookie` and no `Authorization` header is anonymous.
 
-If your callers sign in with a header of your own (`X-Api-Key`, `X-Session`), Aventara cannot see it without a policy. Configure a [policy](/docs/policies) that reads it, or don't use `"anonymous"` or `"everyone"` for reads that depend on it.
+If your callers sign in with a header of your own (`X-Api-Key`, `X-Session`), Aventara cannot see it without a policy. Configure a [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine) that reads it, or don't use `"anonymous"` or `"everyone"` for reads that depend on it.
 
 ## Where the stage goes
 
