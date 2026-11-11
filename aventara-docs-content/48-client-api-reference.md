@@ -191,13 +191,7 @@ await avClient.User.find.count({}, { requestId: "from-client-1", signal });
 
 ### Hook warnings
 
-Not errors: the call goes on. Each is printed through `process.emitWarning` as an `AventaraWarning` with its code as the warning's `code`, or through `console.warn` where there is no `process.emitWarning`.
-
-| Code | Printed when |
-|---|---|
-| `AVENTARA_CLIENT_HOOK_THREW` | A hook threw or rejected. Reported once, naming the hook and the call, and the hook is skipped: the call goes on, with no additions when it was `onCall`. A hook's failure never reaches the call, the calls sent with it or the process. |
-| `AVENTARA_CLIENT_HOOK_HEADER_DROPPED` | `onCall` returned a header avClient sets itself (in any spelling), a name that is not a valid header name, or a value no request can carry (a line break, or a character outside Latin-1). The header is dropped, with the warning naming the header and the call, once per header name for each `onCall`. |
-| `AVENTARA_CLIENT_OPTIONS_NO_DEFAULT` | In a Next.js app, `src/aventara/client-options.ts` (or `.js`) has no default export. The client works without hooks; printed once. |
+A hook that throws, a header `onCall` returned that avClient drops, and a Next.js `client-options` file without a default export each print a warning, not an error: [Error codes: client warnings](/docs/error-codes#client-warnings).
 
 ## Transactions
 
