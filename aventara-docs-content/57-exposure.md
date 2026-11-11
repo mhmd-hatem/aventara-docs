@@ -418,6 +418,8 @@ contract-compilation  COMPILER_READ_ONLY_NESTED_WRITE  client.exemptions.resourc
 
 The layer that grants the write reports it, once, and such a create is not also reported as a hidden required field.
 
+The server-side typed calls (`framework.application`, `framework.client`, `framework.appTx`, `framework.clientTx`) and Next's `Aventara().avClient` do not model the dropped directives yet. A dropped directive still type-checks there, and the call is refused at runtime with `A2004` and `V1006`. The generated client and Next's `@/aventara/universal` read the deployed ClientContract, so their types match what the server accepts.
+
 ### Layers above and below
 
 A layer starts from what the layer above it serves. Under a root with `exposed: true` that dropped `$delete` from `User.posts`, a client with `exposed: false` that grants `posts: ["select", "update"]`, and lets callers create and update posts, gets the relation's update directives without `$delete`, and starts. Naming a dropped directive there (`posts: { update: ["$delete"] }`, or a `$create` or `$update` the root dropped) is refused with `COMPILER_READ_ONLY_NESTED_WRITE`, not as a widening: the message says the target deletes, creates or updates nothing in the layer above. Give the target the operation or a field writable there, or leave the directive out. The same holds further down, for an agent that extends that client. If the relation's member lost everything, there is nothing left to grant, and `posts: ["select", "update"]` is refused the same way: grant `posts: ["select"]`. A directive the root hid on purpose (`posts: { update: ["$delete"] }` under `exposed: true`) is a widening, as for any other hidden token.
