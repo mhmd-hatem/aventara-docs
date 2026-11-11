@@ -79,7 +79,7 @@ Published under the `rc` dist-tag before rc.11. It fixes a policy bypass through
 
 **Policy and startup checks**
 
-- Writing a reference field itself (`authorId: "u2"`) is held to the target's read scope, as `$connect` is: a row the caller may not read is refused (`A4002`). A row a write names to link that is not there is refused the same way (`A4002`) wherever the target has a scope; before, it answered `A2008` or `A2003`. Without a scope the codes are unchanged. See [Policies](/docs/policies).
+- Writing a reference field itself (`authorId: "u2"`) is held to the target's read scope, as `$connect` is: a row the caller may not read is refused (`A4002`). A row a write names to link that is not there is refused the same way (`A4002`) wherever the target has a scope; before, it answered `A2008` or `A2003`. Without a scope the codes are unchanged. See [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) (the `@aventara/core` README).
 - A listed update (`afterChecks`) holds a to-one nested `$update` to its row as it was read, and a listed `update.many` or `update.count` that changes fewer rows than it read is refused (`A4002`) and rolled back.
 - A model whose table another service owns can be marked `resources.<R>.managedElsewhere: true`: Aventara reads and joins it, and no standard operation writes it. The client and agent Contracts leave it out. A `client.resources` or `agent.resources` entry for it is refused (`COMPILER_UNKNOWN_RESOURCE`).
 - The Prisma 7 generate step reads multiSchema's `@@schema("auth")`.

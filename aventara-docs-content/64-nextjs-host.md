@@ -180,7 +180,7 @@ In this form the framework is built when the module is first imported, `next bui
 
 ## Request state
 
-`state` seeds `ctx.$state`, the object every stage of a request reads and writes: the signed-in user, for example, which guards and a [policy](/docs/policies#where-the-principal-comes-from) read.
+`state` seeds `ctx.$state`, the object every stage of a request reads and writes: the signed-in user, for example, which guards and a [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine) read.
 
 ```ts
 // src/aventara/server.ts
@@ -220,7 +220,7 @@ A `state` that is not a function is refused when `Aventara()` is called. Throw `
 
 ### An access provider
 
-Instead of `policy` and `state`, a framework can take `access`: one object that holds the policy engine and the `state` function. Its `state` gets the same `{ headers, request? }`. See [Policies](/docs/policies#an-access-provider).
+Instead of `policy` and `state`, a framework can take `access`: one object that holds the policy engine and the `state` function. Its `state` gets the same `{ headers, request? }`. See [An access provider](https://www.npmjs.com/package/@aventara/core#an-access-provider) in the `@aventara/core` README.
 
 ```ts
 // src/aventara/server.ts (tillAccess is an AvAccessProvider)
@@ -465,5 +465,5 @@ The endpoint's metadata and its `401` name the endpoint at the origin the agent 
 - [Next.js API reference](/docs/next-api-reference): every export, option and error.
 - [TanStack Query and SWR](/docs/tanstack-query-and-swr): prefetch on the server, hydrate in the browser.
 - [Server-side usage](/docs/server-side-usage): `serverClient`, `application`, call options.
-- [Policies](/docs/policies) and [Authentication and guards](/docs/authentication-and-guards).
+- [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) (the `@aventara/core` README) and [Authentication and guards](/docs/authentication-and-guards).
 - [Deploying](/docs/deploying#nextjs).
