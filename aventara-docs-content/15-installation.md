@@ -24,6 +24,8 @@ You rarely install Aventara packages by hand. `aventara new` (or `aventara init`
 
 The bins refuse to run on an unsupported Node, in one sentence that names the range.
 
+SQLite with better-sqlite3 has one connection, so operations and transactions queue for it and run one at a time ([SQLite: one connection](/docs/transactions#sqlite-one-connection)). PostgreSQL runs them side by side.
+
 ## Packages
 
 | Package | Install it | Where | What it is |

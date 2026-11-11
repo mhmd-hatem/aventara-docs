@@ -141,6 +141,8 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?schema=public"
 
 Transaction options (`timeout`, `maxWait`, `isolationLevel`) go on the adapter ([Configuration](/docs/configuration#adapter)). SQLite supports `Serializable` only; on PostgreSQL pick the level your invariants need.
 
+SQLite with better-sqlite3 has one connection. Each operation outside a transaction runs in a short transaction of its own, so operations and transactions queue and run one at a time, and `maxWait` and `timeout` apply to each of them ([SQLite: one connection](/docs/transactions#sqlite-one-connection)). If many requests write at once, use PostgreSQL.
+
 String filters (`contains`, `startsWith`, `endsWith`) follow the database by default: case-insensitive for ASCII on SQLite, case-sensitive on PostgreSQL. On PostgreSQL, pass `mode: "sensitive"` or `mode: "insensitive"` to make the behavior explicit; SQLite offers only `"default"` ([Filtering](/docs/filtering-sorting-paging#case-mode)).
 
 ## Creating and changing the schema

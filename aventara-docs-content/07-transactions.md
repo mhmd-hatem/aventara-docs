@@ -127,7 +127,7 @@ const [created, rows] = await framework.transaction([post, job]);
 - `framework.appTx.$sql` is typed `AvSqlStatementBuilder`, and the values it binds are `AvSqlStatementValue`, both exported from `@aventara/core`. A method that returns `framework.appTx.$sql` needs no return type annotation.
 - It exists only on `framework.appTx`. `clientTx` has none, the client contract carries nothing of it, and `/_transactions` cannot express it. An adapter that cannot run SQL statements refuses a plan with one (`A2002`); the Prisma 7 adapter runs them.
 
-A stage that needs SQL inside its own operation's transaction uses `ctx.$sql`, the same template run at once ([The pipeline context](/docs/pipeline-context#ctxsql)). Outside a transaction `ctx.$sql` is a plain statement: no transaction is opened around it, and `transactionsStyle: "none"` does not affect it.
+A stage that needs SQL inside its own operation's transaction uses `ctx.$sql`, the same template run at once ([The pipeline context](/docs/pipeline-context#ctxsql)). Outside a transaction `ctx.$sql` is a plain statement: no transaction is opened around it. The exception is SQLite with better-sqlite3, where it runs in a transaction of its own that holds only that statement ([SQLite: one connection](#sqlite-one-connection)). `transactionsStyle: "none"` does not affect it.
 
 ## Request state
 
@@ -147,6 +147,73 @@ Then, inside the transaction, each step resolves its `$ref`s and runs its interc
 
 - A Resource's transaction stages (`resources.<R>.transactions.pipelines`) run once per plan that has a top-level step on it, after BEGIN and before COMMIT, and see the whole plan: a guard there can refuse "more than one delete per plan", and an after hook can write an outbox row that commits with the plan.
 - An operation with `forceTransaction` runs as a one-step transaction even when called on its own, so its after hooks commit with it. As a step of a plan it is just a step.
+
+### SQLite: one connection
+
+The better-sqlite3 driver (`@prisma/adapter-better-sqlite3`) has one connection to the database file, and an open transaction holds it. Prisma runs a plain statement on that same connection, so on its own a plain call made while another request's transaction is open would run inside that transaction: it would see its uncommitted rows and roll back with it.
+
+So with SQLite through better-sqlite3, the Prisma adapter runs each operation that is not part of a transaction, and each `ctx.$sql` that is not, in a transaction of its own that holds only that call. It waits until the open transaction ends, then runs on its own. It never sees another request's uncommitted rows and never rolls back with it. D1 runs no transactions and PostgreSQL uses a pool, so neither is affected.
+
+What this means for you:
+
+- Operations and transactions queue for the connection and run one at a time. A long transaction (a slow hook, an external call inside it) holds up every other operation until it ends.
+- `maxWait` on the adapter is how long an operation waits for the connection; unset, Prisma waits 2000 ms. Past it, the operation answers `A3002`.
+- `timeout` on the adapter (Prisma's default is 5000 ms) limits a single plain operation too, not only a transaction.
+- Calls you make on your Prisma client directly are outside Aventara: Prisma runs them inside whatever transaction is open. Make them through the Framework, or wrap them in `prisma.$transaction`.
+
+#### A call from inside a transaction joins it
+
+A call made from inside a transaction's own stages, through the Framework instead of `ctx`, cannot wait for that transaction to end: it would wait on itself. So it joins the transaction instead and commits or rolls back with it. Inside a stage, prefer `ctx`. A call to the root Framework there is allowed, and it warns.
+
+The adapter tells which transaction a call belongs to by its async context (Node's `AsyncLocalStorage`): a call made anywhere in the async work a transaction started belongs to it. The first time a given Resource and operation joins this way, the process warns once (and once for `ctx.$sql`):
+
+```text
+(node:1234) [AVENTARA_PRISMA_SQLITE_TRANSACTION_JOINED] AventaraWarning: User create.many ran inside an open SQLite transaction (better-sqlite3) instead of waiting for it: it was called from that transaction's async context, so it joined the transaction and commits or rolls back with it. ...
+```
+
+If you meant the join, the warning is expected and you can leave it. If you did not, look for a helper shared across requests that keeps the async context it was first called in: a batcher, a queue, or a timer first scheduled from inside a transaction. Here request A's after hook schedules the flush, and request B adds to the batch before it runs:
+
+```ts
+let pending: { email: string }[] = [];
+let flushing: ReturnType<typeof setTimeout> | undefined;
+
+export function addUser(email: string) {
+  pending.push({ email });
+  // Scheduled inside request A's transaction, the timer keeps A's context:
+  // B's user is written inside A's transaction and rolls back if A does.
+  flushing ??= setTimeout(() => {
+    const data = pending;
+    pending = [];
+    flushing = undefined;
+    void framework.application.User.create.many({ data });
+  }, 50);
+}
+```
+
+Give the helper a context of its own. Bind its callback with `AsyncResource.bind` from `node:async_hooks` where the helper is created, outside any transaction:
+
+```ts
+import { AsyncResource } from "node:async_hooks";
+
+let pending: { email: string }[] = [];
+let flushing: ReturnType<typeof setTimeout> | undefined;
+
+const flush = AsyncResource.bind(() => {
+  const data = pending;
+  pending = [];
+  flushing = undefined;
+  void framework.application.User.create.many({ data });
+});
+
+export function addUser(email: string) {
+  pending.push({ email });
+  flushing ??= setTimeout(flush, 50);
+}
+```
+
+The bound flush waits for A like any other call, and B's user commits on its own. Scheduling the helper's timers from outside a transaction works too.
+
+PostgreSQL uses a pool: each transaction gets its own connection, and plain operations run beside it as plain statements. Nothing joins there, and nothing warns.
 
 ## See also
 
