@@ -69,8 +69,11 @@ The same four values work at every level, and each is read relative to the layer
 | `false` | Nothing: the entry follows `exposed`. Same as leaving it out. | Nothing: the entry stays closed. Same as leaving it out. |
 | a list | Hide the listed entries one level down. | Expose only the listed entries one level down. |
 | an object | Go one level deeper; anything it does not name is exposed. | Go one level deeper; anything it does not name is closed. |
+| `"read"` (a field, or a Resource's `fields`) | Hide every read capability of the field; its writes stay. | Expose every read capability the layer above offers, and no write. |
 
 An empty list exempts nothing. A list always means "exempt these", relative to `exposed`.
+
+`"read"` names the capabilities a caller reads with: a scalar's `select`, `filter`, `order` and `orderNulls`, and a relation's `select`, `include`, `filter`, `order`, `pagination` and `reducers`, whichever the field has. On a Resource's `fields` it means the same for every field. It is shorthand: it compiles to the same contract as the list it stands for, so the hash does not change when you switch between them.
 
 ## The shape
 
@@ -81,8 +84,8 @@ exemptions: {
       operations?: true | false | <family>[] | {
         <family>?: true | false | <variant>[] | { <variant>?: true | false },
       },
-      fields?: {
-        <field>?: true | false | <capability>[] | {
+      fields?: "read" | {
+        <field>?: true | false | "read" | <capability>[] | {
           <capability>?: true | false | <token>[],
         },
       },
@@ -115,7 +118,7 @@ export const aventaraConfig = {
     resources: {
       User: {
         fields: {
-          passwordHash: ["select", "filter", "order"],      // write-only
+          passwordHash: "read",                             // write-only
           email: { filter: ["contains", "startsWith", "endsWith"] }, // fewer operators
         },
       },
@@ -174,6 +177,29 @@ client: {
 The client contract then has `Post` with `find.many`, `find.unique` and `create.one`, and five fields with exactly those capabilities. `Post.id` has `filter` because `find.unique` looks a post up by it. `User` has no operations: it is there only as the target of `Post.author`, with `id` and `name` readable through it. `Post.author` can be selected and written with `$connect` only.
 
 Under `exposed: false`, an object that grants nothing (`{}`, `{ select: false }`, `{ create: [] }`, or a Resource object that grants no field and no operation) is the same as leaving the entry out: the name does not reach the contract, and the hash is the same either way.
+
+### A read-only Resource: `fields: "read"`
+
+To let remote callers read a Resource whole without listing every field, give it `fields: "read"`:
+
+```ts
+client: {
+  exposed: false,
+  exemptions: {
+    resources: {
+      Category: { operations: { find: true }, fields: "read" },
+      Post: {
+        operations: { find: true },
+        fields: { id: "read", title: "read", category: "read" },
+      },
+    },
+  },
+},
+```
+
+Every field of `Category` can be selected, filtered on, sorted by and, for a relation, included and paged, as far as the root allows; none can be written. A field the root hid stays hidden, and a capability the root took away (a filter, say) does not come back: `"read"` only asks for what the layer above offers. A field whose every read capability the root hid (a write-only `passwordHash`) is left out.
+
+`fields: "read"` names every field, relations included. A relation into a Resource the layer does not expose then has no target, and startup fails with `COMPILER_DANGLING_RELATION`, as it would for `true` on that relation. Expose the target too, or list the fields one by one. A read-only Resource takes no nested write either: under `exposed: false` a relation into it that you grant `$create` is refused at startup (`COMPILER_READ_ONLY_NESTED_WRITE`, see [Read-only means no nested write](#read-only-means-no-nested-write)), so grant that relation `create: ["$connect"]`.
 
 ## Layers: overlays only narrow
 
@@ -245,12 +271,12 @@ The application layer is untouched, so your own server code can still delete use
 {"data":null,"code":"A2002","cause":{"message":"The requested operation is not available on this Resource.","issues":[{"path":["family"],"code":"V1006","message":"Operation \"delete.unique\" is not available on Resource \"User\"."}]}}
 ```
 
-The route is not mounted, and the regenerated frontend client has no `avClient.User.delete`, so a call to it does not compile. A family with no variant left is omitted from the contract.
+The route is not mounted, and the regenerated frontend client has no `avClient.User.delete`, so a call to it does not compile. A family with no variant left is omitted from the contract. A relation into `User` loses its nested `$delete` in that layer too, so no client deletes a user through another Resource (see [Read-only means no nested write](#read-only-means-no-nested-write)).
 
 | Goal | Configuration |
 |---|---|
 | Remote callers read only | `client`, `exposed: true`: `operations: ["create", "update", "delete", "upsert"]` on each Resource; or `exposed: false` and grant only `find` variants. |
-| Nobody deletes | Root: `operations: { delete: true }`. |
+| Nobody deletes | Root: `operations: { delete: true }`. The relations into the Resource lose `$delete` with it. |
 | Only the server deletes | `client`, `exposed: true`: `operations: { delete: true }`; leave the root alone. |
 | The server may not bulk-update | `application`, `exposed: true`: `operations: { update: ["many", "count"] }`. |
 
@@ -325,6 +351,76 @@ contract-compilation  COMPILER_HIDDEN_REQUIRED_FIELD  client.exemptions.resource
 Keep `authorId` exposed, give it a `compute.create`, or exempt the bulk variants in that layer: `Post: { fields: { authorId: true }, operations: { create: ["many", "count"] } }`. The client's `create.one` then takes `author`, and its bulk creates are gone. For a composite reference, every field you hide needs the same fix.
 
 A [pipe](/docs/pipelines) that fills the hidden field does not count: the compiler cannot see what a pipe writes. A nested create gets the relation it is nested through from its parent, so hiding `author` and `authorId` does not stop `User.posts.$create`. Under `exposed: false`, a required field you do not pick is hidden the same way. The layer that hides the field reports it, once: when the root hides it, the overlays do not repeat the error.
+
+## Read-only means no nested write
+
+A relation does not write rows of a Resource its layer cannot write. The Resource decides, by three tests:
+
+| The target Resource, in that layer | Nested directives it cannot take |
+|---|---|
+| Creates nothing: no `create` or `upsert` operation, and no field writable on create | `$create`, `$connectOrCreate`, `$upsert` |
+| Updates nothing: no `update` or `upsert` operation, and no field writable on update | `$update`, `$upsert` |
+| Deletes nothing: no `delete` operation | `$delete` |
+
+For creates and updates the fields count with the operations. A Resource whose create operation you hide but whose fields stay writable on create still takes nested creates: that is how you say a row is created only through its parent (`Order.lines: { $create: [...] }` with no `OrderLine.create`). It does not matter how the Resource became read-only (`fields: "read"`, capability lists, or exempted operations), or whether it has required fields: without this rule a nested `category: { $create: {} }` into a Resource with no required field would create a row the layer never lets anyone write. Linking (`$connect`, `$disconnect`, `$set`) is never affected. Relation fields are fields: a relation of the target that is writable on create or update, even link-only (`order: { create: ["$connect"] }`), counts, so if the Resource must create nothing, hide its relations' `create` too (`order: ["create"]`), and the same for `update`.
+
+What happens depends on the style of the layer. Each layer goes by its own `exposed`, never by its parent's.
+
+| | `exposed: true` (the relation inherits its directives) | `exposed: false` (the relation has what you grant it) |
+|---|---|---|
+| At startup | The framework drops those directives from every relation into the Resource, and starts. | A grant of one (by `true` on the Resource or the field, by the relation's `create` or `update`, or by name) on a relation callers can reach is refused with `COMPILER_READ_ONLY_NESTED_WRITE`. |
+| In the contract | Fewer directives on those relations; a member left with none is removed. A client-side change moves the ClientContract hash: regenerate the frontend client. | As granted. |
+| A call that sends one | `A2004` with `V1006` at the directive, or `Relation "lines" is not writable during update.` at the relation when the member went. | Not reached: the server does not start. |
+
+Under `exposed: true` the dropping repeats until nothing changes. Dropping a directive can leave another Resource with nothing writable on create or update (its only way was a nested write that went), and the nested writes into it go too, so the layer still starts.
+
+```ts
+client: {
+  exposed: false,
+  exemptions: {
+    resources: {
+      Category: { operations: { find: true }, fields: "read" },
+      Post: {
+        operations: { create: ["one"] },
+        fields: { title: true, authorId: true, category: ["select", "create"] },
+      },
+    },
+  },
+},
+```
+
+```text
+contract-compilation  COMPILER_READ_ONLY_NESTED_WRITE  client.exemptions.resources.Post.fields.category
+  the client layer lets relation "Post.category" write rows of resource "Category" ($create and $connectOrCreate), but "Category" is read-only in that layer: it has no create operation and no field writable on create; take $create and $connectOrCreate off "Post.category" (keep only the directives it may use, such as $connect), or give "Category" a create operation or a field writable on create
+```
+
+Let the relation only link to existing rows, `category: { select: true, create: ["$connect"] }`, or give the target a create operation or a field writable on create in that layer. The same `client` with `exposed: true` and `Category: { operations: ["create", "upsert"], fields: { id: ["create"], name: ["create"], posts: ["create"] } }` starts, and its `Post.category` has no `$create`. A delete grant is refused the same way:
+
+```ts
+client: {
+  exposed: false,
+  exemptions: {
+    resources: {
+      User: {
+        operations: { find: ["unique"], update: ["unique"] },
+        fields: { id: ["select", "filter"], posts: { select: true, update: ["$connect", "$delete"] } },
+      },
+      Post: { operations: { find: ["many"] }, fields: { id: ["select", "filter"], title: ["select"] } },
+    },
+  },
+},
+```
+
+```text
+contract-compilation  COMPILER_READ_ONLY_NESTED_WRITE  client.exemptions.resources.User.fields.posts
+  the client layer lets relation "User.posts" delete rows of resource "Post" ($delete), but "Post" has no delete operation in that layer; take $delete off "User.posts" (keep only the directives it may use, such as $connect), or give "Post" a delete operation
+```
+
+The layer that grants the write reports it, once, and such a create is not also reported as a hidden required field.
+
+### Layers above and below
+
+A layer starts from what the layer above it serves. Under a root with `exposed: true` that dropped `$delete` from `User.posts`, a client with `exposed: false` that grants `posts: ["select", "update"]`, and lets callers create and update posts, gets the relation's update directives without `$delete`, and starts. Naming a dropped directive there (`posts: { update: ["$delete"] }`, or a `$create` or `$update` the root dropped) is refused with `COMPILER_READ_ONLY_NESTED_WRITE`, not as a widening: the message says the target deletes, creates or updates nothing in the layer above. Give the target the operation or a field writable there, or leave the directive out. The same holds further down, for an agent that extends that client. If the relation's member lost everything, there is nothing left to grant, and `posts: ["select", "update"]` is refused the same way: grant `posts: ["select"]`. A directive the root hid on purpose (`posts: { update: ["$delete"] }` under `exposed: true`) is a widening, as for any other hidden token.
 
 ## Every name must exist
 

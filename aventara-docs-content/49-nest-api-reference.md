@@ -49,7 +49,7 @@ type AventaraModuleOptions<M, Cfg> = (
 |---|---|---|
 | `framework` | `AvFramework` | You called `createFramework(config)` yourself and want your own typed `AvFramework<M, Cfg>` in code. |
 | `config` | `AvConfig<M, Cfg>` | The module calls `createFramework(config)` for you. Typed exactly like `createFramework`'s parameter: an annotated `AvConfig<M>`, an inline literal, an inferred constant and a `satisfies` check are all accepted and checked against your adapter's model. |
-| `state` (optional) | `(request) => AvState \| Promise<AvState>` | Seeds each protocol request's `ctx.$state`, called once per request with Express's `req` or Fastify's `request` (its Node request is `request.raw`). Annotate the parameter with your platform's request type. A thrown `AvError` answers that error; any other throw answers `500 A3000`. Not a function: a startup error. See [The pipeline context](/docs/pipeline-context#request-state). |
+| `state` (optional) | `(request) => AvState \| Promise<AvState>` | Seeds each protocol request's `ctx.$state`, called once per request with Express's `req` or Fastify's `request` (its Node request is `request.raw`). Annotate the parameter with your platform's request type. A thrown `AvError` answers that error; a rejection whose `status` or `statusCode` is 401 or 403 answers `401 A4000` or `403 A4001`, with Aventara's own message ([Policies](/docs/policies#when-state-refuses-a-credential)); any other throw answers `500 A3000`. Not a function: a startup error. Leave it out when the framework is built with [`access`](/docs/config-reference#access): the provider's own `state` seeds each request, and a `state` option beside it is refused (a type error, and a startup error). See [The pipeline context](/docs/pipeline-context#request-state). |
 
 ### forRoot
 
@@ -144,6 +144,7 @@ All reject while Nest builds the application, before it listens:
 | `framework` is not a Framework | AventaraModule: `framework` is not an Aventara Framework (it has no string `api` and no `contracts.client`); pass what `createFramework` resolved to. |
 | mounted twice in one application | refused |
 | platform other than Express or Fastify (or none, as with `createApplicationContext`) | AventaraModule mounts the protocol on Nest's Express or Fastify platform; this application's platform is `none`. |
+| `state` given for a framework built with `access` | AventaraModule: the Framework is built with `access`, whose `state` seeds each request's state; remove the module's `state` option. |
 | invalid configuration | the `AvConstructionError` propagates unchanged; see [Startup diagnostics](/docs/config-reference#startup-diagnostics) |
 
 Nest's default `abortOnError: true` exits the process on a bootstrap error; pass `abortOnError: false` to `NestFactory.create` to catch it. The module owns no resource to shut down; your Prisma provider closes its own client in `onModuleDestroy` (with `app.enableShutdownHooks()` for signals).

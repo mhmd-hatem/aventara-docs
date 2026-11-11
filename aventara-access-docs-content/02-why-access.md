@@ -47,7 +47,7 @@ Access adds no token endpoint and no OAuth route. It verifies and maps what Bett
         allow, scope to rows, trim fields        or  403 A4002
 ```
 
-The framework owns the question and enforces the answer: it limits reads to the rows in scope, refuses fields a grant does not open, and checks writes. See [Policies](https://aventara.razor34.dev/framework/docs/policies) in the framework docs for how it asks.
+The framework owns the question and enforces the answer: it limits reads to the rows in scope, refuses fields a grant does not open, and checks writes. See [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) in the `@aventara/core` README for how it asks.
 
 ## When it is a good fit
 

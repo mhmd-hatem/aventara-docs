@@ -35,6 +35,7 @@ AGENTS.md
 - `reference/config.md`, `reference/stages.md` and `reference/recipes.md` are the detail the rules point to. Every code block in them is compiled against the release before it ships.
 - `reference/errors.md` is `ERRORS.md` from the installed `@aventara/core`: every code with its cause and fix, generated from the same catalog as [Error codes](/docs/error-codes).
 - `.aventara-skill.json` records what was written (a hash per file), so a refresh can tell which files you changed.
+- The commands in the skill follow the project's package manager: `npm run aventara:prepare` and `npx tsc` with npm, `pnpm run aventara:prepare` and `pnpm exec tsc` with pnpm (shown below in npm's form). `aventara new` and `aventara init` use the one they install with; `aventara skill` takes it from the nearest lockfile, up to the repository's root, so an app inside a pnpm workspace gets pnpm's forms. With no npm or pnpm lockfile it follows the package manager that ran it (`pnpm dlx` gives pnpm's forms, anything else npm's).
 
 To refresh them after upgrading, run `aventara skill` in the project, with the CLI at your `@aventara/core` version:
 
@@ -72,7 +73,7 @@ description: Build and change this project's Aventara API (NestJS or Next.js, Pr
 
 # Aventara
 
-Aventara turns the Prisma schema into a typed API: every model is a Resource with standard operations (`find`, `create`, `update`, `delete`, `upsert`), served at `api` (`/api`) and called from the generated frontend client. You configure it; you do not write controllers. Written for `@aventara/core` 1.0.0-rc.12.
+Aventara turns the Prisma schema into a typed API: every model is a Resource with standard operations (`find`, `create`, `update`, `delete`, `upsert`), served at `api` (`/api`) and called from the generated frontend client. You configure the models' operations; you do not wrap them in controllers. Logic that is not one of those operations (a health check, a report, a webhook) goes in your own Nest controller or service, which calls `framework.application` and sits behind Nest guards. Written for `@aventara/core` 1.0.0-rc.12.
 
 There is one way to do each task. Follow these rules; the reference files hold the detail:
 
@@ -81,6 +82,8 @@ There is one way to do each task. Follow these rules; the reference files hold t
 - `reference/recipes.md`: complete, type-checked examples for the common tasks.
 - `reference/client.md`: calling the API from frontend and server code: several calls in one request (`avClient.all`, `POST /_all`), aborting, `avLazy`, `grouping: false`, cached reads.
 - `reference/errors.md`: every code (`A…`, `V…`, `CONFIG_…`, `COMPILER_…`) with its cause and fix.
+
+For anything these files do not cover, read the docs, which are Markdown for agents: `https://aventara.razor34.dev/framework/llms.txt` lists every page, `https://aventara.razor34.dev/framework/markdown/<slug>` is one page; Aventara Access has the same under `/access/` instead of `/framework/`. Read the page before guessing.
 
 If `@aventara/access` is installed, read its own skill, `node_modules/@aventara/access/skill/SKILL.md`, for policies.
 
@@ -117,15 +120,15 @@ A call reads the database, so Next.js runs it at request time (Cache Components 
 
 ## Rules
 
-1. **Change the schema, then prepare.** After editing `prisma/schema.prisma` run your migration (`npx prisma migrate dev` or `npx prisma db push`), then `npm run aventara:prepare`. Run `aventara:prepare` again after adding or removing a Resource file, and after adding, moving or removing a `compute` stage; the server warns `generated types are stale` until you do. Restart the server and regenerate the frontend client (`npm run avclient:generate` in the frontend): the contract hash changed.
+1. **Change the schema, then prepare.** After editing `prisma/schema.prisma` run your migration (`npx prisma migrate dev` or `npx prisma db push`), then `npm run aventara:prepare`. Run `aventara:prepare` again after adding or removing a Resource file, and after adding, moving or removing a `compute` stage; the server warns `generated types are stale` until you do. Restart the server and regenerate the frontend client (`npm run avclient:generate` in the frontend) whenever the client contract changed: the schema, exposure, field validators, limits, operations, the client layer's `transactionsStyle`, a Json field's `AvZ` shape, a `cache` stage, or which fields compute fills.
 2. **Configure, never wrap.** Do not write a Nest controller, service or REST route for a model. Every model already has its operations; shape them with `exposed`/`exemptions` and pipelines. Server code calls `framework.application.<Resource>.<family>.<variant>(args)`.
 3. **Expose with exemptions.** `exposed: true` (the root's default; an overlay that lists `exemptions` must say it) exposes everything the adapter offers and `exemptions` lists what to hide; `exposed: false` exposes nothing and `exemptions` lists what to expose. Hide at the root what no caller may reach; hide in `client` what only your server code may reach. An overlay (`application`, `client`, `agent`) only narrows the root's view: to expose something in one overlay only, expose it at the root and hide it in the other.
 4. **Pick the stage from the table below.** Each task has one stage. Do not authorize in an interceptor, transform in a guard, or write other rows from a compute stage.
-5. **Never cast types away.** No `as`, no `!`, no `any`, no `@ts-ignore` / `@ts-expect-error` to silence an Aventara type. The types are the contract: a type error names the exact key that is wrong (a misspelled field, an overlay granting what the root hid, a missing required field). Fix the key. To get typed arguments in a stage, register it on the operation (`resources.<R>.operations.<family>.<variant>.pipelines`) inside a `defineResource` block; to type `ctx.<Resource>` calls, give the stage type your model (`AvAfterHook<Model>`).
+5. **Never cast types away.** No `as`, no `!`, no `any`, no `@ts-ignore` / `@ts-expect-error` to silence an Aventara type. The types are the contract: a type error names the exact key that is wrong (a misspelled field, an overlay granting what the root hid, a missing required field). Fix the key. One exception: the `ctx` calls and `ctx.$args` inside a stage are typed from your model with no configuration applied, so a Json field's `AvZ` shape, a virtual input and a field `compute.create` fills are not in those types. There, narrow the value with a type guard (`typeof x === "object" && x !== null && "en" in x`); never cast. To get typed arguments in a stage, register it on the operation (`resources.<R>.operations.<family>.<variant>.pipelines`) inside a `defineResource` block; to type `ctx.<Resource>` calls, give the stage type your model (`AvAfterHook<Model>`).
 6. **Annotate stages in the `as const` config.** An inline arrow in `aventaraConfig` has no contextual type (TS7006). Declare it with its stage type (`const requireUser: AvGuard = (ctx) => …`) or move it into a `defineResource` block, where stages are typed from where they sit.
 7. **Fill server-side values with `compute.create`.** A required field the caller must not send (an owner id, a slug, a hash) gets `pipelines.compute.create`; that also makes it optional on create. A pipe cannot fill a missing required field: the framework refuses the create (`A2004`, `V1000`) before any pipe runs. Hiding a required field from a layer that still creates the Resource needs a `compute.create`, or startup fails with `COMPILER_HIDDEN_REQUIRED_FIELD`.
-8. **Validate values with `AvZ`.** Length, range, pattern, format and closed-set rules are field validators (`AvZ.maxLength(80)`, `AvZ.email()`, `AvZ.oneOf(["draft", "live"])`); a closed set the types should name is a Prisma `enum` instead. They are part of the contract, so the generated client checks them before sending. A rule across fields or one that needs the database is a guard.
-9. **Read the user from `ctx.$state`.** Declare it once (`declare module "@aventara/core" { interface AvState { user?: … } }`), set it from `AventaraModule`'s `state` option (remote requests) or a call's `{ state }` option (server code), and read `ctx.$state.user` in every stage. Never parse headers again in each stage.
+8. **Validate values with `AvZ`.** Length, range, pattern and format rules are field validators (`AvZ.maxLength(80)`, `AvZ.email()`); they are part of the contract, so the generated client checks them before sending. A rule across the call's fields is a guard or a pipe. A rule that reads the database (an order must still be open) can change between a guard's check and the write, because guards run before the transaction opens: re-check it in `hooks.before` with `forceTransaction: true` (or in the Resource's transaction stages), where a throw rolls back. A guard may check it first for a quick refusal, never as the only check. When two requests can race on one row, make the write the check: `update.first` with the expected state in its `where` (`reference/recipes.md`, Compare-and-set).
+9. **Read the user from `ctx.$state`.** Declare it once (`declare module "@aventara/core" { interface AvState { user?: … } }`), set it from `AventaraModule`'s `state` option (remote requests) or a call's `{ state }` option (server code), and read `ctx.$state.user` in every stage. Never parse headers again in each stage. Nest guards, interceptors and pipes (`APP_GUARD`, Passport's `AuthGuard`, `@nestjs/throttler`) never run on Aventara's routes (`<api>/_*`), and on Express neither does `MiddlewareConsumer` middleware: only `app.use(...)` does. Find the user in `app.use` middleware and hand it over with `state`; authorize in Aventara guards. A `state` function may throw `new AvError("A4001", "…")` to refuse with `403`. There is no built-in rate limit: add one with `app.use(rateLimit(…))`. CORS is not access control.
 10. **Side effects that must commit with the write: `forceTransaction` + an `after` hook.** Set `forceTransaction: true` on the operation and write the related rows (an outbox event, a counter) through `ctx.<Resource>` or `ctx.$sql` in its `after` hook. Without it the write has already committed when the hook runs.
 11. **Errors are codes.** Branch on `code` or the error class (`AvNotFoundError`, `AvValidationError`, …), never on a message. Throw `new AvError("A4000", "Sign in first.")` from a stage to answer a code. Look up any code in `reference/errors.md` (or `AvErrorCatalog[code]` from `@aventara/core`); a startup diagnostic carries its `docs` URL.
 12. **Do not edit generated files.** Prisma's client, the files beside the discovery artifact (`src/generated/aventara/`, or `src/aventara/` when Prisma's client output is `src/generated`) and the frontend's generated client are rebuilt by `aventara:prepare` and `avclient generate`.
@@ -151,7 +154,7 @@ A call reads the database, so Next.js runs it at request time (Cache Components 
 | Share request information (the signed-in user) | `ctx.$state` | `AventaraModule`'s `state` option, or a call's `{ state }` |
 | Call another operation from a stage | `ctx.<Resource>.<family>.<variant>(args)` | the `ctx` every stage gets (compute can only read) |
 
-Order: framework validation → guards → pipes (operation, then field) → field validators and Json shapes on every value the caller sent, a field with a compute stage included (`A2004`) → write compute (create/update) → re-check (Aventara's checks on pipe and compute output: `A3004`, `A3000`; then validators and Json shapes on what compute set or changed: `A2004`) → interceptors → `hooks.before` → the operation (then compute read) → `hooks.after` → interceptors unwind; filters handle a failure. `ctx` calls are raw: they run validation, field pipes, compute and validators, and none of your guards, pipes, hooks, interceptors or filters.
+Order: framework validation → policy admission (with a policy) → guards → pipes (operation, then field; then a nested write's targets') → write compute (create/update) → re-check (Aventara's checks on pipe and compute output: `A3004`, `A3000`; then field validators and Json shapes on every value, computed included: `A2004`) → policy write check (with a policy) → interceptors → `hooks.before` → the operation (then compute read) → `hooks.after` → interceptors unwind → output validation; filters handle a failure. With `forceTransaction` or in a plan, guards and pipes run before `BEGIN` (`reference/stages.md`). `ctx` calls are raw: they run validation, field pipes, compute and validators, and none of your guards, pipes, hooks, interceptors or filters.
 
 ## The shape of a configuration
 
@@ -199,13 +202,23 @@ curl -X POST http://localhost:3000/api/_resources/User/create/one \
 
 It answers `201` with `{"data":{"email":"ada@example.com","id":"cmhfa2k1x0000l8v4b2c9d7e3","name":"Ada"},"code":"A1002","cause":null}`. Without the two headers the answer is `400 A2000`; a lower-case `user` is `404 A2001`; arguments outside `data` are `422 A2004`. After a schema or configuration change the hash changes and an old one is `409 A2005`: fetch it again. Several operations in one request: `POST <api>/_all` (`reference/client.md`, By hand).
 
+## Deploying
+
+- Migrations: `migrate dev` while developing, commit `prisma/migrations/`, and run `npx prisma migrate deploy` as a release step before the new server starts. `db push` is for development and prototypes only.
+- CI: `npx aventara-build --check` exits `1` when a generated file is missing or stale (`--check --client` on Next.js).
+- The server starts without a database: the contracts come from the discovery artifact, and a call that needs the database answers `A3001` until it is back.
+- Serverless and edge: pass `prebuilt: aventaraContracts` (from `contracts.generated.ts`) where the framework is created, so a cold start does not compile the Contracts.
+- While developing, a local `mcp: "/mcp"` with no `authorization` lets your coding agent read the contract and call the API on the development database (`claude mcp add --transport http my-api http://localhost:3000/mcp`). It answers callers on the same machine only; set `mcp.authorization` before deploying.
+
 ## Before you finish
 
-- `npx tsc --noEmit` passes with no casts added.
+- `npm run typecheck` passes with no casts added (the scaffold's script: `tsc --noEmit`, after `next typegen` in Next.js).
 - The server starts: an `AvConstructionError` lists each problem as `{ code, path, message, docs }`; fix the key at `path`.
-- After a schema or compute change you ran `npm run aventara:prepare`, and the frontend regenerated its client.
+- After a schema or compute change you ran `npm run aventara:prepare`, and the frontend regenerated its client. `Type 'AvModel' does not satisfy the constraint 'AvAdapterModel'` in every Resource file means prepare failed: run it and fix the first error it prints.
+- An answer of `500 A3000` hides the real error: it went to the configuration's `diagnostics` function (root key, `(d) => …`). Read it there.
+- Tests: `reference/recipes.md`, Testing.
 
-These files are generated by `aventara` for this project's Aventara version. Refresh them after upgrading: `npx @aventara/cli@<your @aventara/core version> skill`. A file you edited is kept (pass `--force` to replace it).
+These files are generated by `aventara` for this project's Aventara version. Refresh them after upgrading: `npx @aventara/cli@<your @aventara/core version> skill`. A file you edited is kept, with a warning naming it, and stops receiving fixes (pass `--force` to replace it).
 ````
 
 ## The reference files
@@ -216,6 +229,20 @@ These files are generated by `aventara` for this project's Aventara version. Ref
 # Calling the API
 
 How frontend and server code call the operations: several calls in one round trip, aborting, `avLazy`, and how cached reads go out. The generated client is the default export of the file `avclient generate` writes (`api/AvClient.ts`, at the frontend's `generateAt`); in a Next.js app it is `@/aventara/client` in the browser and `@/aventara/server` on the server.
+
+## The query language is not Prisma's
+
+The types catch each of these; knowing them saves a round per guess.
+
+| Prisma | Aventara |
+|---|---|
+| `select: { id: true, title: true }` | `select: ["id", "title"]`; a relation is `include: { author: { select: ["name"] } }` |
+| `take`, `skip` | `limit`, `offset`; `cursor: { id }` needs an explicit `orderBy` (`V1009` without one) |
+| `_count` | `"$count"` in a `select` list, or `find.count({ where })` |
+| `connect`, `create`, `set` (relations) | `$connect`, `$create`, `$connectOrCreate`, `$disconnect`, `$set`, `$update`, `$delete`, `$upsert` |
+| `increment`, `push` | `{ $increment: 1 }`, `$decrement`, `$multiply`, `$divide`, `$push` |
+| `undefined` in a `where` (ignored) | refused (`V1001`): leave the key out |
+| `findMany`, `update` | `find.many`, `update.unique`; `update.first` writes one row a `where` matches |
 
 ## Calls made together share one request
 
@@ -384,8 +411,8 @@ root
   -- the six layer keys, at the root and in every overlay --
   exposed            true: exemptions hide; false: exemptions are all that is exposed
   exemptions         { resources: { <R>: true | { operations?, fields? } } }
-  transactionsStyle  "interactive" | "none"
-  limits             { maxListLimit, maxNestingDepth, maxTransactionOperations, maxBooleanNodes, maxJsonDepth, maxRequestBytes, maxAll, maxAllConcurrency }
+  transactionsStyle  "interactive" | "server" | "none"   (see Transactions)
+  limits             { maxListLimit, maxNestingDepth, maxTransactionOperations, maxTransactionWrites, maxBooleanNodes, maxJsonDepth, maxRequestBytes, maxAll, maxAllConcurrency }
   pipelines          { guards, pipes, hooks: { before, after }, interceptors, filters, cache }   cache: find only, never in application or agent (see Caching reads)
   resources
     <Resource>
@@ -394,7 +421,7 @@ root
       operations
         <family>                     find | create | update | delete | upsert
           pipelines                  every variant of the family
-          forceTransaction           true: a plain call runs as a one-step transaction
+          forceTransaction           true: a plain call runs as a one-step transaction (needs transactionsStyle "interactive")
           <variant>                  e.g. create.one, find.many
             pipelines                that one operation (typed ctx.$args)
             forceTransaction
@@ -423,7 +450,7 @@ root
 | field `compute` | Chained: the root's stage runs, then the overlay's, which receives the root's result as `value`. |
 | field `definition` | Root only (`CONFIG_FORBIDDEN_IN_OVERLAY` in an overlay). |
 | `managedElsewhere` | Root only (`CONFIG_FORBIDDEN_IN_OVERLAY` in an overlay). |
-| `forceTransaction` | Forced when the root or the operation's overlay sets it. |
+| `forceTransaction` | Forced when the root or the operation's overlay sets it. Under an effective `transactionsStyle: "none"` in that layer it is a startup error (`CONFIG_INVALID_VALUE`) and a type error. To keep forced one-step transactions while refusing client plans of several steps, set `client: { limits: { maxTransactionOperations: 1 } }`. |
 
 An override wins when present, not when truthy (`false` overrides). An explicit `undefined` is refused: leave the key out. The `agent` layer narrows the layer it `extends` (default `"client"`).
 
@@ -435,6 +462,7 @@ An override wins when present, not when truthy (`false` overrides). An explicit 
 | `false` | nothing (same as leaving it out) | nothing |
 | a list | hide the listed entries one level down | expose only the listed entries |
 | an object | go one level deeper | go one level deeper |
+| `"read"` (a field, or a Resource's `fields`) | hide every read capability of the field (each field's, on `fields`); its writes stay | expose every read capability the layer above offers, and no write |
 
 | Level | Names you can list |
 |---|---|
@@ -442,13 +470,16 @@ An override wins when present, not when truthy (`false` overrides). An explicit 
 | a family | `find`: `first`, `unique`, `many`, `count`; `create`: `one`, `many`, `count`; `update`: `first`, `unique`, `many`, `count`; `delete`: `first`, `unique`, `count`; `upsert`: `unique` |
 | a scalar field | `select`, `filter`, `order`, `orderNulls`, `create`, `update` |
 | a relation field | `select`, `include`, `filter`, `order`, `pagination`, `reducers`, `create`, `update` |
+| `"read"` names | a scalar's `select`, `filter`, `order`, `orderNulls`; a relation's `select`, `include`, `filter`, `order`, `pagination`, `reducers` |
 | a capability's tokens | `filter`: operators (`equals`, `in`, `contains`, …); `create`/`update`: directives (`$increment`, `$push`, …); relation `create`/`update`: `$create`, `$connect`, `$connectOrCreate`, `$disconnect`, `$set`, `$update`, `$delete`, `$upsert` |
 
 Prisma has no `delete.many`. Common shapes:
 
-- Write-only field: `fields: { passwordHash: ["select", "filter", "order"] }`.
+- Write-only field: `fields: { passwordHash: "read" }`.
 - Read-only for remote callers: `client.exemptions…fields: { likeCount: ["create", "update"] }`.
 - Hide a Resource from remote callers: `client.exemptions.resources.AuditLog: true`. Hide the relations that point at it too, or startup fails with `COMPILER_DANGLING_RELATION`.
+- Read-only Resource for remote callers (Pick): `client: { exposed: false, exemptions: { resources: { Category: { operations: { find: true }, fields: "read" } } } }`. `fields: "read"` names every field, relations included: expose the Resources its relations point at too (or list the fields instead), or startup fails with `COMPILER_DANGLING_RELATION`. Under `exposed: false` a relation into it that you grant `$create`, `$connectOrCreate`, `$upsert` or `$update` is refused at startup (`COMPILER_READ_ONLY_NESTED_WRITE`), so let the relation only link (`author: { select: true, create: ["$connect"] }`).
+- No nested write into a Resource the layer cannot write. The fields decide with the operations: no create operation and no field writable on create means no `$create`/`$connectOrCreate`/`$upsert` into it, the same on update for `$update`/`$upsert`; no delete operation means no `$delete`. Hiding only the create operation keeps nested creates ("created only through its parent"). Under `exposed: true` the relations into it lose those directives on their own (startup succeeds; the Contract and hash change; a directive sent anyway is `V1006`). Under `exposed: false` a grant of one (by `true`, the member, or naming it) fails startup with `COMPILER_READ_ONLY_NESTED_WRITE`: grant only the linking directives, `posts: { update: ["$connect", "$disconnect", "$set"] }`.
 - A public client that reaches only what the frontend calls: `client: { exposed: false, exemptions: { resources: { Post: { operations: { find: ["many", "unique"] }, fields: { id: ["select", "filter"], title: ["select"] } } } } }`. A unique operation needs its identifier exposed with its `filter`, since a unique `where` filters on it (`COMPILER_MISSING_IDENTIFIER`); a field a layer may not filter on, a write-only secret say, is no identifier there.
 
 A hidden field disappears from that layer's inputs, outputs, filters, ordering and the generated client. A client exemption changes the contract hash: regenerate the frontend client.
@@ -485,11 +516,24 @@ sits in a schema your datasource lists, list it as external as well, or `prisma 
 | `maxRequestBytes` | `1048576` | `A2010` |
 | `maxNestingDepth` | `12` | `A2009` / `V1013` |
 | `maxListLimit` | `250` | `A2009` / `V1014` |
-| `maxTransactionOperations` | `20` | `A2009` / `V1014` |
+| `maxTransactionOperations` | `20` | steps in one transaction plan, reads and `$sql` steps included: `A2009` / `V1014` (`POST /_all` is bound by `maxAll` instead, and is not atomic) |
+| `maxTransactionWrites` | `20` | `create`/`update`/`upsert`/`delete` steps in one plan, each `$sql` step counted as a write: `A2009` / `V1014` |
 | `maxBooleanNodes` | `50` | `A2009` / `V1015` |
 | `maxJsonDepth` | `64` | `A2009` / `V1021` |
 | `maxAll` | `10` | operations in one `POST /_all`: `A2009` / `V1014` (the generated client splits; in-process `all` ignores it) |
 | `maxAllConcurrency` | `4` | operations of one set running at once; the rest wait (at least `1`) |
+
+`POST /_all` is not a transaction: `maxAll` bounds it, not the two plan limits, and its writes do not roll back together.
+
+## Transactions
+
+| `transactionsStyle` | The server opens transactions (`forceTransaction`, a policy-checked write, `ctx.$transaction`) | Callers send plans (`/_transactions`, `avClient.transaction`, `framework.transaction`) |
+|---|---|---|
+| `"interactive"` (the adapter's default) | yes | yes |
+| `"server"` | yes | no: no `/_transactions` route, no generated `tx`, a plan answers `404 A2002` |
+| `"none"` | no: `forceTransaction` is a startup error | no |
+
+To keep remote callers from sending multi-step plans while forced writes still run atomically, set `client: { transactionsStyle: "server" }`. Keep each invariant in a `before` hook of the forced operation, inside its transaction; a guard runs before `BEGIN`.
 
 ## Caching reads
 
@@ -531,10 +575,35 @@ Also: the arguments land in the URL (server and proxy logs, history), so never c
 
 ## Fields
 
-- Add a virtual field at the root: `definition: { type: { scalar: "string" }, nullable: false, list: false, lifecycle: ["VIRTUAL"], capabilities: { select: true } }` plus a `compute.read` stage. A write-only virtual input says `capabilities: { select: false, create: [], update: [] }`; with `nullable: false` a create must send it (`A2004`, `V1000`, and the client types require it) unless a `compute.create` fills it.
+- Add a virtual field at the root: `definition: { type: { scalar: "string" }, nullable: false, list: false, lifecycle: ["VIRTUAL"], capabilities: { select: true } }` plus a `compute.read` stage. A write-only virtual input says `capabilities: { select: false, create: [], update: [] }`.
 - Type a `Json` column: `definition: { json: AvZ.object({ … }) }`; every write is checked against it and the client types follow it.
 - A `compute.create` stage makes its field optional on create, and must return a value when the caller sent none.
 - A `compute.read` stage with no `dependsOn` declares no field it reads, so it computes from the same inputs for every row: such a value usually belongs in response metadata or `ctx.$state`, not in a field.
+
+## Scalars
+
+| Prisma type | In your code (`framework.application`, stages) | On the wire (HTTP, `framework.client`) |
+|---|---|---|
+| `DateTime` | `Date` | ISO-8601 UTC string |
+| `BigInt` | `bigint` | base-10 string; a JSON number is refused (`V1001`) |
+| `Decimal` | `AvDecimal` (from `@aventara/core`; holds the digits, does no arithmetic) | decimal string |
+| `Bytes` | `Uint8Array` | base64 |
+
+- A validator bound is written in the field's own type: `AvZ.gte(0n)` on a `BigInt`, a `Date` on a `DateTime`.
+- An `AvZ` Json shape has no `bigint` node, and `AvZ.int()` is a safe integer only: keep 64-bit amounts inside Json as strings.
+- `bigint` and `Date` are not JSON-serializable: a Nest controller that returns a server-side result holding one answers `500`. Convert first (`value.toString()`, `date.toISOString()`).
+- On SQLite a `Decimal` is a 64-bit float (15 significant digits); use `BigInt` minor units for money there.
+
+## The adapter's options and the database
+
+Transaction options belong to the adapter, never to `aventaraConfig`: `createPrismaAdapter({ ...adapter, client, transactionOptions: { maxWait, timeout, isolationLevel } })`. Prisma's defaults are `maxWait` 2000 ms and `timeout` 5000 ms: keep slow work (a printer, a network call) out of a transaction's hooks, or raise `timeout`.
+
+| | SQLite | PostgreSQL |
+|---|---|---|
+| `isolationLevel` | `Serializable` only | every level but `Snapshot` |
+| String `mode` | `"default"` only (case-insensitive for ASCII) | `"default"`, `"sensitive"`, `"insensitive"` |
+| Json filters | no `path` | `path` |
+| Connections | one, shared by every request (see the Transactions page of the docs) | a pool |
 
 ## Startup
 
@@ -581,9 +650,8 @@ The root's stages run for every origin; an overlay's only for its own (`ctx.$ori
 framework validation (required create fields included; a field compute.create fills is not required yet)
 -> guards       layer -> Resource -> family -> variant (root, then overlay, at each), then field write guards
 -> pipes        the same levels, then field pipes
--> validators   field validators and Json shapes on every value the caller sent, a field with a compute stage included (A2004)
 -> compute      create or update (write compute)
--> re-check     Aventara's own checks on the pipe and compute output (A3004, A3000), then validators and Json shapes on the values compute set or changed (A2004)
+-> re-check     Aventara's own checks on the pipe and compute output (A3004, A3000), then field validators and Json shapes on every value, computed included (A2004)
 -> interceptors enter, outer to inner
 -> hooks.before
 -> operation    one adapter call, then compute read on the returned rows
@@ -594,17 +662,32 @@ on a failure after validation: filters, inner to outer; the first that handles i
 
 A call refused by a guard, the re-check or a validator runs no interceptor and no hook. A `unique` operation that matches no row fails at the operation (`AvNotFoundError`, `A2003`); no `after` hook runs.
 
-With `forceTransaction` (or as a step of a transaction plan), guards, pipes and the validators of every literal value the caller sent run before the transaction; a refusal there opens nothing. Then: `BEGIN -> the Resource's transaction stages -> validators of $ref values (and of what a transaction pipe changed) -> write compute -> re-check (values compute set or changed) -> interceptors -> hooks.before -> adapter call -> hooks.after -> interceptors -> COMMIT`. A refusal inside rolls the transaction back. The hooks' `ctx` calls and `ctx.$sql` join it; the guards' and pipes' calls do not.
+With `forceTransaction` (or as a step of a transaction plan), guards and pipes run before the transaction, and validators judge the literal values no write compute changes; a refusal there opens nothing. Then: `BEGIN -> the Resource's transaction stages -> write compute -> re-check (computed and $ref values included) -> interceptors -> hooks.before -> adapter call -> hooks.after -> interceptors -> COMMIT`. A refusal inside rolls the transaction back. The hooks' `ctx` calls and `ctx.$sql` join it; the guards' and pipes' calls do not. So a guard's database check can be stale by the time the write commits (check-then-act): re-check a rule that must hold at commit in `hooks.before` or a transaction stage. `forceTransaction` needs transactions: under an effective `transactionsStyle: "none"` it is a startup error (`CONFIG_INVALID_VALUE`).
+
+## Resource transaction stages
+
+`resources.<R>.transactions.pipelines` takes every stage kind and runs once per transaction (a plan, or a `forceTransaction` call) that has a top-level step on R, after `BEGIN`. `ctx.$args` is the plan, frozen: each step `{ resource, family, variant, args }` or `{ sql }`; there is no `ctx.$operation`. A transaction pipe may change a step's `args`, never the steps (`A3004`). There is no layer-wide transaction stage: put it on each Resource it guards. A nested write's target is not touched.
+
+```ts
+import type { AvTransactionGuard } from "@aventara/core";
+
+// A client plan may delete at most one post.
+export const onePostDeletePerPlan: AvTransactionGuard = (ctx) =>
+  ctx.$origin === "application" ||
+  ctx.$args.filter((step) => step.resource === "Post" && step.family === "delete").length <= 1;
+
+// resources: { Post: { transactions: { pipelines: { guards: [onePostDeletePerPlan] } } } }
+```
 
 ## Rules that are easy to miss
 
-- `ctx` calls (`ctx.<Resource>.<family>.<variant>(args)`) are raw: validation, field pipes, compute and validators run; guards, pipes, hooks, interceptors, filters and transaction stages do not. They are application-origin: the `application` overlay's exposure applies, the `client` overlay's does not. They resolve data directly and throw the `AvError` subclass of a failure.
+- `ctx` calls (`ctx.<Resource>.<family>.<variant>(args)`) are raw: validation, field pipes, compute and validators run; guards, pipes, hooks, interceptors, filters and transaction stages do not. They are application-origin: the `application` overlay's exposure applies, the `client` overlay's does not. They resolve data directly and throw the `AvError` subclass of a failure. A `ctx` create need not write a field the root's or the `application` overlay's `compute.create` fills: the generated types state those fields (run `aventara:prepare` after changing compute); a field only the `client` or `agent` overlay computes is still required.
 - `ctx.$args` is frozen. A pipe returns new arguments; an `after` hook gets a frozen result. To answer with a different result, use an interceptor. A `Date` or bytes value cannot be frozen, so each stage gets its own copy: changing one in place changes nothing another stage sees, what is written or what the caller receives.
 - `ctx.$state` is the only thing a stage writes in place: one object per request, shared by every stage and inherited by `ctx` calls. Compute can read it, not write it.
 - `compute.read` gets the row (`record`) frozen, with its own copy of each `Date` or bytes value: return the field's value. Writing into `record` throws and answers `A3000`; the answer is built from the row as read.
 - Compute gets a read-only `ctx`: `find.*` calls only, no writes, no `$sql`, no `$transaction` (reaching one answers `A3000`). Effects on other rows belong in an `after` hook under `forceTransaction`.
 - A required create field the caller left out is refused before the guards; no pipe can fill it. Use `compute.create` or a database default.
-- Each value is judged once. Every value the caller sent is judged after its field pipes and before write compute, a field with its own compute stage included, so compute never sees a value its own validators refuse; a bad value is refused even when compute would replace it. After compute, only a value compute set or changed is judged (a compute that returns `undefined` or the caller's value changes nothing): a result that fails a validator answers `A2004`. Aventara's own re-check comes first: a pipe that returns a wrong type or an unknown key, or drops a required field, answers `A3004`, as does a pipe or compute that writes a reference twice; a compute that returns a wrong type or a value its field's `format` refuses (a relative path for `format: "url"`), or leaves a required field missing, answers `A3000`.
+- Validators run after write compute, so they judge the computed value too: a `compute.create` result that fails a validator answers `A2004` when the caller's layer shows the field. For a field the caller's layer hides, the root's validators judge it, and a refusal is the server's defect: `500 A3000`, with an `AvComputedValueError` sent to `diagnostics`. Aventara's own re-check comes first: a pipe that returns a wrong type or an unknown key, or drops a required field, answers `A3004`, as does a pipe or compute that writes a reference twice; a compute that returns a wrong type or a value its field's `format` refuses (a relative path for `format: "url"`), or leaves a required field missing, answers `A3000`.
 - Validators do not judge a directive's operand (`{ $increment: 500 }`); `$push` entries are judged.
 - `pipelines.cache` runs nothing: it is data that lets a read be served as a cacheable `GET` (`reference/config.md`, Caching reads), and the one `pipelines` key that does not add up across levels. Every stage runs on that `GET` as on the `POST`; `ctx.$transport.method` tells them apart.
 - Calls grouped into one `POST /_all` each run their own full pipeline, exactly as alone (`reference/client.md`).
@@ -619,7 +702,7 @@ With `forceTransaction` (or as a step of a transaction plan), guards, pipes and 
 ````markdown
 # Recipes
 
-Every block here compiles against the Aventara release this skill was written for. Model names (`User`, `Post`, `Order`, `OutboxEvent`) are examples: use your schema's.
+Every block here compiles against the Aventara release this skill was written for. Model names (`User`, `Post`, `Order`, `OutboxEvent`) are examples: use your schema's. The ids here are numbers; the scaffold's `User.id` is a `String` cuid, so write your schema's id type where a recipe names one.
 
 ## The signed-in user, for every stage
 
@@ -635,7 +718,7 @@ declare module "@aventara/core" {
 export {};
 ```
 
-Seed it from your auth middleware's result, in `src/app.module.ts`:
+Seed it from what your auth middleware found, in `src/app.module.ts`. Run that middleware with `app.use(...)` in `main.ts`: Nest guards (Passport's `AuthGuard`, `APP_GUARD`) never run on Aventara's routes.
 
 ```ts
 // src/app.module.ts
@@ -714,7 +797,7 @@ export const post = defineResource<Model>()("Post", {
           create: ({ value, ctx }) => {
             const user = ctx.$state.user;
             if (user !== undefined) return user.id;
-            if (typeof value === "number") return value;
+            if (value !== undefined) return value; // server code may pass the owner itself
             throw new AvError("A4000", "Sign in first.");
           },
         },
@@ -759,7 +842,7 @@ email: {
 },
 ```
 
-Validators are `AvZ` checks only (`minLength`, `maxLength`, `regex`, `email`, `uuid`, `gte`, `lte`, `multipleOf`, `maxItems`, …). A rule across two fields, or one that reads the database, is a guard.
+Validators are `AvZ` checks only (`minLength`, `maxLength`, `regex`, `email`, `uuid`, `gte`, `lte`, `multipleOf`, `maxItems`, …). A rule across two fields is a guard or a pipe. A rule that reads the database runs where it holds at commit: `hooks.before` under `forceTransaction` (Compare-and-set, below), with a guard as an optional early check.
 
 ## An outbox event that commits with the order
 
@@ -782,7 +865,7 @@ export const order = defineResource<Model>()("Order", {
                 // The result holds what the caller selected: narrow it, never cast it.
                 const id = typeof result === "object" && result !== null && "id" in result ? result.id : undefined;
                 // Runs inside the order's transaction: a throw rolls the order back.
-                if (typeof id !== "number") throw new Error('create orders with select: ["id"]');
+                if (typeof id !== "number" && typeof id !== "string") throw new Error('create orders with select: ["id"]');
                 await ctx.OutboxEvent.create.one({
                   data: { topic: "order.created", payload: { orderId: id } },
                   select: ["id"],
@@ -839,6 +922,42 @@ export class PostReader {
 ```
 
 `framework.application` calls resolve the data and throw the code's `AvError` subclass; `find.first` resolves `null` instead of throwing. Several writes that must succeed together: `framework.transaction([framework.appTx.Post.create.one(…), …])`, or `ctx.$transaction(async (tx) => …)` inside a stage.
+
+## Server surfaces
+
+| Call | Runs as | Values |
+|---|---|---|
+| `framework.application.<R>.<family>.<variant>(args, options?)` | the application layer: trusted code, no policy unless `{ as }` | application (`Date`, `bigint`, `AvDecimal`, `Uint8Array`) |
+| `framework.serverClient.<R>…` | the client layer: the exposure, pipelines, limits and policy a remote caller gets | application |
+| `framework.client.<R>…` | the client layer, as above | wire (ISO strings, decimal and bigint strings, base64) |
+| `framework.transaction([...], options?)` with `framework.appTx`, `framework.clientTx` or `framework.serverClientTx` steps | one layer per plan: mixing `appTx` with client steps is `A2004` / `V1020` | as the matching call |
+
+`options`: `{ requestId, state, as, signal }` (`signal` on `serverClient` calls). A server-side call has no HTTP request, so `ctx.$transport` is absent and a guard that reads headers sees none: pass the user with `{ state }`.
+
+## Compare-and-set: a status change two requests may race on
+
+A guard's check runs before the transaction; even a `hooks.before` re-check inside it can be passed by two transactions at once under PostgreSQL's default isolation. Make the write itself the check:
+
+```ts
+const closed = await framework.application.Ticket.update.first({
+  where: { id: ticketId, status: "OPEN" },
+  data: { status: "CLOSED" },
+  select: ["id", "status"],
+});
+if (closed === null) {
+  // no open ticket with that id: already closed, or never there
+}
+```
+
+`update.first` runs two statements in one transaction, a read and then a write with the same `where` asserted again: the second of two racing calls resolves `null` (no match) or throws `AvConflictError` `A2014` (the row changed between the read and the write); nothing is written either way. `A2013` and `A2014` may succeed if sent again. An `after` hook that must write the side effect (an event, a number from a counter) goes on `update.first` with `forceTransaction: true`. The update's answer is read before that hook runs. To answer with what the hook wrote, patch the result in an interceptor, which runs inside the same transaction: `const result = await next();`, read only the written field with `ctx` (`select: ["number"]`), and return `{ ...result, number }` when `result` holds that field. Never replace the result with a fresh `ctx` read: the answer is checked against the caller's own projection, and a `ctx` call is application-origin, so a read with the default fields carries fields the `client` layer hides and a remote caller gets `500 A3000`.
+
+## Testing
+
+- Through Nest: `Test.createTestingModule({ imports: [AppModule] }).compile()`, then `moduleRef.get(...)` or `createNestApplication()` and real HTTP.
+- Assert on `code` or the error class, never the message: `await expect(call).rejects.toMatchObject({ code: "A2004" })`, `.rejects.toBeInstanceOf(AvValidationError)`.
+- As a remote caller, in process: `framework.client` (wire values) or `framework.serverClient` (application values) run the client layer's exposure, pipelines and limits. A client plan: `framework.transaction([framework.clientTx.Post.create.one(…), …])`, held to the client's `maxTransactionOperations`.
+- Without a database: `createFakeAdapter({ model: discovery.model, execute })` from `@aventara/testing`, passed as `adapter` to `createFramework({ ...aventaraConfig, adapter })`; its `operations` and `transactions` record what ran.
+- Never import `@aventara/core/internal` in tests: it is not public API and changes in any release.
 
 ## Agents (MCP)
 

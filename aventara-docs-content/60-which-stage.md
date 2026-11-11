@@ -14,7 +14,7 @@ Aventara has several places to run your own code around an operation, and most t
 | You want to | Use | Where it goes |
 |---|---|---|
 | Check a permission | a guard | `pipelines.guards`, at the layer, a Resource, a family or a variant |
-| Limit which rows and fields a caller may read or write, per caller | a [policy](/docs/policies) | the root `policy` key: an engine that answers `can`, `scopeOf` and `fieldsOf`. It runs before your guards. |
+| Limit which rows and fields a caller may read or write, per caller | a [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine) | the root `policy` key: an engine that answers `can`, `scopeOf` and `fieldsOf`. It runs before your guards. |
 | Refuse a write to one field | a field write guard | `resources.<R>.fields.<f>.pipelines.guards` |
 | Normalize input (trim, lower-case, add a default, scope a query) | a pipe, or a field pipe for one field's value | `pipelines.pipes`, or `resources.<R>.fields.<f>.pipelines.pipes` |
 | Enforce a rule on a value (length, range, pattern, format) | a validator | `resources.<R>.fields.<f>.pipelines.validators` |
@@ -23,12 +23,14 @@ Aventara has several places to run your own code around an operation, and most t
 | Wrap the execution (timing, caching, retries, `try`/`catch`, `AsyncLocalStorage`) | an interceptor | `pipelines.interceptors` |
 | Turn an error into an answer for the caller | a filter | `pipelines.filters` |
 | Check a whole transaction (at most one delete per plan, for example) | the Resource's transaction stages | `resources.<R>.transactions.pipelines` |
+| Enforce a rule that reads the database and must still hold at commit (a ticket must still be open) | a `hooks.before` stage with `forceTransaction: true` on the operation, or the Resource's transaction stages; a guard may check it first for a quick refusal | `resources.<R>.operations.<family>.<variant>.pipelines.hooks.before` |
 | Share request information between stages (the signed-in user) | `ctx.$state` | seeded by `AventaraModule`'s `state` option, or by a call's `{ state }` option |
 | Call another operation from a stage | `ctx.<Resource>.<family>.<variant>(args)` | the `ctx` every stage gets (compute can only read) |
 
 Some details behind the rows:
 
 - A guard returns `false` to refuse with `A4001`, or throws an `AvError` to answer with another code. See [Authentication and guards](/docs/authentication-and-guards).
+- A guard runs before the transaction opens, and its `ctx` reads do not join it. A rule it checks against the database can change before the write commits (check-then-act), so it is never the only check of such a rule. See [Check, then act](/docs/pipelines#check-then-act).
 - A field pipe is a pure function of one value and gets no `ctx`. An operation pipe gets the whole arguments and `ctx`, and returns new arguments.
 - Validators are declarative `AvZ` checks. They are part of the contract, so the generated client runs the client-visible ones before it sends a request. See [Field validators](/docs/field-validators).
 - Compute gets a read-only `ctx`: it can call `ctx.<Resource>.find.*` and read `ctx.$state`, and nothing that writes. See [Computed fields](/docs/computed-fields).

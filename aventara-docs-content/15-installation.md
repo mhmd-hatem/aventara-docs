@@ -24,6 +24,8 @@ You rarely install Aventara packages by hand. `aventara new` (or `aventara init`
 
 The bins refuse to run on an unsupported Node, in one sentence that names the range.
 
+SQLite with better-sqlite3 has one connection, so operations and transactions queue for it and run one at a time ([SQLite: one connection](/docs/transactions#sqlite-one-connection)). PostgreSQL runs them side by side.
+
 ## Packages
 
 | Package | Install it | Where | What it is |
@@ -118,7 +120,25 @@ minimumReleaseAge: 4320
 
 The units differ: npm counts days, pnpm counts minutes. Both examples above mean three days.
 
-A release-age delay also holds back a brand-new Aventara release, including a fresh `@rc`. Exclude the Aventara packages (`minimumReleaseAgeExclude` in pnpm, `min-release-age-exclude` in npm) or wait out the delay.
+pnpm 11 and later have a delay by default: one day (1440 minutes), even when you set none. That built-in delay is not strict: a version range or tag (`@rc`, `@latest`) quietly resolves to the newest release old enough.
+
+A release-age delay also holds back a brand-new Aventara release, including a fresh `@rc`: `pnpm dlx @aventara/cli@rc new …` then runs the previous CLI, and the project is pinned to that version. `aventara new` and `aventara init` print the version they pin, and the newer one when the registry has it:
+
+```text
+Aventara 1.0.0-rc.11 (newest: 1.0.0-rc.12, held back by a release-age delay or not yet in your registry; to take it: pnpm --config.minimum-release-age=0 dlx @aventara/cli@1.0.0-rc.12 new …)
+```
+
+Naming the exact version does not get past a delay you set yourself (`minimumReleaseAge` in `pnpm-workspace.yaml` or in pnpm's global config): pnpm refuses a version that is too new (`ERR_PNPM_NO_MATURE_MATCHING_VERSION`). pnpm's built-in one-day delay lets an exact version through. To take new Aventara releases under your own delay, exclude the Aventara packages from it:
+
+```yaml
+# pnpm-workspace.yaml (or pnpm's global config.yaml)
+minimumReleaseAgeExclude:
+  - "@aventara/*"
+```
+
+For one run, `pnpm --config.minimum-release-age=0 dlx @aventara/cli@<version> new …` turns the delay off. In npm the setting is `min-release-age-exclude`.
+
+The newer version is read from the registry npm and pnpm use for `@aventara` (`@aventara:registry`, else `registry`). Behind an HTTP proxy, Node reads `HTTPS_PROXY` only with `NODE_USE_ENV_PROXY=1`; without it the line shows the pinned version alone.
 
 When an advisory names a fixed version, exclude that exact version so you get it at once (pnpm takes `name@x.y.z`; npm excludes by package name); remove the exclude after 3 days.
 

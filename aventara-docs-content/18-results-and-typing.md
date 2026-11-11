@@ -88,7 +88,7 @@ When the nested relation has a `where` and paging, `count` is the number of matc
 | `["$defaults", "email"]` | the default fields and `email: string` |
 | `["id", "email"]` | `{ id; email }` only |
 
-A field that a [policy](/docs/policies#governed-fields-and-defaults) governs is not in the default fields. It is typed as present, never optional or nullable, wherever a `select` names it. A request that may not read it is refused (`A4002`) instead of returning a gap.
+A field that a [policy](https://www.npmjs.com/package/@aventara/core#a-policy-engine) governs is not in the default fields. It is typed as present, never optional or nullable, wherever a `select` names it. A request that may not read it is refused (`A4002`) instead of returning a gap.
 
 ## Results are readonly
 
