@@ -1,6 +1,6 @@
 ---
 title: Field validators
-description: Declarative checks on a field's value with AvZ - lengths, ranges, patterns and formats - checked by the server and, before anything is sent, by the generated client.
+description: Declarative checks on a field's value with AvZ - lengths, ranges, patterns, formats and closed sets - checked by the server and, before anything is sent, by the generated client.
 order: 21
 section: guides
 ---
@@ -55,6 +55,7 @@ A validator is a rule on input. It never states a type: the field's type comes f
 | List length | `minItems`, `maxItems` | any list field |
 | Byte size | `minSize`, `maxSize`, `size` | `bytes` |
 | Text | `regex`, `includes`, `startsWith`, `endsWith`, `lowercase`, `uppercase` | `string` |
+| One of a set | `oneOf` | `string` |
 | Named formats | `email`, `url`, `emoji`, `uuid` (any version), `guid`, `nanoid`, `cuid`, `cuid2`, `ulid`, `xid`, `ksuid`, `ipv4`, `ipv6`, `cidrv4`, `cidrv6`, `base64`, `base64url`, `e164`, `creditCard`, `iban`, `jwt`, `jsonString`, and `AvZ.iso.datetime()`, `AvZ.iso.date()`, `AvZ.iso.time()`, `AvZ.iso.duration()` | `string` |
 
 Each check behaves as zod 4's does: a string's length is counted in Unicode code points, and a `float`'s `multipleOf` allows zod's tolerance. A `decimal`'s bounds and multiples are exact. A bound is written in the field's own type: a number for `int` and `float`, a `bigint` for `bigint`, a `Date` for `datetime`, and a number or a `bigint` for `decimal`.
@@ -63,6 +64,33 @@ Each check behaves as zod 4's does: a string's length is counted in Unicode code
 publishedAt: { pipelines: { validators: [AvZ.gte(new Date("2020-01-01T00:00:00.000Z"))] } },
 views:       { pipelines: { validators: [AvZ.nonnegative()] } },
 ```
+
+### A closed set of values
+
+`AvZ.oneOf` accepts a string equal to one of the values you list, exactly:
+
+```ts
+currency: { pipelines: { validators: [AvZ.oneOf(["USD", "EUR", "GBP"])] } },
+```
+
+It is a pattern check underneath: `^(?:USD|EUR|GBP)$`, with each value's pattern characters escaped, so `AvZ.oneOf(["C++", "a.b"])` matches `C++` and `a.b` and nothing else. The contract stores it as a `regex` check, so the generated client runs it like any other, and a refused value answers `V1003` with `Value must be one of "USD", "EUR", "GBP".`. The list needs at least one value, and every value is a string: the types refuse an empty list, and so does the builder when it runs.
+
+The field's type stays `string`. When you want the type itself to be the set, so that `framework.client`, `framework.application` and the generated client type `currency` as `"USD" | "EUR" | "GBP"`, make it a Prisma `enum` instead:
+
+```prisma
+enum Currency {
+  USD
+  EUR
+  GBP
+}
+
+model Price {
+  id       String   @id @default(uuid())
+  currency Currency
+}
+```
+
+Aventara carries the enum into the contract and the generated client as a literal union, and a value outside it is refused before any stage runs ([Enums and scalars](/docs/enums-and-scalars)). Adding a value is then a schema change and a migration. Use `AvZ.oneOf` when the list belongs to the application rather than to the database, and a Prisma `enum` when the set is part of the data model.
 
 There are no refinements, no custom check functions and no transforms (`trim`, `toLowerCase`). A rule across two fields of the call belongs in a [pipe or a guard](/docs/pipelines). To normalize a value (trim it, lower-case it), use a [field pipe](/docs/pipelines#field-pipes-and-field-write-guards).
 
@@ -111,11 +139,11 @@ A failed check answers `422` `A2004`, with one issue per broken rule. A range, l
 | `max_length` (`maximum`), `min_length` (`minimum`), `length_equals` (`length`) | `maxLength`, `minLength`, `length` | `V1004` |
 | `max_length` / `min_length` with `list: true` | `maxItems`, `minItems` | `V1004` |
 | `max_size` (`maximum`), `min_size` (`minimum`), `size_equals` (`size`) | `maxSize`, `minSize`, `size` | `V1004` |
-| `string_format` (`format: "regex"`, `pattern: { source, flags }`) | `regex` | `V1003` |
+| `string_format` (`format: "regex"`, `pattern: { source, flags }`) | `regex`, `oneOf` | `V1003` |
 | `string_format` (`format: "includes"`, `"starts_with"`, `"ends_with"`, `"lowercase"`, `"uppercase"`) | `includes`, `startsWith`, `endsWith`, `lowercase`, `uppercase` | `V1003` |
 | `string_format` (`format: "email"`, `"uuid"`, `"url"`, ...) | the named formats | `V1003` |
 
-The messages are plain sentences such as `Value must be at least 3 characters long.`, `List must have at most 5 entries.`, `Value must match the pattern /^[a-z0-9-]+$/.` or `Value must be a multiple of 100.`. Branch on `code`, `check` and `params`, not on the message.
+The messages are plain sentences such as `Value must be at least 3 characters long.`, `List must have at most 5 entries.`, `Value must match the pattern /^[a-z0-9-]+$/.`, `Value must be one of "USD", "EUR".` (from `AvZ.oneOf`) or `Value must be a multiple of 100.`. Branch on `code`, `check` and `params`, not on the message.
 
 `null` breaks no check (whether a field may be `null` comes from your schema), and a directive's operand such as `{ $increment: 5 }` is not the field's value, so it is not judged; `$push` entries are.
 
@@ -124,19 +152,20 @@ The messages are plain sentences such as `Value must be at least 3 characters lo
 On the server, in this order:
 
 1. The framework validates the arguments against the contract: types, unknown fields, structure, and that every create holds the fields its layer requires (a field a `compute.create` fills is not required yet). For a Json field this only checks that the value is plain JSON; its shape comes in step 4.
-2. The [guards](/docs/pipelines) run, and see the value as the caller sent it. Validators are about values, so they run after the pipes and write compute; presence is not a validator.
+2. The [guards](/docs/pipelines) run, and see the value as the caller sent it. Presence is not a validator: a missing required field was refused in step 1.
 3. The operation's pipes run, then each [field pipe](/docs/pipelines#field-pipes-and-field-write-guards) on the value.
-4. [Write compute](/docs/computed-fields) runs: each `compute.create` or `compute.update` stage fills its field.
-5. The re-check. First Aventara's own checks on what the pipes and compute produced: a wrong type, an unknown key, a required field a pipe dropped, or a reference written twice answers `A3004` (your bug), and a compute stage that returns the wrong type answers `A3000`. Then the validators check every value, a Json field's shape included.
-6. Then the interceptors and hooks run, and the adapter writes exactly what the validators checked: no later stage can change it ([Read-only data](/docs/pipelines#read-only-data)).
+4. The validators check every value the caller sent, as the pipes left them, a Json field's shape included. That includes a field that has a `compute.create` or `compute.update` stage.
+5. [Write compute](/docs/computed-fields) runs: each `compute.create` or `compute.update` stage fills its field. It never sees a value its own validators refuse.
+6. The re-check. First Aventara's own checks on what the pipes and compute produced: a wrong type, an unknown key, a required field a pipe dropped, or a reference written twice answers `A3004` (your bug), and a compute stage that returns the wrong type answers `A3000`. Then the validators check the values compute set or changed.
+7. Then the interceptors and hooks run, and the adapter writes exactly what the validators checked: no later stage can change it ([Read-only data](/docs/pipelines#read-only-data)).
 
-So the validators judge every value that is written: the caller's input after the pipes, and every value a `compute.create` or `compute.update` stage returns, at the top level, in nested writes and in both branches of an upsert. A call judges once, after compute. A value that breaks a check is answered `A2004` with the issues, at the field, whether it came from the caller, a pipe or a compute stage. A computed value of the wrong type or format is your bug and stays `A3000`, with the details on an `AvComputedValueError` in your [`diagnostics`](/docs/config-reference#diagnostics) sink. A `compute.read` value is output, not a write, and the validators do not judge it.
+So each value is judged once. Every value the caller sent is judged after its field pipes and before compute, even for a field that has a compute stage, so a bad value is refused even when compute would have replaced it. After compute, only a value a `compute.create` or `compute.update` stage set or changed is judged: a field the caller left out that compute filled, or a caller's value compute replaced, at the top level, in nested writes and in both branches of an upsert. A compute stage that returns `undefined`, or the caller's own value, changes nothing, and that value is not judged again. A value that breaks a check is answered `A2004` with the issues, at the field, whether it came from the caller, a pipe or a compute stage. When the caller's values are refused, compute does not run, so one answer never mixes the caller's issues with a computed value's. A compute stage can therefore count on the values its validators admit: a currency code checked by `AvZ.oneOf` before `Intl.NumberFormat` reads it, a quantity bounded by `AvZ.lte` before it is multiplied. A computed value of the wrong type or format is your bug and stays `A3000`, with the details on an `AvComputedValueError` in your [`diagnostics`](/docs/config-reference#diagnostics) sink. A `compute.read` value is output, not a write, and the validators do not judge it.
 
 A field the caller's layer hides can still be filled by a compute stage. The caller cannot have written it, so its value is judged against the root's validators and, for a typed Json field, the root's shape. A value they refuse is your bug: the call answers `500` `A3000`, your `diagnostics` sink receives an `AvComputedValueError` with the issues, and the answer says nothing about the hidden field. A layer that shows the field still answers `A2004` at it.
 
 A value a validator refuses runs no interceptor and no hook. Issues come in the order the call wrote the fields, a Json field's shape issues at that field's place. Inside one Json value they follow the shape's keys as the contract lists them.
 
-In a [transaction](/docs/transactions), every step's guards and pipes run before the transaction opens, and so do the validators on its literal values that no write compute changes, so a bad value in step 3 refuses the plan before step 1 writes anything. A computed value and a `$ref` value are judged at their step, after the `$ref`s are resolved and the field pipes and write compute have run; a refusal there rolls the transaction back. Nested write data is checked against the target Resource's validators. A [`ctx` call](/docs/pipeline-context) from a stage keeps validators too.
+In a [transaction](/docs/transactions), every step's guards and pipes run before the transaction opens, and so do the validators on every literal value it sent, so a bad value in step 3 refuses the plan before step 1 writes anything. A `$ref` value is judged at its step, once it is resolved and through its field pipes, before write compute; a value a Resource transaction pipe changed is judged at its step too; a value compute set or changed is judged at its step after write compute. A refusal there rolls the transaction back. Nested write data is checked against the target Resource's validators. A [`ctx` call](/docs/pipeline-context) from a stage keeps validators too.
 
 Validators add up across layers. A check at the root applies to both origins; one in the `client` overlay applies to remote callers only; one in `application` to your server code only:
 
