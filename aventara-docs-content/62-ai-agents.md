@@ -120,7 +120,7 @@ A Next.js app (`@aventara/next`, App Router under `src/app/`) keeps everything A
 
 Server Components and Server Actions call `avClient.<Resource>.<family>.<variant>(args)` (checked as the caller) or `avApp` (trusted code); Client Components call the generated `avClient` from `@/aventara/client`. There is no separate frontend to regenerate: `aventara:prepare` writes the browser client too, and `next build` runs it first. An `mcp` endpoint on Next.js needs `authorization`.
 
-Data a Server Component prefetches for a Client Component goes through TanStack Query or SWR, with the query written once over `@/aventara/universal` (it runs on both sides): the server dehydrates it with `avDehydrate` from `@aventara/next`, the browser revives it with `avHydrate` from `@/aventara/client` (`Date`, `bigint`, `Uint8Array` and `AvDecimal`, which React cannot pass as they are), and the Client Component reads it through the same query, which is where its type comes from. `avHydrate` returns `unknown`: never hand its output to a component as typed props. The pattern: `reference/recipes.md`, Prefetched data in a Client Component. Transactions on the server: `avClient.tx` with `avClient.transaction([...])` (the client layer), or `avApp.appTx` with `avApp.transaction([...])` (the application layer). They need the built Framework, which `instrumentation.ts`'s `await ready()` gives; elsewhere, `await ready()` first.
+Data a Server Component prefetches for a Client Component goes through TanStack Query, with the query written once over `@/aventara/universal` (it runs on both sides): the server dehydrates it with `avDehydrate` from `@aventara/next`, the browser revives it with `avHydrate` from `@/aventara/client` (`Date`, `bigint`, `Uint8Array` and `AvDecimal`, which React cannot pass as they are), and the Client Component reads it through the same query, which is where its type comes from. `avHydrate` returns `unknown`: never hand its output to a component as typed props. The pattern: `reference/recipes.md`, Prefetched data in a Client Component. Transactions on the server: `avClient.tx` with `avClient.transaction([...])` (the client layer), or `avApp.appTx` with `avApp.transaction([...])` (the application layer). They need the built Framework, which `instrumentation.ts`'s `await ready()` gives; elsewhere, `await ready()` first.
 
 A call reads the database, so Next.js runs it at request time (Cache Components is on: `cacheComponents: true`). Give a page that calls `avClient` or `avApp` one of: the calling component inside `<Suspense fallback={…}>` (or a `loading.tsx`), `"use cache"` on a function that makes the call (the result is shared by every visitor: never with `state`), or `export const instant = false` to render the whole page at request time. Without one, `next build` fails naming these three: add one (no `connection()` is needed).
 
@@ -510,7 +510,7 @@ export default defineClientConfig({
 - The generated client calls the `entrypoint` it was generated with. To build a client for staging or production, set `AVENTARA_API_URL` to that server and regenerate. `new AvClient({ entrypoint })` points one client at another deployment that serves the same contract (a test server, SSR).
 - `generateAt` is where the client goes: `avclient generate` owns `AvClient.ts` and `generated/` in it and touches nothing else there.
 - `tsconfigFile` names the tsconfig that compiles the client, only when it is not the nearest `tsconfig.json` above `generateAt` (Vite's `tsconfig.app.json`).
-- `accessOrigins`, only with Aventara Access: the origins besides the entrypoint's where the client may call Access (`["https://auth.example.com"]`). Access on another origin is not written into the client unless listed here.
+- `accessOrigins`, only with Aventara Access on another origin than the entrypoint's: list that origin (`["https://auth.example.com"]`). Without it `avclient generate` refuses with an error naming that origin and `accessOrigins`, because sign-in credentials would go there.
 
 ## Regenerate after the server changes
 
@@ -1171,7 +1171,7 @@ export class PostReader {
 
 ## Prefetched data in a Client Component (Next.js)
 
-Write the query once over `@/aventara/universal`, which runs on the server and in the browser; the Client Component's data is typed by that query. The browser's `QueryClient` takes `defaultOptions: { hydrate: { deserializeData: avHydrate } }` (`avHydrate` from `@/aventara/client`), set once in your providers. With SWR, pass `avDehydrate({ [key]: data })` as the `fallback` and `avHydrate(fallback)` to `SWRConfig`.
+Write the query once over `@/aventara/universal`, which runs on the server and in the browser; the Client Component's data is typed by that query. The browser's `QueryClient` takes `defaultOptions: { hydrate: { deserializeData: avHydrate } }` (`avHydrate` from `@/aventara/client`), set once in your providers. Use TanStack Query for this: SWR's `fallback` would need a cast, since `avHydrate` returns `unknown`.
 
 ```ts
 // src/app/posts/posts.queries.ts
@@ -1181,6 +1181,7 @@ import { avClient } from "@/aventara/universal";
 export const postsQuery = queryOptions({
   queryKey: ["posts"],
   queryFn: () => avClient.Post.find.many({ select: ["id", "title", "createdAt"] }),
+  staleTime: 60_000, // the hydrated data is not refetched on mount
 });
 ```
 
