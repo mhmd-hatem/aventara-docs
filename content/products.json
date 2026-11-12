@@ -6,10 +6,10 @@
     "headline": "Your schema. Every layer connected.",
     "detail": "Keep your Prisma schema, client and migrations. Aventara turns your models and configuration into contracts, a typed HTTP API and a frontend client.",
     "accent": "iris",
-    "currentVersion": "1.0.0-rc.12",
+    "currentVersion": "1.0.0-rc.13",
     "versions": [
       {
-        "version": "1.0.0-rc.12",
+        "version": "1.0.0-rc.13",
         "source": {
           "kind": "local",
           "path": "aventara-docs-content",

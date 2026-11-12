@@ -1,13 +1,65 @@
 ---
 title: Upgrading
-description: Move from 1.0.0-rc.11 to 1.0.0-rc.12 (lookup keys need filter, the scaffold's String ids), from 1.0.0-rc.8 to 1.0.0-rc.11 (Node and Prisma floors, stricter policy checks, grouped client calls, regenerate clients), from 1.0.0-rc.4 to 1.0.0-rc.8 (rebuild after a discovery change, policy additions, request type names), from 1.0.0-rc.3 to 1.0.0-rc.4 (build-time Contracts, the policy seam), from 1.0.0-rc.2 to 1.0.0-rc.3, from 1.0.0-rc.1 to 1.0.0-rc.2, from 1.0.0-rc.0 to 1.0.0-rc.1 (the new configuration shape, Av names, the $ ctx members) and from earlier pilots step by step, and the general flow for upgrading Aventara packages.
+description: Move from 1.0.0-rc.12 to 1.0.0-rc.13 (the transaction write limit, validators before compute, 401 and 403 from state), from 1.0.0-rc.11 to 1.0.0-rc.12 (lookup keys need filter, the scaffold's String ids), from 1.0.0-rc.8 to 1.0.0-rc.11 (Node and Prisma floors, stricter policy checks, grouped client calls, regenerate clients), from 1.0.0-rc.4 to 1.0.0-rc.8 (rebuild after a discovery change, policy additions, request type names), from 1.0.0-rc.3 to 1.0.0-rc.4 (build-time Contracts, the policy seam), from 1.0.0-rc.2 to 1.0.0-rc.3, from 1.0.0-rc.1 to 1.0.0-rc.2, from 1.0.0-rc.0 to 1.0.0-rc.1 (the new configuration shape, Av names, the $ ctx members) and from earlier pilots step by step, and the general flow for upgrading Aventara packages.
 order: 34
 section: guides
 ---
 
 # Upgrading
 
-Aventara `1.0.0-rc.12` is the tenth published release candidate (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were tagged but never published, and rc.9 and rc.10 sit between rc.8 and rc.11), and the next release follows it; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.12` from `1.0.0-rc.11`, the move to `1.0.0-rc.11` from `1.0.0-rc.8`, the move to `1.0.0-rc.8` from `1.0.0-rc.4`, the move to `1.0.0-rc.4` from `1.0.0-rc.3`, the move to `1.0.0-rc.3` from `1.0.0-rc.2`, to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
+Aventara `1.0.0-rc.13` is the eleventh published release candidate (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were tagged but never published, and rc.9 and rc.10 sit between rc.8 and rc.11), and the next release follows it; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.13` from `1.0.0-rc.12`, the move to `1.0.0-rc.12` from `1.0.0-rc.11`, the move to `1.0.0-rc.11` from `1.0.0-rc.8`, the move to `1.0.0-rc.8` from `1.0.0-rc.4`, the move to `1.0.0-rc.4` from `1.0.0-rc.3`, the move to `1.0.0-rc.3` from `1.0.0-rc.2`, to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
+
+## From 1.0.0-rc.12 to 1.0.0-rc.13
+
+Before 1.0 the API does not keep backward compatibility, so the changes in behavior are listed plainly in step 2. Every Contract hash changes in this release (the new write limit is part of each Contract's `limits`), so regenerate every frontend client. Most projects change a version number, regenerate and rebuild.
+
+### 1. Install the new versions
+
+```bash
+npm install --save-exact @aventara/core@1.0.0-rc.13 @aventara/nest@1.0.0-rc.13 @aventara/prisma7-adapter@1.0.0-rc.13 @aventara/build@1.0.0-rc.13
+# add @aventara/mcp@1.0.0-rc.13 and @aventara/testing@1.0.0-rc.13 to the command if you use them
+```
+
+With pnpm or yarn, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
+
+```bash
+# pnpm (in a workspace, add --filter <your server package> after pnpm)
+pnpm add --save-exact @aventara/core@1.0.0-rc.13 @aventara/nest@1.0.0-rc.13 @aventara/prisma7-adapter@1.0.0-rc.13
+pnpm add --save-dev --save-exact @aventara/build@1.0.0-rc.13
+
+# yarn
+yarn add --exact @aventara/core@1.0.0-rc.13 @aventara/nest@1.0.0-rc.13 @aventara/prisma7-adapter@1.0.0-rc.13
+yarn add --dev --exact @aventara/build@1.0.0-rc.13
+```
+
+Move the frontend's `@aventara/client` to the same version, and run `npx @aventara/cli@1.0.0-rc.13 skill` (`pnpm dlx @aventara/cli@1.0.0-rc.13 skill`, `yarn dlx @aventara/cli@1.0.0-rc.13 skill` on Yarn Berry) to refresh the agent skill. Then run `npm run aventara:prepare` on the server (`pnpm run aventara:prepare`, `yarn aventara:prepare`) and `avclient generate` in each frontend.
+
+### 2. Changes in behavior
+
+| Change | What to do |
+| --- | --- |
+| A transaction plan with more than 20 write steps is refused before anything runs (`422 A2009`, one `V1014` at `["operations"]`). The new limit `maxTransactionWrites` (default `20`) counts each `create`, `update`, `upsert` and `delete` step and each `appTx.$sql` step; a step with nested `$create`s counts once. It defaults to `20` whatever `maxTransactionOperations` is set to | If a plan needs more writes, raise `maxTransactionWrites` under `limits`, at the root or per layer. Raising only `maxTransactionOperations` does not lift it: raise both ([Limits and safety](/docs/limits-and-safety#the-limits)). |
+| Field validators judge every value the caller sent before any write compute stage runs, a field's own `compute.create` or `compute.update` included; after compute, only a value compute set or changed is judged. A caller value a validator refuses now answers `422 A2004` even when compute would have replaced it (before, it was dropped silently), and a caller value that used to break a compute stage (`500 A3000`) is refused `422 A2004` at the field before compute runs | Make sure callers do not send, for a field compute fills, a value its validators refuse. |
+| When `state` (the host's `state` option or the `access` provider's `state`) rejects with an object whose `status` or `statusCode` is the number 401 or 403, the request answers `401 A4000` or `403 A4001` instead of `500 A3000`, on every protocol route and MCP tool call, with core's own message. In process (`avClient` in a Next.js Server Component or Server Action, `framework.serverClient.$access.can` given `headers`) the call rejects with an `AvAuthError`. An object whose `status` and `statusCode` are both numbers that disagree is not read as a refusal (`500 A3000`) | Handle `A4000` and `A4001` where a bad credential used to show up as `A3000`; the generated client throws `AvAuthError` for both. |
+| Read-only now means no nested write: a relation takes no `$create`, `$connectOrCreate`, `$upsert`, `$update` or `$delete` into a Resource its layer cannot create, update or delete (by its operations and its writable fields). Under `exposed: true` those directives are dropped from the relation, and the ClientContract hash changes. Under `exposed: false` a layer that grants one fails at startup with `COMPILER_READ_ONLY_NESTED_WRITE`. `$connect`, `$disconnect` and `$set` stay | Under `exposed: false`, let such a relation only link: `author: { select: true, create: ["$connect"] }`. Regenerate the frontend client. |
+| A field the configuration adds (`lifecycle: ["VIRTUAL"]`) with `nullable: false` is a create requirement in each layer that lets a caller write it at create, unless a `compute.create` (the root's or that layer's) fills it. A create without it answers `422 A2004` with `V1000` at the field, and the types require it | Send it on every create, or declare it `nullable: true`. Regenerate the frontend client. |
+| With SQLite through `@prisma/adapter-better-sqlite3`, an operation outside a transaction, and a `ctx.$sql` outside one, runs in a transaction of its own and waits while another request's transaction is open. `transactionOptions` apply: past `maxWait` it answers `A3002`, and `timeout` limits a single plain operation too. A plain call made from inside a transaction's own async context joins it and warns `AVENTARA_PRISMA_SQLITE_TRANSACTION_JOINED` | Check that `transactionOptions.timeout` fits your slowest single operation. Where the warning appears, make the call through the stage's `ctx` instead of the root Framework. |
+| `createPrismaAdapter` throws when the Prisma client was built with another driver adapter than the declared `driver` | Make `driver` in `src/aventara.adapter.ts` name the driver adapter your Prisma client is built with. |
+
+### 3. CLI and scaffold changes
+
+These change only what `aventara new`, `aventara init` and `avclient init` write and print. An existing project keeps its files.
+
+- `aventara new` and `aventara init` print the Aventara version they pin first, and, when the registry's `rc` or `latest` tag names a newer one, that version and a command that takes it ([CLI reference](/docs/cli-reference#aventara-new)). A release-age delay is the usual reason `@rc` resolves an older CLI.
+- They add a `typecheck` script: `tsc --noEmit` in a NestJS project, `next typegen && tsc --noEmit` in a Next.js one. A project scaffolded before can add the same line by hand.
+- They work inside a monorepo: inside a git repository the new project gets no `.git` of its own, and under a pnpm workspace the install runs at the root ([Inside a pnpm workspace](/docs/cli-reference#inside-a-pnpm-workspace)). `aventara new --skip-lint` leaves out `nest new`'s oxlint and prettier.
+- The agent skill spells its commands for the project's package manager. `aventara skill` (step 1) refreshes it.
+- `avclient init` writes a client-only agent skill, `.claude/skills/aventara-client/SKILL.md`. In a frontend set up before, run `npx avclient skill` to add it.
+- A failed `aventara-build` run now changes no generated file. If an older build left `Type 'AvModel' does not satisfy the constraint 'AvAdapterModel'` in every Resource file, run `aventara:prepare` again and fix the first error it prints.
+
+### 4. New and optional
+
+`transactionsStyle: "server"` (forced writes stay atomic, callers send no plans), `AvProtocol.fingerprint` for hand-written transaction plans, `AvZ.oneOf` for a closed set of string values, the `"read"` exemption for read-only Resources and write-only fields, and `ctx` creates that no longer ask for a field the root's or the `application` overlay's `compute.create` fills. Each is optional; see the [Changelog](/docs/changelog#100-rc13).
 
 ## From 1.0.0-rc.11 to 1.0.0-rc.12
 

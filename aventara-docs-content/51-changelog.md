@@ -7,11 +7,48 @@ section: about
 
 # Changelog
 
-`1.0.0-rc.0` was the first release candidate, `1.0.0-rc.1` the second, `1.0.0-rc.2` the third, `1.0.0-rc.3` the fourth, `1.0.0-rc.4` the fifth, `1.0.0-rc.8` the sixth, `1.0.0-rc.9` the seventh, `1.0.0-rc.10` the eighth, `1.0.0-rc.11` the ninth and `1.0.0-rc.12` is the tenth (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published); the releases before them are pilots, and a pilot's API could change. A release candidate changes the API only to fix what testing finds. Pin exact versions. All `@aventara/*` packages are released together at one version. Each package also ships this history for itself as a `CHANGELOG.md` beside its README.
+`1.0.0-rc.0` was the first release candidate, `1.0.0-rc.1` the second, `1.0.0-rc.2` the third, `1.0.0-rc.3` the fourth, `1.0.0-rc.4` the fifth, `1.0.0-rc.8` the sixth, `1.0.0-rc.9` the seventh, `1.0.0-rc.10` the eighth, `1.0.0-rc.11` the ninth, `1.0.0-rc.12` the tenth and `1.0.0-rc.13` is the eleventh (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published); the releases before them are pilots, and a pilot's API could change. A release candidate changes the API only to fix what testing finds. Pin exact versions. All `@aventara/*` packages are released together at one version. Each package also ships this history for itself as a `CHANGELOG.md` beside its README.
+
+## 1.0.0-rc.13
+
+The current release, published under the `rc` dist-tag (install with `@rc`). A transaction plan's writes get their own limit, field validators judge the caller's values before compute, a `state` that rejects with 401 or 403 answers as such, and `transactionsStyle` takes `"server"`. Every Contract hash changes, so regenerate your clients. Upgrading from rc.12: see [Upgrading](/docs/upgrading#from-100-rc12-to-100-rc13).
+
+**Transactions**
+
+- `limits.maxTransactionWrites` (default `20`) counts the write steps of one transaction plan: each `create`, `update`, `upsert` and `delete` step, and each `appTx.$sql` step, since a statement cannot be classed as a read. A plan with more is refused before anything runs (`422 A2009`, one `V1014` at `["operations"]`). It is set like every other limit and is part of each Contract's `limits`, so every Contract hash moves. It defaults to `20` whatever `maxTransactionOperations` is set to, which still counts every step: raise both. It counts steps, not rows. `POST /_all` is bounded by `maxAll`, not by either plan limit. The MCP `transaction` tool's description states the write limit when it is lower than the step limit.
+- `transactionsStyle: "server"`: the server still opens transactions (a forced call, a write the policy checks after it runs, `ctx.$transaction`), and callers send no plans. The layer has no `POST /_transactions` route (a plan sent to it answers `404 A2002`), `framework.transaction` refuses a plan of that origin the same way, the generated client has no `tx` or `transaction`, and an MCP agent layer under it has no `transaction` tool. `forceTransaction` is allowed under it. It needs an adapter with transactions, and a layer that states it gets a new Contract hash.
+- `AvProtocol.fingerprint({ resource, family, variant, args })` on `@aventara/core/protocol` computes a plan step's `fingerprint`, so a client written by hand can send a raw `POST /_transactions` plan. It is the function the server checks a step with.
+
+**Validation and exposure**
+
+- Field validators judge every value the caller sent after the guards, the pipes and its field pipes, and before any write compute stage, a field's own included. After compute, only a value compute set or changed is judged. A caller value that broke a compute stage answered `500 A3000` before; it now answers `422 A2004` at the field and no compute stage runs. A bad caller value is refused even when compute would have replaced it; before, it was dropped silently.
+- `AvZ.oneOf(["USD", "EUR"])` is a string field validator for a closed set of values, run by the server and by the generated client like any `AvZ.regex`. A refused value answers `V1003` with `Value must be one of "USD", "EUR".` To type the set as a union, use a Prisma `enum`.
+- An exemption takes `"read"`, on a field and on a Resource's `fields`: every read capability of the field. Under `exposed: false` it exposes reading and no write (`Category: { operations: { find: true }, fields: "read" }`); under `exposed: true` it hides reading and keeps the writes (`passwordHash: "read"`). It compiles to the same Contracts as the capability lists it stands for, hash included.
+- Read-only means no nested write: a relation takes no `$create`, `$connectOrCreate`, `$upsert`, `$update` or `$delete` into a Resource its layer cannot create, update or delete. Under `exposed: true` they are dropped and the ClientContract hash changes; under `exposed: false` a grant of one fails at startup with `COMPILER_READ_ONLY_NESTED_WRITE`. `$connect`, `$disconnect` and `$set` stay.
+- A field the configuration adds (`lifecycle: ["VIRTUAL"]`) with `nullable: false` is a create requirement where a caller can write it at create and no `compute.create` fills it (`422 A2004`, `V1000`), and the types require it. The Client Contract hash changes for such a configuration.
+- A stage's `ctx` create no longer has to write a field the root's or the `application` overlay's `compute.create` fills. A field only the `client` or `agent` overlay computes is still required.
+
+**Hosts and state**
+
+- A `state` (the host's `state` option or the `access` provider's) that rejects with an object whose `status` or `statusCode` is the number 401 or 403 answers `401 A4000` or `403 A4001` instead of `500 A3000`, on every protocol route that seeds state and on MCP tool calls. Nothing of the rejection reaches the caller or `diagnostics`. In process, an `avClient` call in a Next.js Server Component or Server Action, and `framework.serverClient.$access.can` given `headers`, reject with an `AvAuthError`. Numbers in `status` and `statusCode` that disagree are not a refusal (`500 A3000`).
+
+**Prisma 7 adapter**
+
+- With SQLite through `@prisma/adapter-better-sqlite3`, an operation or `ctx.$sql` outside a transaction no longer runs inside another request's open transaction: it runs in a transaction of its own and waits until the open one ends. `transactionOptions` apply (`maxWait` answers `A3002`; `timeout` limits a single plain operation). A plain call from inside a transaction's own async context joins it and warns `AVENTARA_PRISMA_SQLITE_TRANSACTION_JOINED`. PostgreSQL and D1 run as before.
+- `createPrismaAdapter` throws when the Prisma client was built with another driver adapter than the declared `driver`, and names the supported set.
+
+**CLI, build and client**
+
+- `aventara new` and `aventara init` work inside a monorepo: no `.git` of the project's own inside a git repository, and under a pnpm workspace the scaffold's `allowBuilds` go into the root's `pnpm-workspace.yaml` and the install runs at the root. `aventara new --skip-lint` leaves out `nest new`'s oxlint and prettier.
+- They print the Aventara version they pin, and a newer `rc` or `latest` version with a command that takes it. The frontend's next step names `@aventara/client` at the CLI's exact version.
+- They add a `typecheck` script (`tsc --noEmit`, or `next typegen && tsc --noEmit` in a Next.js project); one the project already has is kept.
+- The agent skill spells its commands for the project's package manager (npm or pnpm), and covers more of what agents got wrong: rules that read the database, Nest guards on Aventara routes, scalars, server surfaces, testing, deploying and the full stage order.
+- `aventara-build` no longer leaves `Type 'AvModel' does not satisfy the constraint 'AvAdapterModel'` in every Resource file. A failed or interrupted run changes no generated file, and a second run on the same project while one is writing is refused.
+- `avclient init` writes a client-only agent skill, `.claude/skills/aventara-client/SKILL.md`; `avclient skill` refreshes it. The generated client still needs no `@aventara/client` at run time.
 
 ## 1.0.0-rc.12
 
-The current release, published under the `rc` dist-tag (install with `@rc`). A unique field a layer may not filter on stops being a lookup key, and the scaffold writes String ids and Prisma ranges. Upgrading from rc.11: see [Upgrading](/docs/upgrading#from-100-rc11-to-100-rc12).
+Published under the `rc` dist-tag before rc.13. A unique field a layer may not filter on stops being a lookup key, and the scaffold writes String ids and Prisma ranges. Upgrading from rc.11: see [Upgrading](/docs/upgrading#from-100-rc11-to-100-rc12).
 
 **Lookup keys**
 

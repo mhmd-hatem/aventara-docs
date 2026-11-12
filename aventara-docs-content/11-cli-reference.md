@@ -9,7 +9,7 @@ section: reference
 
 Two commands: `aventara` scaffolds the server, on NestJS or Next.js; `avclient` sets up a separate frontend and generates its typed client. Both are run once through `npx` (or installed globally); neither is a runtime dependency of your application.
 
-The examples use the `@rc` tag, which points to the newest release candidate (`1.0.0-rc.12`).
+The examples use the `@rc` tag, which points to the newest release candidate (`1.0.0-rc.13`).
 
 ```bash
 npx @aventara/cli@rc <command>        # or: npm i -g @aventara/cli@rc
@@ -46,7 +46,7 @@ aventara: no initial commit: /path/to/repo is inside a git repository already; c
 aventara: no initial commit: git has no user.name and user.email set; set them, then commit the project yourself.
 ```
 
-Every `new` and `init` run prints the version it pins first: `Aventara 1.0.0-rc.12`. When the registry's tag for that channel (`rc` or `latest`) names a newer release, the line says so and gives a command that takes it; a release-age delay is the usual cause ([Installation](/docs/installation)). The lookup happens once the run passes its checks, reads the registry's tags only, gives up after a moment, and prints nothing more when offline. The frontend's next step names `@aventara/client` at the same exact version.
+Every `new` and `init` run prints the version it pins first: `Aventara 1.0.0-rc.13`. When the registry's tag for that channel (`rc` or `latest`) names a newer release, the line says so and gives a command that takes it; a release-age delay is the usual cause ([Installation](/docs/installation)). The lookup happens once the run passes its checks, reads the registry's tags only, gives up after a moment, and prints nothing more when offline. The frontend's next step names `@aventara/client` at the same exact version.
 
 #### Inside a pnpm workspace
 

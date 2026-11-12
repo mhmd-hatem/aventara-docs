@@ -57,6 +57,7 @@ A normal NestJS 12 project, plus:
 | `src/app.module.ts` | Edited once to import `PrismaModule` and `AventaraModule.forRootAsync(...)`. |
 | `src/main.ts` | Edited once to enable CORS for the origins in `CORS_ORIGINS`, and to hold a commented-out rate limiter (below). |
 | `.env` | `DATABASE_URL="file:./dev.db"` and `CORS_ORIGINS`. Not committed. |
+| `package.json` | Edited once: the Aventara dependencies, the `aventara:prepare` script with the hooks that run it (on install, before `build` and the start scripts), and a `typecheck` script (`tsc --noEmit`) so `npm run typecheck`, or a monorepo's `turbo typecheck`, checks the project. A `typecheck` script you already have is kept. |
 | `src/generated/` | Generated on every install by `npm run aventara:prepare`: the Prisma client, the discovery artifact, and the three files `aventara-build` writes (`resources.generated.ts`, `computed-fields.generated.ts`, `contracts.generated.ts`). Never edit. |
 | `.claude/skills/aventara/` | The agent skill for your AI coding agent: `SKILL.md` and its `reference/` files, for the Aventara version installed. `aventara skill` refreshes it ([AI agents](/docs/ai-agents)). |
 | `AGENTS.md` | A short Aventara section between `<!-- aventara:start -->` and `<!-- aventara:end -->`; an existing `AGENTS.md` keeps everything else. |
