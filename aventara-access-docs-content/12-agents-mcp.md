@@ -14,11 +14,14 @@ Access issues no token and serves no OAuth route.
 With `mcp: { resource }`, Access reads the provider's tokens for your MCP endpoint, holds the agent to its user's
 grants and its token's scopes, and gives the framework its `mcp.authorization`.
 
-Install the provider and `@better-auth/cimd` in the same range as Better Auth. npm takes the newest patch of each, with
-Better Auth's at the same patch:
+Install the provider and `@better-auth/cimd`, with `@better-auth/core`, at the `better-auth` version the app has
+(`npm ls better-auth`). Each `@better-auth/*` release needs the `better-auth` and `@better-auth/core` of its own version
+or later, so a newer one than yours does not install; and without `@better-auth/core` named, npm puts its newest
+release beside an older `better-auth` (which keeps its own copy), and the two copies' types do not match:
 
 ```sh
-npm install @better-auth/oauth-provider@~1.7.12 @better-auth/cimd@~1.7.12
+v=$(npm ls better-auth --depth=0 --json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).dependencies["better-auth"].version')
+npm install --save-exact "@better-auth/core@$v" "@better-auth/oauth-provider@$v" "@better-auth/cimd@$v"
 ```
 
 ```ts
@@ -68,6 +71,28 @@ export const access = createAccess({
 		},
 	}),
 	mcp: { resource },
+	resources: {
+		// The rules grant on `User`, Better Auth's `user` table: `users: true` opens it,
+		// and `session` and `account` read only (an admin's `read "*"` reads them),
+		// their secret columns sealed.
+		users: true,
+		// Off Prisma's adapter, every table Better Auth is built with is named: the
+		// OAuth provider's among them.
+		authTables: {
+			user: "User",
+			session: "Session",
+			account: "Account",
+			verification: null,
+			jwks: null,
+			oauthClient: null,
+			oauthResource: null,
+			oauthClientResource: null,
+			oauthRefreshToken: null,
+			oauthAccessToken: null,
+			oauthConsent: null,
+			oauthClientAssertion: null,
+		},
+	},
 });
 ```
 
@@ -92,7 +117,8 @@ scopes, or whose session has ended.
 `POST /oauth2/revoke` does not revoke a JWT access token: the provider answers that a self-contained token cannot be
 revoked server-side, and the token verifies until it expires. To stop an agent at once, revoke the user's consent to its
 client, disable the client or end its session, which `verify` reads on every request, and keep the provider's
-`accessTokenExpiresIn` short. `/oauth2/revoke` does revoke a refresh token.
+`accessTokenExpiresIn` short. A client the operator set to skip consent (`skipConsent: true`) has no consent to revoke:
+disable it or end the session. `/oauth2/revoke` does revoke a refresh token.
 
 With Better Auth's `secondaryStorage`, the provider requires `session.storeSessionInDatabase: true`, so the session a
 token names is a database row. With `preserveSessionInDatabase` too, Better Auth ends that row when the session ends, and
@@ -100,8 +126,9 @@ the token stops.
 
 ### Better Auth on Prisma's adapter
 
-Better Auth's OAuth provider (1.7.12 to 1.7.14) cannot register its resource on Better Auth's Prisma adapter: it writes
-`allowedScopes: null`, and the `String[]` column `auth generate` writes for it is a list Prisma will not leave unset.
+Better Auth's OAuth provider cannot register its resource on Better Auth's Prisma adapter (1.7.12 to 1.7.20, the
+latest when this was written): it writes `allowedScopes: null`, and the `String[]` column `auth generate` writes for it
+is a list Prisma will not leave unset.
 Run Better Auth on a `pg` `Pool` (its built-in Kysely), as the samples on this page do. The tables can still live in
 your Prisma schema: `auth generate` writes them, `prisma db push` makes them, and `resources.authTables` names the
 Resource each one is.
@@ -158,7 +185,8 @@ redirect URI it asked for, and say what each scope lets the agent do.
 - opaque access tokens (`disableJwtPlugin`);
 - the endpoint missing from its `resources`, or no `aventara:read` among its `scopes`;
 - a refresh reuse window (`refreshTokenReuseInterval` other than 0);
-- a `validateRedirectUri`, a `requestUriResolver`, or a `postLogin.consentReferenceId`;
+- a `validateRedirectUri`, an `allowInsecureRedirectUri` (plain http: redirect URIs), a `requestUriResolver`, or a
+  `postLogin.consentReferenceId`;
 - open registration without `openRegistration`;
 - an endpoint that is the provider's own UserInfo URL;
 - the `service` profile, which hands no browser a session to consent in.
@@ -218,6 +246,28 @@ export const access = createAccess({
 		},
 	}),
 	audience,
+	resources: {
+		// The rules grant on `User`, Better Auth's `user` table: `users: true` opens it,
+		// and `session` and `account` read only (an admin's `read "*"` reads them),
+		// their secret columns sealed.
+		users: true,
+		// Off Prisma's adapter, every table Better Auth is built with is named: the
+		// OAuth provider's among them.
+		authTables: {
+			user: "User",
+			session: "Session",
+			account: "Account",
+			verification: null,
+			jwks: null,
+			oauthClient: null,
+			oauthResource: null,
+			oauthClientResource: null,
+			oauthRefreshToken: null,
+			oauthAccessToken: null,
+			oauthConsent: null,
+			oauthClientAssertion: null,
+		},
+	},
 });
 ```
 
@@ -230,4 +280,4 @@ export const access = createAccess({
 - Access refuses a provider with `enforcePerClientResources: false`, and open registration. With `mcp` beside it, the
   audience in `clientRegistrationDefaultResources` or `clientRegistrationAllowedResources` is refused too.
 
-On the kiosk profile, a session bound to a till never gets an agent's token ([The kiosk profile](/docs/kiosk)).
+Beside the kiosk plugin, a session bound to a till never gets an agent's token ([Kiosk mode](/docs/kiosk)).

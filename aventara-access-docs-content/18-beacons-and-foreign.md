@@ -19,7 +19,7 @@ A Resource another namespace owns is marked `{ foreign: "<namespace>" }` in the 
 conditions, but cannot grant, deny or govern on it. That is a type error, and the engine and the registry refuse it
 too.
 
-```ts policy
+```ts
 // src/chat.policies.ts
 import { definePolicies } from "@aventara/access";
 import { model } from "./generated/aventara/discovery.artifact.js";

@@ -17,7 +17,9 @@ Find a name, then follow the link to the page that defines it.
 | `@aventara/access/auth` | `createAccess`, `agentOf` | [createAccess](/docs/create-access), [Agents over MCP](/docs/agents-mcp) |
 | `@aventara/access/better-auth` | `aventaraAccess`, `accessOf`, `aventaraAccessClient`, `agentOf` | [The Better Auth plugin](/docs/better-auth-plugin) |
 | `@aventara/access/standalone` | `serve` | [Hosts](/docs/hosts#standalone) |
-| `avaccess` | `push`, `pull`, `verify`, `status`, `diff`, `keys`, `generate`, `schema`, `serve` | [CLI reference](/docs/cli-reference) |
+| `@aventara/better-auth-kiosk` | `kiosk`, `kioskOf` | [Kiosk mode](/docs/kiosk) |
+| `@aventara/better-auth-onboarding` | `onboarding`, `onboardingOf` | [Onboarding](/docs/onboarding) |
+| `avaccess` | `push`, `pull`, `verify`, `status`, `diff`, `keys`, `generate`, `schema`, `serve`, `skill` | [CLI reference](/docs/cli-reference) |
 
 ## The rules builder
 
@@ -46,7 +48,7 @@ Find a name, then follow the link to the page that defines it.
 | Option | Page |
 |---|---|
 | `betterAuth`, `policies` (`rules`, `claims`, `claimsOf`, `guardrails`, `lock`, `requireLock`, `tokenTtl`), `principal` | [createAccess](/docs/create-access#the-levers) |
-| `profile` (`web`, `service`, `kiosk`) | [createAccess](/docs/create-access#profiles), [The kiosk profile](/docs/kiosk) |
+| `profile` (`web`, `service`) | [createAccess](/docs/create-access#profiles); kiosk mode is the kiosk plugin ([Kiosk mode](/docs/kiosk)) |
 | `registry` (`enabled`, `ownership`) | [Namespaces, the registry and the CLI](/docs/registry-and-cli) |
 | `audit` | [The audit log](/docs/audit-log) |
 | `resources` (`users`, `members`, `authTables`) | [Better Auth tables as Resources](/docs/auth-tables) |
@@ -59,9 +61,10 @@ Find a name, then follow the link to the page that defines it.
 
 | Member | Page |
 |---|---|
-| `handler`, `api`, `options`, `$Infer`, `policy`, `state`, `registry`, `client`, `kiosk`, `mcp`, `beacon` | [createAccess](/docs/create-access#what-the-instance-holds) |
+| `handler`, `api`, `options`, `$Infer`, `policy`, `state`, `registry`, `client`, `mcp`, `beacon` | [createAccess](/docs/create-access#what-the-instance-holds) |
 | `client.verbs`: `signIn`, `signUp`, `signOut`, `resetPassword`, `me` | [The $access verbs](/docs/access-verbs) |
-| `kiosk.listDevices()`, `kiosk.revokeDevice()` | [The kiosk profile](/docs/kiosk#your-servers-own-calls) |
+| `kioskOf(access).listDevices()`, `revokeDevice()`, `setUserPin()` | [Kiosk mode](/docs/kiosk#your-servers-own-calls) |
+| `onboardingOf(auth).check` | [Onboarding](/docs/onboarding#your-servers-own-calls) |
 | `registry.createNamespace`, `rotateKey`, `revokeKey`, `assignResource`, `releaseResource`, `pushGuardrails` | [Registry](/docs/registry-and-cli) |
 | `authClient.access.can` | [The client plugin](/docs/better-auth-plugin#the-client-plugin) |
 
@@ -71,7 +74,7 @@ Find a name, then follow the link to the page that defines it.
 |---|---|
 | Better Auth's routes under `/api/auth`, plus `GET /me`, `GET /token`, `GET /jwks` | [Hosts](/docs/hosts), [createAccess](/docs/create-access#tokens-and-sessions) |
 | `/access/v1/...` (the registry) | [Registry](/docs/registry-and-cli#the-server) |
-| `/kiosk/...` | [The kiosk profile](/docs/kiosk#the-verbs-and-routes) |
+| `/kiosk/...` (the kiosk plugin) | [Kiosk mode](/docs/kiosk#the-verbs-and-routes) |
 | `POST {api}/_access/can` (the framework's) | [The $access verbs](/docs/access-verbs) |
 | `GET /health` (standalone server) | [Hosts](/docs/hosts#standalone) |
 

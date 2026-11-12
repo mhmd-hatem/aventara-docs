@@ -178,6 +178,9 @@ async function bootstrap() {
 			return auth(request, response);
 		},
 	);
+	// Better Auth starts, and Access checks its options: a refusal stops the start
+	// here, before the server listens.
+	await access.api.ok();
 	await app.listen(process.env.PORT ?? 3000);
 }
 await bootstrap();

@@ -52,8 +52,10 @@ Every name in a rule is checked against your schema. A Resource, field, relation
 | `@aventara/access/auth` | `createAccess`: Better Auth with Access beside it. Tokens with claims, the engine, each request's principal. |
 | `@aventara/access/better-auth` | `aventaraAccess()`, `accessOf`, `aventaraAccessClient()`: Access as a plugin of the Better Auth you build yourself, and its client plugin. |
 | `@aventara/access/standalone` | `serve(access)`: Access as its own HTTP server. |
+| `@aventara/better-auth-kiosk` | `kiosk()`: shared tills with staff switching by PIN, as a Better Auth plugin of its own ([Kiosk mode](/docs/kiosk)). |
+| `@aventara/better-auth-onboarding` | `onboarding()`: users held at the door until they finish what your app asks, as a Better Auth plugin of its own ([Onboarding](/docs/onboarding)). |
 | The registry | Namespaces, keys and the org's guardrails, stored in Better Auth's database. |
-| `avaccess` | The command line: `push`, `pull`, `verify`, `status`, `diff`, `keys`, `generate`, `schema`, `serve`. |
+| `avaccess` | The command line: `push`, `pull`, `verify`, `status`, `diff`, `keys`, `generate`, `schema`, `serve`, `skill`. |
 | The generated client | Two TypeScript files (`avAccess.ts` and `avAccess.internal.ts`) that decide for a service that does not run on Aventara. |
 
 ## Three ways to use it
@@ -76,46 +78,56 @@ A refused request is answered `403 A4002` by the framework. Every decision can g
 
 ## Status and requirements
 
-Access `1.0.0-rc.2` is a release candidate of 1.0. Its public API can still change before the stable release.
+Access `1.0.0-rc.3` is a release candidate of 1.0. Its public API can still change before the stable release.
 
 | | Version |
 |---|---|
-| `@aventara/access` | `1.0.0-rc.2` |
+| `@aventara/access` | `1.0.0-rc.3` |
+| `@aventara/better-auth-kiosk`, `@aventara/better-auth-onboarding` | `1.0.0-rc.3`, beside it |
 | Aventara framework (`@aventara/core` and the packages that host it) | `1.0.0-rc.12` (tested). `1.0.0-rc.10` or later works. |
-| Better Auth | `~1.7.12` (1.7.12 or a later 1.7 patch; tested on 1.7.14) |
+| Better Auth | `~1.7.12` (1.7.12 or a later 1.7 patch; tested on 1.7.17, audited through 1.7.20) |
 | Node.js | `^22.23.4 \|\| >=24.22.1` |
 
 Access has no dependency on the framework. Its engine and its instance fit the framework's types by shape. [Installation](/docs/installation) has the full list.
 
-## What changed in 1.0.0-rc.2
+## What changed in 1.0.0-rc.3
 
-Released beside `@aventara/core` `1.0.0-rc.12`, and tested with it. It still works with `1.0.0-rc.10` or later.
-`aventara new` 1.0.0-rc.12 scaffolds `User.id` as a `String` (`@default(cuid())`), the id Access needs.
+Released beside the first releases of two Better Auth plugins, `@aventara/better-auth-kiosk` and
+`@aventara/better-auth-onboarding` (both `1.0.0-rc.3`), and beside `@aventara/core` `1.0.0-rc.12`, with which it is
+tested. It still works with `@aventara/core` `1.0.0-rc.10` or later. [Upgrading](/docs/upgrading) has the steps from
+1.0.0-rc.2; the package's `CHANGELOG.md` lists everything.
 
-- Security: numeric ids are refused. `createAccess` and `aventaraAccess()` refuse Better Auth's
-  `advanced.database.generateId: "serial"` in every app (`ACCESS_OPTIONS_INVALID`), and `avaccess serve` and
-  `avaccess keys` refuse it before they migrate or listen. An app on `1.0.0-rc.1` with numeric ids refuses to start
-  after upgrading until it moves to String ids ([User ids](/docs/create-access#user-ids) lists the steps).
-- Security: a kiosk PIN switch keys the user's failed-PIN count, the device's one try for a user with a clean record,
-  the PIN and the audit entry on the user's id as stored, never as the request wrote it. Kiosk apps whose ids the
-  database matches under other spellings should have their users set new PINs ([The kiosk profile](/docs/kiosk)).
-- Security: `createAccess` copies the `betterAuth` block's plain data (its plain objects and arrays) when it is
-  called and freezes the copy; every startup check and Better Auth run on it, and `access.options` is it. Plugin
-  objects, functions and class instances (the adapter, a database client or pool) are kept as given and not frozen.
-- Security (docs): the NestJS and Express mount that 1.0.0-rc.1 showed, `toNodeHandler(access)` alone, hands Better
-  Auth no client address. In production its rate limit then counts every client in one bucket per route, and a client
-  that sends its own `X-Forwarded-For` gets a fresh bucket each time. The mount now sets each request's address first
-  (`src/client-address.ts`, [Hosts](/docs/hosts#nestjs)); an app mounted the old way should add it. Next.js keeps an
-  `X-Forwarded-For` the client sent: self-hosted, run `next start` behind a proxy that overwrites it (or appends to it
-  and is listed in `trustedProxies`), never reached by clients directly; on Vercel there is nothing to do
-  ([Hosts](/docs/hosts#nextjs)). Run production with `NODE_ENV=production`, which Better Auth's rate limit needs.
-- `avaccess serve` no longer turns Better Auth's rate limit on by itself. It is on under `NODE_ENV=production`, Better
-  Auth's default: set it in production ([The standalone server](/docs/standalone-server)).
-- The examples: `createAccess` opens `resources: { users: true }`, which its rules on `User` need to start; the
-  rules' `Campaign`, `Member` and `Note` Prisma models are shown ([Rules](/docs/rules)); the NestJS `src/main.ts` is
-  the scaffold's with the mount added, its CORS block kept; the hub example on a `pg` Pool names
-  `resources.authTables` ([The Better Auth plugin](/docs/better-auth-plugin#the-app-as-the-hub)); and the registry's
-  tables include `accessBeacon`.
+- Breaking: kiosk mode moved out of Access into its own Better Auth plugin, `kiosk()` from
+  `@aventara/better-auth-kiosk`, with no shim. `profile: { kind: "kiosk" }` is refused with a sentence that names the
+  plugin. The plugin also fixes rc.2 kiosk-mode defects: a hang on a database with one connection, sessions other
+  plugins opened on a till escaping the device binding, `@better-auth/electron` beside it, and impersonated sessions
+  setting PINs and enrolling tills ([Kiosk mode](/docs/kiosk), [Upgrading](/docs/upgrading)).
+- New: the onboarding plugin, `onboarding()` from `@aventara/better-auth-onboarding`. Beside Access, a token or session
+  whose user has not finished onboarding proves nobody ([Onboarding](/docs/onboarding)).
+- Security: `createAccess` and `aventaraAccess()` refuse Better Auth's origin and CSRF opt-outs
+  (`advanced.disableOriginCheck`, `advanced.disableCSRFCheck`, the same checks off in Better Auth's context), its test
+  mode outside NODE_ENV=test, a `trustedOrigins` entry whose host is a wildcard alone, ids the database makes
+  (`generateId: false`), and, under `mcp` or `audience`, the OAuth provider's `allowInsecureRedirectUri`. They warn of
+  other trusted-origin wildcards outside production ([Hosts](/docs/hosts#trusted-origins-and-wildcards),
+  [Instead of turning the CSRF check off](/docs/hosts#instead-of-turning-the-csrf-check-off)).
+- Security: a user Better Auth's admin plugin holds banned is nobody to Access, whatever made their session, an API
+  key's included: `me` is `null` and `GET /token` answers `403 BANNED_USER` ([createAccess](/docs/create-access)).
+- Fixed: each rule matches what Prisma's `findMany({ where })` returns for it. NULL matches no comparison, `not`
+  included, and a to-one relation with no row behind it matches no condition on it. A rule with `null` inside `in` or
+  `notIn`, and an empty condition below a rule's root, are refused when the rules compile and in a pushed file
+  ([Rules](/docs/rules)). Run `avaccess generate` again in a service with a generated client.
+- `avaccess verify` refuses, and `avaccess status` reports, a generated client that is not what the installed Access
+  would write for the pinned files. `avaccess generate` records each client in `avAccess.lock.json` (`clients`), and
+  `generate --prune` drops the entries whose files are gone ([The generated client](/docs/generated-client)).
+- New command `avaccess skill [<name>...]`: it writes the agent skill into your project, and the optional skills you
+  name (`kiosk`, `onboarding`, `registry`, `mcp`, `server`, `service-client`) ([Installation](/docs/installation#ai-agents)).
+- `createAccess` builds nothing: start it with `await access.api.ok()` before your server listens, so a refusal of
+  Better Auth's options stops the start. `serve()` and `avaccess serve` start Better Auth before they listen.
+- The registry refuses Better Auth's memory adapter, and `rotateKey` refuses a rotation another one overtook. Set
+  `transaction: true` on Prisma's or Drizzle's adapter for a server that runs the registry
+  ([Namespaces, the registry and the CLI](/docs/registry-and-cli)).
+- `policies.claimsOf` runs once on each request read by a session cookie, not twice. The docs cover Access on SQLite,
+  ending a user's sessions when their role changes, and the rules with a development identity of your own.
 
 ## Where to start
 

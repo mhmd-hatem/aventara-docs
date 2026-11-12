@@ -55,6 +55,13 @@ Then `audit: { sink: auditSink }`.
 { at, kind: "kiosk-lock", userId, deviceId, reason, origin }
 { at, kind: "kiosk-device", userId, deviceId, reason, origin }
 { at, kind: "kiosk-pin", userId, origin }
+{ at, kind: "enrollment-code-issued", userId, codeId, deviceName, expiresAt, origin }
+{ at, kind: "enrollment-code-redeemed", userId, codeId, deviceId, origin }
+{ at, kind: "enrollment-code-revoked", userId, codeId, origin }
+{ at, kind: "enrollment-code-refused", userId, reason, codeId?, origin, suppressed?, windowStart?, windowEnd? }
+{ at, kind: "approval-granted", userId, requesterId, deviceId, approvalId, action, subject?, expiresAt, origin }
+{ at, kind: "approval-refused", userId: null, reason, target?, deviceId, action, origin, suppressed?, windowStart?, windowEnd? }
+{ at, kind: "approval-consumed", userId, requesterId, deviceId, approvalId, action, subject?, origin }
 { at, kind: "decision", userId, resource, action, allowed, reason, origin, suppressed?, windowStart?, windowEnd? }
 ```
 
@@ -64,7 +71,9 @@ Then `audit: { sink: auditSink }`.
 | `sign-in-failed` | A route that starts a session refusing the caller. `route` is Better Auth's endpoint, `reason` the code it refused with. A failed kiosk PIN is one on `/kiosk/switch-user`, with the device's `deviceId`. |
 | `sign-out` | A session ended through `/sign-out` |
 | `token` | A JWT issued for a session by `GET /token` |
-| `kiosk-*` | The kiosk profile's events ([The kiosk profile](/docs/kiosk)) |
+| `kiosk-*` | The kiosk plugin's events, when `betterAuth.plugins` holds it ([Kiosk mode](/docs/kiosk)) |
+| `enrollment-code-*` | The kiosk's device enrollment codes. `userId` is the code's issuer (who revoked it, on `-revoked`; `null` when your server did). `-refused` has `reason` `unknown`, `expired` or `issuer-refused`; an `unknown` one names no code and no user. The code itself is never kept |
+| `approval-*` | The kiosk's supervisor approvals. `userId` is the approver, `requesterId` the user whose session asked, `action` and `subject` what the till sent. `-refused` has `userId: null` and the approver as its `target`, as a refused PIN has it; its `reason` is `self-approval`, `banned`, `email-not-verified`, `onboarding`, `not-allowed`, `no-session` or `impersonated` |
 | `decision` | A `can` answer |
 
 - `reason` on a decision names the deciding rule: `grant:<id>`, `deny:<id>`, or `no grant`. A guardrail reads
@@ -75,12 +84,19 @@ Then `audit: { sink: auditSink }`.
   never kept.
 - A request's admission is one decision event, however many rows it reads or writes. A row question adds an event only
   when the rules refuse that row. `scopeOf`, `fieldsOf` and `explain` log nothing.
-- An event holds no token, password, cookie, key or header.
+- An event holds no token, password, cookie, key or header, and no kiosk PIN, device credential or device enrollment
+  code.
+- Text fields come from requests: a device's name, an approval's `action` and `subject`. The kiosk refuses control
+  characters in them, but a sink that writes them into HTML, a terminal or another log format should still escape them.
+- With `audit: true` and the kiosk plugin, the table has the kiosk's nullable columns too: `deviceId`,
+  `previousUserId`, `codeId`, `deviceName`, `approvalId`, `requesterId`, `subject` and `expiresAt`. An approval's
+  action goes in `action`. Under `aventaraAccess()` the table has them whether or not the plugin is beside it.
 
 ## Anonymous floods
 
-Anonymous refusals (a refused decision with no `userId`, and every refused sign-in) are logged once a minute for each
-origin and reason, and for each route and `target` on a sign-in. The first is logged. The repeats in the minute are
+Anonymous refusals (a refused decision with no `userId`, every refused sign-in, a redemption of an unknown device
+enrollment code, and an approval refused before any PIN was read, `no-session` or `impersonated`) are logged once a
+minute for each origin and reason, and for each route and `target` on a sign-in, and each device on an approval. The first is logged. The repeats in the minute are
 counted, and when the minute closes the count is logged as a summary: the first event's fields with `suppressed` (the
 count), `windowStart` and `windowEnd`.
 

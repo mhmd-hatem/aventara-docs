@@ -237,7 +237,7 @@ Under `mcp` the issuer must be https, or `http://127.0.0.1` or `http://[::1]`. `
 
 ### The OAuth provider cannot register its resource
 
-Better Auth's OAuth provider (1.7.12 to 1.7.14) cannot register its resource on Better Auth's Prisma adapter. Run Better Auth on a `pg` `Pool`. The tables can still live in your Prisma schema ([Agents over MCP](/docs/agents-mcp#better-auth-on-prismas-adapter)).
+Better Auth's OAuth provider (1.7.12 to 1.7.20) cannot register its resource on Better Auth's Prisma adapter. Run Better Auth on a `pg` `Pool`. The tables can still live in your Prisma schema ([Agents over MCP](/docs/agents-mcp#better-auth-on-prismas-adapter)).
 
 ### An authorization request is refused 400 invalid_request
 
@@ -259,4 +259,8 @@ Two requests changed the device's credential at once, or a request brought the c
 
 ### The kiosk refuses a configuration
 
-Cookie cache, `bearer()`, `multiSession()`, `crossSubDomainCookies`, `SameSite=None` and an http: base URL are each a way around the device binding ([What the kiosk refuses](/docs/kiosk#what-the-kiosk-refuses)).
+Code `KIOSK_OPTIONS_INVALID`, when Better Auth builds its context (the first request, or `await access.api.ok()` before your server listens). Cookie cache, `bearer()`, `multiSession()`, `@better-auth/electron`, `crossSubDomainCookies`, `SameSite=None`, an http: base URL off loopback and off `insecureLan`, and the rest are each a way around the device binding ([What the kiosk refuses](/docs/kiosk#what-the-kiosk-refuses)).
+
+### profile kind "kiosk" is refused
+
+Code `ACCESS_OPTIONS_INVALID`. Kiosk mode moved out of Access into `@aventara/better-auth-kiosk` in 1.0.0-rc.3. Install the plugin and put `kiosk({ canEnrollDevice, idleTimeout?, insecureLan? })` in `betterAuth.plugins`, on the `web` profile ([Upgrading](/docs/upgrading)).
