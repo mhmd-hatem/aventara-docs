@@ -15,8 +15,7 @@ import avClient, { AvClient, AvConflictError, type Post } from "./api/AvClient";
 
 // A client that sends credentials, for the writes below.
 const authed = new AvClient({
-  fetch: (input, init) =>
-    fetch(input, { ...init, headers: { ...init?.headers, Authorization: `Bearer ${localStorage.getItem("token")}` } }),
+  onCall: () => ({ headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }),
 });
 ```
 

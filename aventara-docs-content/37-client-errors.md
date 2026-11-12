@@ -41,6 +41,8 @@ All are exported from `AvClient.ts`. Every class except `AvTransportError` exten
 
 The full code table, with HTTP statuses, is in [HTTP protocol](/docs/http-protocol#codes).
 
+A client generated with Aventara Access's verbs also exports `AvAccessError`. A `$access` verb other than `can` throws it when Access answers with a status that is not 2xx. It carries that `status`, Access's own `code` (`null` when the answer names none) and its message. It is not an `AvError`, because Access's answers are not framework envelopes. `$access.can` goes through the framework's own route and throws the classes above.
+
 ### Refused before anything is sent
 
 The client checks a few things locally and throws before any request is made: validators listed in the contract (`V1004` and the other validator codes), and an `undefined` in a filter, a unique selector or a cursor (`A2004` / `V1001` at that path, [Filtering](/docs/filtering-sorting-paging#undefined-in-a-filter)). These are `AvValidationError`s with the same code and path the server would answer.

@@ -63,6 +63,7 @@ export default defineClientConfig({
 |---|---|
 | `entrypoint` | One absolute `http(s)` URL: origin plus mount path, for example `http://localhost:3103/api`. It may not contain credentials. A trailing slash is fine. |
 | `generateAt` | The directory the client is written into. You may share it with your own files. |
+| `accessOrigins` | Only with Aventara Access: the origins other than the entrypoint's where `$access` may send a sign-in (`["https://auth.example.com"]`), each an `http(s)` origin alone, a string or `env("NAME")`. When the client contract's Access URL is on an origin that is not listed, `avclient generate` refuses, with an error that names that origin and `accessOrigins`; it never leaves Access out of the client. |
 
 The generator loads the config the way Prisma loads `prisma.config`: it looks for `framework.client.ts`, `.mts`, `.cts`, `.js`, `.mjs` or `.cjs` in the project root, in ESM or CommonJS syntax, whatever your package's `"type"` is. A `framework.client.mts` written by `0.1.0-pilot.1` keeps working, and `avclient init` leaves it in place. Only one such file may exist; with two the generator stops and asks you to keep one:
 

@@ -58,6 +58,8 @@ A validator is a rule on input. It never states a type: the field's type comes f
 | One of a set | `oneOf` | `string` |
 | Named formats | `email`, `url`, `emoji`, `uuid` (any version), `guid`, `nanoid`, `cuid`, `cuid2`, `ulid`, `xid`, `ksuid`, `ipv4`, `ipv6`, `cidrv4`, `cidrv6`, `base64`, `base64url`, `e164`, `creditCard`, `iban`, `jwt`, `jsonString`, and `AvZ.iso.datetime()`, `AvZ.iso.date()`, `AvZ.iso.time()`, `AvZ.iso.duration()` | `string` |
 
+A named format is a call, like the other checks: `AvZ.url()` accepts a URL, `AvZ.email()` an email address.
+
 Each check behaves as zod 4's does: a string's length is counted in Unicode code points, and a `float`'s `multipleOf` allows zod's tolerance. A `decimal`'s bounds and multiples are exact. A bound is written in the field's own type: a number for `int` and `float`, a `bigint` for `bigint`, a `Date` for `datetime`, and a number or a `bigint` for `decimal`.
 
 ```ts

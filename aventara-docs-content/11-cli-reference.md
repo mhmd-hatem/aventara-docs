@@ -220,7 +220,7 @@ When nothing changed, `avclient generate` ends with `avclient: up to date: … a
 
 ### avclient skill
 
-Writes or refreshes the frontend's agent skill, `.claude/skills/aventara-client/SKILL.md`: how the generated client calls the API, for the installed `@aventara/client`. `avclient init` writes it too. Run it after upgrading `@aventara/client`. A file you changed is kept with a warning unless you pass `--force`. The skill is development guidance: the generated client still needs no `@aventara/client` at run time.
+Writes or refreshes the frontend's agent skill in `.claude/skills/aventara-client/`: `SKILL.md`, how the generated client calls the API, and `reference/client-setup.md`, the frontend's `framework.client.ts`, regenerating the client and the stale-client error (`A2005`), for the installed `@aventara/client`. `avclient init` writes it too. Run it after upgrading `@aventara/client`. A file you changed is kept with a warning unless you pass `--force`. The skill is development guidance: the generated client still needs no `@aventara/client` at run time.
 
 ### avclient generate
 

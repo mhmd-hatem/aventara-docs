@@ -101,7 +101,7 @@ Without the scaffold, a single origin is one line:
 app.enableCors({ origin: "http://localhost:5173" });
 ```
 
-The generated client sends `Content-Type: application/json`, `Aventara-Protocol-Version` and `Aventara-Contract-Hash` (plus `Aventara-Request-Id` if you set `requestId`, and anything your custom `fetch` adds, such as `Authorization`). Those make every call a non-simple request, so the browser preflights it; Nest's default reflects the requested headers back, which is what you need. Verified on both platforms:
+The generated client sends `Content-Type: application/json`, `Aventara-Protocol-Version` and `Aventara-Contract-Hash` (plus `Aventara-Request-Id` if you set `requestId`, and anything `onCall` adds, such as `Authorization`). Those make every call a non-simple request, so the browser preflights it; Nest's default reflects the requested headers back, which is what you need. Verified on both platforms:
 
 ```bash
 curl -si -X OPTIONS http://localhost:3103/api/_resources/Post/find/many \
