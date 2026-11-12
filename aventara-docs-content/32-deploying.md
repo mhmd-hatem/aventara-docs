@@ -137,7 +137,7 @@ and `.env` gets Prisma's placeholder, which you replace:
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?schema=public"
 ```
 
-`provider` and `driver` are declared, never sniffed: they must match your schema and the Prisma driver adapter you construct. The generate step checks `--provider` against your schema's `datasource` block and refuses a mismatch. It cannot check the driver. Changing database means changing all four, then `npm run aventara:prepare`.
+`provider` and `driver` are declared, never sniffed: they must match your schema and the Prisma driver adapter you construct. The generate step checks `--provider` against your schema's `datasource` block and refuses a mismatch. It cannot check the driver. Changing database means changing all four, then `npm run aventara:prepare`. The migration history changes too: Prisma writes `prisma/migrations/` for one provider, which `migration_lock.toml` records, and `migrate` refuses another. Start a new history for the new database (move the old folder aside, then `prisma migrate dev`) rather than reusing the old one.
 
 Transaction options (`timeout`, `maxWait`, `isolationLevel`) go on the adapter ([Configuration](/docs/configuration#adapter)). SQLite supports `Serializable` only; on PostgreSQL pick the level your invariants need.
 

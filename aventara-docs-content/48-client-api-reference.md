@@ -36,6 +36,7 @@ export default defineClientConfig({
 |---|---|---|---|
 | `entrypoint` | `string \| AvEnvReference` | `env("AVENTARA_API_URL")`, value `http://localhost:3000/api` | The deployed framework entrypoint: origin plus mount path, one absolute `http(s)` URL. No credentials (the platform's `fetch` refuses them, and the value ships inside the client). No query or fragment; the mount path follows the server's [mount-path rules](/docs/config-reference#api). |
 | `generateAt` | `string \| AvEnvReference` | `./src/api` | Directory the client is written into, relative to the config file. Shared: the generator owns exactly `AvClient.ts` and `generated/` there and never touches anything else. |
+| `accessOrigins` | `readonly (string \| AvEnvReference)[]` | none | Only with Aventara Access: the origins other than the entrypoint's where `$access` may send a sign-in, each `scheme://host[:port]` alone. A client contract whose Access URL is on another origin is refused unless that origin is listed. |
 
 The file is `framework.client.ts`. The generator loads it like `prisma.config`: `.ts`, `.mts`, `.cts`, `.js`, `.mjs` or `.cjs`, in ESM or CommonJS syntax (a `framework.client.mts` from `0.1.0-pilot.1` keeps working). With two of them present the generator refuses.
 

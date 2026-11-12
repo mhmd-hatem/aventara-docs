@@ -120,7 +120,7 @@ A Next.js app (`@aventara/next`, App Router under `src/app/`) keeps everything A
 
 Server Components and Server Actions call `avClient.<Resource>.<family>.<variant>(args)` (checked as the caller) or `avApp` (trusted code); Client Components call the generated `avClient` from `@/aventara/client`. There is no separate frontend to regenerate: `aventara:prepare` writes the browser client too, and `next build` runs it first. An `mcp` endpoint on Next.js needs `authorization`.
 
-A Server Component's results passed to a Client Component (or through TanStack Query's `dehydrate`) go through `avDehydrate` from `@aventara/next`, and come back typed through `avHydrate` from `@/aventara/client`: it carries `Date`, `bigint`, `Uint8Array` and `AvDecimal` values, which React cannot pass as they are. With TanStack Query: `dehydrate(queryClient, { serializeData: avDehydrate })` on the server, `defaultOptions: { hydrate: { deserializeData: avHydrate } }` in the browser. Transactions on the server: `avClient.tx` with `avClient.transaction([...])` (the client layer), or `avApp.appTx` with `avApp.transaction([...])` (the application layer). They need the built Framework, which `instrumentation.ts`'s `await ready()` gives; elsewhere, `await ready()` first.
+Data a Server Component prefetches for a Client Component goes through TanStack Query or SWR, with the query written once over `@/aventara/universal` (it runs on both sides): the server dehydrates it with `avDehydrate` from `@aventara/next`, the browser revives it with `avHydrate` from `@/aventara/client` (`Date`, `bigint`, `Uint8Array` and `AvDecimal`, which React cannot pass as they are), and the Client Component reads it through the same query, which is where its type comes from. `avHydrate` returns `unknown`: never hand its output to a component as typed props. The pattern: `reference/recipes.md`, Prefetched data in a Client Component. Transactions on the server: `avClient.tx` with `avClient.transaction([...])` (the client layer), or `avApp.appTx` with `avApp.transaction([...])` (the application layer). They need the built Framework, which `instrumentation.ts`'s `await ready()` gives; elsewhere, `await ready()` first.
 
 A call reads the database, so Next.js runs it at request time (Cache Components is on: `cacheComponents: true`). Give a page that calls `avClient` or `avApp` one of: the calling component inside `<Suspense fallback={…}>` (or a `loading.tsx`), `"use cache"` on a function that makes the call (the result is shared by every visitor: never with `state`), or `export const instant = false` to render the whole page at request time. Without one, `next build` fails naming these three: add one (no `connection()` is needed).
 
@@ -214,7 +214,7 @@ It answers `201` with `{"data":{"email":"ada@example.com","id":"cmhfa2k1x0000l8v
 - CI: `npx aventara-build --check` exits `1` when a generated file is missing or stale (`--check --client` on Next.js).
 - The server starts without a database: the contracts come from the discovery artifact, and a call that needs the database answers `A3001` until it is back.
 - Serverless and edge: pass `prebuilt: aventaraContracts` (from `contracts.generated.ts`) where the framework is created, so a cold start does not compile the Contracts. A file compiled from another configuration, model or core is not used: startup warns `AVENTARA_PREBUILT_STALE` and compiles the Contracts as without it. Run `aventara:prepare` in the build so the file is current.
-- While developing, a local `mcp: "/mcp"` with no `authorization` lets your coding agent read the contract and call the API on the development database (`claude mcp add --transport http my-api http://localhost:3000/mcp`). It answers callers on the same machine only; set `mcp.authorization` before deploying.
+- NestJS, while developing: a local `mcp: "/mcp"` with no `authorization` lets your coding agent read the contract and call the API on the development database (`claude mcp add --transport http my-api http://localhost:3000/mcp`). It answers callers on the same machine only; set `mcp.authorization` before deploying. On Next.js, `mcp` without `authorization` is a type error, and building the Framework (`ready()`, the first request) refuses it: Next.js adds `x-forwarded-for` to every request, so the endpoint would refuse every caller.
 
 ## Before you finish
 
@@ -330,7 +330,7 @@ const [user, created] = await avClient.transaction([author, post]); // one resul
 ```
 
 - `avClient.tx.<Resource>.<family>.<variant>(args)` describes a step and sends nothing. `avClient.transaction([...])` sends the steps once, as one `POST <api>/_transactions`; they all commit or none does.
-- `step.$ref("field")` stands for that field of an earlier step's result, on a step whose result is one row (`create.one`, `find.unique`, `update.unique`, …). Write it in `data` at any depth (a field, a `$connect`), in a `where` or in a `cursor`, never in a projection's nested `where` or `orderBy`. Its type must fit where it is written; a mismatch is a type error.
+- `step.$ref("field")` stands for that field of an earlier step's result, on a step whose result is one row (`create.one`, `find.unique`, `update.unique`, …). The field must be in that step's result: put it in its `select` (a field the result does not carry is refused, `A2007` / `V1010`). Write it in `data` at any depth (a field, a `$connect`), in a `where` or in a `cursor`, never in a projection's nested `where` or `orderBy`. Its type must fit where it is written; a mismatch is a type error.
 - A failing step rolls every step back and throws its error, with `error.cause.operation` the failing step's index.
 - The client has no `tx` when the server's client layer sets `transactionsStyle: "server"` or `"none"`.
 - Server code: `framework.transaction([framework.appTx.…])`, the same `$ref`s. In Next.js, `avApp.appTx` with `avApp.transaction([...])`, or `avClient.tx` with `avClient.transaction([...])` from `@/aventara/server`, never mixed in one list.
@@ -510,6 +510,7 @@ export default defineClientConfig({
 - The generated client calls the `entrypoint` it was generated with. To build a client for staging or production, set `AVENTARA_API_URL` to that server and regenerate. `new AvClient({ entrypoint })` points one client at another deployment that serves the same contract (a test server, SSR).
 - `generateAt` is where the client goes: `avclient generate` owns `AvClient.ts` and `generated/` in it and touches nothing else there.
 - `tsconfigFile` names the tsconfig that compiles the client, only when it is not the nearest `tsconfig.json` above `generateAt` (Vite's `tsconfig.app.json`).
+- `accessOrigins`, only with Aventara Access: the origins besides the entrypoint's where the client may call Access (`["https://auth.example.com"]`). Access on another origin is not written into the client unless listed here.
 
 ## Regenerate after the server changes
 
@@ -534,7 +535,8 @@ A client generated before such a change is refused on its next call with `409 A2
 
 | For | Checks |
 |---|---|
-| Numbers, `BigInt`, `DateTime` | `lt`, `lte`, `gt`, `gte` (the bound in the field's own type: `AvZ.gte(0n)` on a `BigInt`, a `Date` on a `DateTime`), `positive`, `nonnegative`, `negative`, `nonpositive`, `multipleOf` |
+| Numbers, `BigInt`, `Decimal` | `lt`, `lte`, `gt`, `gte`, `positive`, `nonnegative`, `negative`, `nonpositive`, `multipleOf`; the bound in the field's type: a number on an `Int` or `Float`, a `bigint` on a `BigInt` (`AvZ.gte(0n)`), either on a `Decimal` |
+| `DateTime` | `lt`, `lte`, `gt`, `gte` with a `Date` (`AvZ.gte(new Date("2020-01-01"))`) |
 | Strings (on a list field, each entry) | `maxLength`, `minLength`, `length`, `regex`, `oneOf`, `includes`, `startsWith`, `endsWith`, `lowercase`, `uppercase` |
 | String formats | `email`, `url`, `uuid`, `guid`, `cuid`, `cuid2`, `ulid`, `nanoid`, `xid`, `ksuid`, `emoji`, `ipv4`, `ipv6`, `cidrv4`, `cidrv6`, `base64`, `base64url`, `jsonString`, `e164`, `creditCard`, `iban`, `jwt`, `iso.datetime()`, `iso.date()`, `iso.time()`, `iso.duration()` |
 | Lists | `maxItems`, `minItems` |
@@ -792,7 +794,8 @@ Transaction options belong to the adapter, never to `aventaraConfig`: `createPri
 
 To switch the database (SQLite to PostgreSQL, say) or the driver, change these together, then run `aventara:prepare`:
 
-- the schema's `datasource` `provider`;
+- the schema's `datasource` `provider`, and `DATABASE_URL` in `.env` (and in every deployment) to the new database's URL;
+- `prisma/migrations/`: Prisma writes migrations for one provider, which `migration_lock.toml` records, and `migrate` refuses another. Start a new history for the new database (move the old folder aside, then `prisma migrate dev`) rather than reusing the old one;
 - `describePrismaAdapter({ provider, driver })` in the adapter's description file: `provider` is `"sqlite"` or `"postgresql"`, `driver` the matching driver adapter package;
 - the Prisma client's own driver adapter (`src/prisma.service.ts`, or `src/prisma.ts` in Next.js), and the installed `@prisma/adapter-…` package;
 - the `aventara:prepare` script's `aventara-prisma7-generate --provider … --driver …` flags. Moving the schema or Prisma's client `output` changes its `--schema` or `--client` the same way.
@@ -1166,6 +1169,56 @@ export class PostReader {
 
 `options`: `{ requestId, state, as, signal }` (`signal` on `serverClient` calls). A server-side call has no HTTP request, so `ctx.$transport` is absent and a guard that reads headers sees none: pass the user with `{ state }`.
 
+## Prefetched data in a Client Component (Next.js)
+
+Write the query once over `@/aventara/universal`, which runs on the server and in the browser; the Client Component's data is typed by that query. The browser's `QueryClient` takes `defaultOptions: { hydrate: { deserializeData: avHydrate } }` (`avHydrate` from `@/aventara/client`), set once in your providers. With SWR, pass `avDehydrate({ [key]: data })` as the `fallback` and `avHydrate(fallback)` to `SWRConfig`.
+
+```ts
+// src/app/posts/posts.queries.ts
+import { queryOptions } from "@tanstack/react-query";
+import { avClient } from "@/aventara/universal";
+
+export const postsQuery = queryOptions({
+  queryKey: ["posts"],
+  queryFn: () => avClient.Post.find.many({ select: ["id", "title", "createdAt"] }),
+});
+```
+
+```tsx
+// src/app/posts/post-list.tsx
+"use client";
+import { useQuery } from "@tanstack/react-query";
+import { postsQuery } from "./posts.queries";
+
+export function PostList() {
+  const { data } = useQuery(postsQuery); // createdAt is a Date
+  return <ul>{data?.map((post) => <li key={post.id}>{post.title}, {post.createdAt.toLocaleDateString()}</li>)}</ul>;
+}
+```
+
+```tsx
+// src/app/posts/page.tsx
+import { avDehydrate } from "@aventara/next";
+import { dehydrate, HydrationBoundary, QueryClient } from "@tanstack/react-query";
+import { Suspense } from "react";
+import { PostList } from "./post-list";
+import { postsQuery } from "./posts.queries";
+
+async function Prefetched() {
+  const queryClient = new QueryClient(); // one per request
+  await queryClient.prefetchQuery(postsQuery);
+  return (
+    <HydrationBoundary state={dehydrate(queryClient, { serializeData: avDehydrate })}>
+      <PostList />
+    </HydrationBoundary>
+  );
+}
+
+export default function Page() {
+  return <Suspense fallback={<p>Loading</p>}><Prefetched /></Suspense>;
+}
+```
+
 ## Compare-and-set: a status change two requests may race on
 
 A guard's check runs before the transaction; even a `hooks.before` re-check inside it can be passed by two transactions at once under PostgreSQL's default isolation. Make the write itself the check:
@@ -1192,6 +1245,7 @@ if (closed === null) {
 
 ```ts
 // src/post.guards.spec.ts
+import assert from "node:assert/strict";
 import { createFramework } from "@aventara/core";
 import { createFakeAdapter } from "@aventara/testing";
 import { aventaraConfig } from "./aventara.config.js";
@@ -1205,8 +1259,12 @@ const adapter = createFakeAdapter({
 const framework = await createFramework({ ...aventaraConfig, adapter });
 
 // As a remote caller: the client layer's exposure and pipelines run.
-await framework.serverClient.Post.find.many({ select: ["id", "title"] });
-console.log(adapter.operations.map((operation) => `${operation.resource}.${operation.family}.${operation.variant}`));
+const posts = await framework.serverClient.Post.find.many({ select: ["id", "title"] });
+assert.deepEqual(posts, [{ id: 1, title: "Hello" }]);
+assert.deepEqual(
+  adapter.operations.map((operation) => `${operation.resource}.${operation.family}.${operation.variant}`),
+  ["Post.find.many"],
+);
 ```
 
 - Never import `@aventara/core/internal` in tests: it is not public API and changes in any release.
@@ -1222,7 +1280,7 @@ agent: {
 },
 ```
 
-Without `mcp.authorization` the endpoint answers callers on the same machine only; set `authorization: { servers, verify }` before deploying. `servers` lists the OAuth authorization servers (https URLs) your agents get tokens from; `verify(token)` checks one bearer token and resolves the caller (the token's claims, say), or `null` to answer `401`. What it resolves is each tool call's `ctx.$state.mcp.claims`, beside what the host's `state` seeds: declare it in `AvState` (`mcp?: { claims: … }`) and authorize agents from it in the `agent` layer's guards. A guard can tell an agent apart: `ctx.$origin === "agent"`.
+On NestJS, without `mcp.authorization` the endpoint answers callers on the same machine only (for your coding agent while developing); set `authorization: { servers, verify }` before deploying. On Next.js, `mcp` always needs `authorization`: without it the configuration is a type error, and building the Framework (`ready()`) refuses it. `servers` lists the OAuth authorization servers (https URLs) your agents get tokens from; `verify(token)` checks one bearer token and resolves the caller (the token's claims, say), or `null` to answer `401`. What it resolves is each tool call's `ctx.$state.mcp.claims`, beside what the host's `state` seeds: declare it in `AvState` (`mcp?: { claims: … }`) and authorize agents from it in the `agent` layer's guards. A guard can tell an agent apart: `ctx.$origin === "agent"`.
 ````
 
 ### reference/errors.md
