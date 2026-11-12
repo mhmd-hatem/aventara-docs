@@ -578,8 +578,8 @@ When the configuration cannot be built into contracts, `createFramework` (and `A
 
 **A root-only key is written in an overlay.**
 
-- Cause: A field definition in application, client or agent.
-- Fix: Define the field once at the root (`resources.<R>.fields.<f>.definition`); an overlay only chooses its visibility.
+- Cause: A field definition, or a Resource's managedElsewhere, in application, client or agent.
+- Fix: State it once at the root (`resources.<R>.fields.<f>.definition`, `resources.<R>.managedElsewhere`); an overlay only chooses visibility.
 
 ### Discovery
 
@@ -749,6 +749,42 @@ Two conditions are not errors. The server starts and answers correctly. Each pri
 
 - Cause: A compute stage was added, moved or removed since `aventara:prepare` last ran. The message lists each field that differs. Until then the pre-compute stages and the creates a stage writes through `ctx` are typed with the old computed fields; a create that leaves out a field the configuration does not compute is still refused at runtime (`A2004`).
 - Fix: Run `npm run aventara:prepare`. The warning changes nothing at runtime.
+
+### Client warnings
+
+Three conditions in the generated client are not errors either: the call goes on. Each prints one warning, an `AventaraWarning`, through `process.emitWarning` with its code as the warning's `code`, or through `console.warn` where there is no `process`.
+
+#### `AVENTARA_CLIENT_HOOK_THREW`
+
+**A client hook threw or rejected.** Printed once for each failure of `onCall`, `onSuccess` or `onError` ([Client API reference](/docs/client-api-reference)), naming the hook and the call.
+
+- Cause: The hook threw, returned a rejected promise, or returned a value that cannot be read. The hook is skipped: the call goes on, with no additions when it was `onCall`, and the caller gets the same result or rejection. A hook's failure never reaches the call, the calls sent with it or the process.
+- Fix: Fix the hook. An `onCall` that reads a token should await one shared in-flight promise and handle its failure.
+
+#### `AVENTARA_CLIENT_HOOK_HEADER_DROPPED`
+
+**A header from `onCall` was dropped.** Printed once per header name for each `onCall`, naming the header and the call.
+
+- Cause: `onCall` returned a header the client sets itself (`Content-Type`, `Accept` or an `Aventara-*` header, in any spelling), a name that is not a valid header name, or a value no request can carry (a line break, a control character, or a character outside Latin-1, such as an emoji or an em dash). The call is sent without that header. The types refuse the client's own headers already.
+- Fix: Return only headers of your own, with Latin-1 values; encode anything else first.
+
+#### `AVENTARA_CLIENT_OPTIONS_NO_DEFAULT`
+
+**The Next.js client options file has no default export.** Printed once, the first time a hook runs, when `src/aventara/client-options.ts` (or `.js`) exports no default object.
+
+- Cause: The file exists, so `aventara-build --client` wires `@/aventara/client` and `@/aventara/universal` to it, but it has no default export. The client works without hooks.
+- Fix: Export the hooks as its default: `export default { onCall, onSuccess, onError } satisfies Pick<AvClientOptions, "onCall" | "onSuccess" | "onError">`.
+
+### Adapter warnings
+
+One condition in `@aventara/prisma7-adapter` is not an error: the call runs and answers correctly. It prints one warning, an `AventaraWarning`, through `process.emitWarning` with its code as the warning's `code`.
+
+#### `AVENTARA_PRISMA_SQLITE_TRANSACTION_JOINED`
+
+**A plain call joined an open SQLite transaction.** Printed with `@prisma/adapter-better-sqlite3` the first time a given Resource and operation joins (and once for `ctx.$sql`) in the process. A plain call that waits its turn never warns.
+
+- Cause: SQLite has one connection, so a plain operation outside a transaction waits until an open one ends. A call made from inside that transaction's own async context joins it instead, and commits or rolls back with it: a stage that calls the root Framework instead of its `ctx`, or a helper shared across requests (a batcher, a timer first scheduled inside one request's transaction) that runs another request's call in that context.
+- Fix: In a stage, call through `ctx`. Give a shared helper its own async context: bind its callback with `AsyncResource.bind` from `node:async_hooks` when it is created, outside any transaction, or schedule its timers from outside a transaction. A join you meant is fine; the join is never refused.
 
 ### Example startup messages
 
