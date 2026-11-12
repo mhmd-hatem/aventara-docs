@@ -174,6 +174,7 @@ export default {
 
 - The file is bundled into the browser too: import nothing server-only into it and keep no secret there. Branch on `typeof window` when a hook must act differently on the server.
 - The hooks read the default export when they run, so the file may import from `@/aventara/client` (an error class for `instanceof`).
+- If the file has no default export, or its default export is not an object, the clients run without hooks, and the first call prints one `AVENTARA_CLIENT_OPTIONS_NO_DEFAULT` warning ([Error codes: client warnings](/docs/error-codes#client-warnings)).
 - `fetch`, `grouping` and `entrypoint` in the file are type errors: the entries keep their own.
 - On the server, `@/aventara/universal` calls the app in process: `onCall`'s headers reach that request, but its state is seeded from the request being served, so a header added there signs no one in.
 - `@/aventara/server`'s `avClient` is the Framework's own in-process client, not an `AvClient`, and takes no hooks.
