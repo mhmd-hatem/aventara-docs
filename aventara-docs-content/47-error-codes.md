@@ -578,8 +578,8 @@ When the configuration cannot be built into contracts, `createFramework` (and `A
 
 **A root-only key is written in an overlay.**
 
-- Cause: A field definition in application, client or agent.
-- Fix: Define the field once at the root (`resources.<R>.fields.<f>.definition`); an overlay only chooses its visibility.
+- Cause: A field definition, or a Resource's managedElsewhere, in application, client or agent.
+- Fix: State it once at the root (`resources.<R>.fields.<f>.definition`, `resources.<R>.managedElsewhere`); an overlay only chooses visibility.
 
 ### Discovery
 

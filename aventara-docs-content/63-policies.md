@@ -94,6 +94,8 @@ A guard can still read `ctx.$state.user`, and verifying the token stays your mid
 
 A third member, `client`, is optional. Aventara Access fills it, and its own documentation covers it. A provider written by hand leaves it out.
 
+With Aventara Access installed, `npx avaccess skill` writes its own agent skill into `.claude/skills/aventara-access/`.
+
 A point-of-sale till with its own PIN sign-in, written by hand:
 
 ```ts
