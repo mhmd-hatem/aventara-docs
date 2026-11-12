@@ -428,7 +428,7 @@ search.abort(); // only `hits` stops; strict `all` then rejects with its AbortEr
 - Aborted before the request is sent: the call is dropped. After: it rejects at once; the other calls of the same request go on.
 - Calls grouped into the same request but not in that `all` are never touched. The HTTP request itself is aborted only when every call in it is.
 - A started database query still finishes on the server (no cancel); a started write is written.
-- Nothing aborts for you: no default timeout, no abort on navigation. Pass the signal your data library gives (TanStack Query's and SWR's `queryFn` receive one), or abort in an effect's cleanup.
+- Nothing aborts for you: no default timeout, no abort on navigation. Pass the signal your data library gives (TanStack Query's `queryFn` receives one: `queryFn: ({ signal }) => avClient.Post.find.many({}, { signal })`), or abort in an effect's cleanup.
 
 ## Turning grouping off
 
