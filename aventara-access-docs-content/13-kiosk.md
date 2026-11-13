@@ -598,7 +598,7 @@ export const auth = betterAuth({
 });
 ```
 
-A WebView calls the server cross-origin, so the server answers CORS for the app's origins: the two request headers
+A WebView calls the server cross-origin, so the server answers CORS for the app's origins: the three request headers
 allowed, the two answer headers exposed, and no credentials (no cookie is sent). Browsers on your web origins still
 get credentialed CORS. Answer both from one `enableCors`, in place of the scaffold's in `src/main.ts`
 ([Hosts](/docs/hosts)): a second `enableCors` adds a second CORS middleware, which answers every preflight before the
