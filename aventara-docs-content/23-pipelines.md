@@ -117,9 +117,11 @@ validate the arguments against the contract: types, unknown fields, structure, a
                           then nested targets'; a field with a compute stage included
 -> compute (write)        create, update, or an upsert's two branches; then nested targets'
                           (a compute.create that leaves its required field missing answers A3000)
--> re-check               Aventara's own checks on what the pipes and compute produced
-                          (A3004, or A3000 for a computed value); then the validators on the
-                          values compute set or changed (A2004); then nested targets'
+-> re-check               Aventara's own checks on what the pipes and compute produced, top level
+                          and nested targets' in one pass (A3004, or A3000 for a computed value);
+                          then the validators on the values compute set or changed (A2004), top
+                          level then nested targets'; then the root's validators on a value
+                          compute set in a field the caller's layer hides (A3000)
 -> policy write check     only when a policy is configured: the checks on what a write is about to
                           write (see Policies)
    (a refusal so far runs no interceptor and no hook)
@@ -301,12 +303,12 @@ A re-check inside the transaction still reads under your database's isolation le
 
 ```text
 validate the whole plan
--> every step, in order: guards -> pipes -> validators (every literal value it sent; $refs unresolved)
+-> every step, in order: policy admission (with a policy) -> guards -> pipes -> validators (every literal value it sent; $refs unresolved)
 -> BEGIN
 -> guards, then pipes, of each touched Resource (they see the whole plan, $refs unresolved)
 -> every touched Resource's interceptors enter, then every touched Resource's hooks.before
      -> the steps, in order, each: resolve $refs -> field pipes and validators of the resolved values -> write compute -> validators of what compute set or changed
-        -> interceptors -> hooks.before -> the adapter call -> hooks.after -> interceptors
+        -> policy write check (with a policy) -> interceptors -> hooks.before -> the adapter call -> hooks.after -> interceptors -> output validation
    every touched Resource's hooks.after, the last touched Resource's first (they see every step's result), then the interceptors unwind
 -> COMMIT
 
@@ -354,11 +356,12 @@ const oneProjectDeletePerPlan: AvTransactionGuard = (ctx) =>
 Outside a transaction, a write is already committed when its `after` hook runs. `forceTransaction: true` on a family or a variant makes a plain call of that operation a one-step transaction:
 
 ```text
-validate -> guards -> pipes -> validators (every value the caller sent) -> BEGIN -> the Resource's transaction stages
--> write compute -> re-check (what compute set or changed) -> interceptors -> hooks.before -> the adapter call -> hooks.after -> interceptors -> COMMIT
+validate -> policy admission (with a policy) -> guards -> pipes -> validators (every value the caller sent) -> BEGIN -> the Resource's transaction stages
+-> write compute -> re-check (what compute set or changed) -> policy write check (with a policy) -> interceptors -> hooks.before -> the adapter call -> hooks.after -> interceptors
+-> output validation -> COMMIT
 ```
 
-A guard, pipe or validator that refuses the call opens no transaction. A computed value the validators refuse is judged inside it and rolls the transaction back.
+A policy admission, guard, pipe or validator that refuses the call opens no transaction. A computed value the validators refuse, a policy write check that refuses, and an output that fails output validation are judged inside it and roll the transaction back.
 
 ```ts
 resources: {

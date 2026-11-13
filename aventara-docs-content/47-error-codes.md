@@ -252,20 +252,20 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 ### Authentication and authorization (A4xxx)
 
-Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework itself never authenticates. `A4002` is also what a configured policy answers when it refuses a request: see [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) (the `@aventara/core` README). `A4000` and `A4001` are also what a request answers when its `state` rejects with an authentication library's refusal, an error whose `status` or `statusCode` is 401 or 403: see [Request state](/docs/nestjs-host#request-state-what-your-middleware-found) in the NestJS host guide.
+Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework itself never authenticates. `A4002` is also what a configured policy answers when it refuses a request: see [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) (the `@aventara/core` README). `A4000` and `A4001` are also what a request answers when its `state` rejects with an authentication library's refusal, an error whose `status` or `statusCode` is 401 or 403: see [`A4000`](/docs/error-codes#a4000) and [`A4001`](/docs/error-codes#a4001) below, for every host and the `access` provider alike.
 
 #### `A4000`
 
 **Unauthenticated.** HTTP 401, thrown as `AvAuthError`.
 
-- Cause: A guard threw new AvError("A4000", ...), or the host's or access provider's state rejected with an object whose status or statusCode is 401 (an authentication library's refusal, answered with this message only): authentication is required or failed. The framework never authenticates by itself.
+- Cause: A guard threw new AvError("A4000", ...), or the host's or access provider's state rejected with an object whose status or statusCode is the number 401 (an authentication library's refusal, such as Better Auth's statusCode 401): authentication is required or failed. Such a refusal answers {"data":null,"code":"A4000","cause":{"message":"Unauthenticated."}}, nothing of the library's error, and is not sent to diagnostics. A string status ("401"), another number, or a status and statusCode that are two different numbers is no refusal and answers 500 A3000; a number beside a string is read by the number. The rule holds on every protocol route (operations, cached reads, /_transactions, /_all, /_access/can), on MCP tool calls and in Next.js; in process (avClient in a Server Component or Server Action, serverClient.$access.can given headers) the call rejects with an AvAuthError. The framework never authenticates by itself.
 - Fix: Send the credentials your guards expect, such as the Authorization header.
 
 #### `A4001`
 
 **Forbidden.** HTTP 403, thrown as `AvAuthError`.
 
-- Cause: A guard returned false ("Operation denied by a framework guard."), a field write guard or a nested write's target guard included, a stage threw A4001, or the host's or access provider's state rejected with an object whose status or statusCode is 403 (answered with this message only).
+- Cause: A guard returned false ("Operation denied by a framework guard."), a field write guard or a nested write's target guard included, a stage threw A4001, or the host's or access provider's state rejected with an object whose status or statusCode is the number 403, read by the same rule as A4000's 401 (answered with this message only, not sent to diagnostics).
 - Fix: Call as a caller the guard admits, or stop sending the guarded field. To answer another code, throw an AvError from the guard.
 
 #### `A4002`

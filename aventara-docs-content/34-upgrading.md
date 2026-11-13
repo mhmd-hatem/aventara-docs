@@ -89,7 +89,7 @@ Move the frontend's `@aventara/client` to the same version, and run `npx @aventa
 
 These change only what `aventara new` and `aventara init` write. An existing project keeps its files.
 
-- The starter `User` model's id is `String @id @default(cuid())` instead of an `Int` autoincrement. A project scaffolded before keeps its schema.
+- The starter `User` model's id is `String @id @default(cuid())` instead of an `Int` autoincrement. A project scaffolded before keeps its schema. Aventara Access needs a `String` `User.id`; to move an existing `Int` id, see [Access's upgrading guide](https://aventara.razor34.dev/access/docs/upgrading#100-rc1-to-100-rc2).
 - Prisma, `@prisma/client` and the driver adapter are written at the adapter's range `^7.10.1`, so the first install takes the newest Prisma 7 and never Prisma 8.
 - `aventara init` adds `.env` to `.gitignore` whenever it writes to `.env`. If you ran `init` over an existing project before, check that your `.gitignore` lists `.env`.
 - `@aventara/nest` is built and tested against NestJS 12.3.2. Its peer range stays `^12.0.0`, so nothing has to change.
@@ -830,7 +830,7 @@ error TS2741: Property 'regenerate_with_aventara_prepare' is missing in type ...
 
 That is the symptom of an artifact from an older adapter; `aventara:prepare` fixes it ([Troubleshooting](/docs/troubleshooting#build-error-property-regenerate_with_aventara_prepare-is-missing)). At start-up the adapter also refuses an old artifact with a message that names `aventara:prepare`.
 
-Projects made by pilot.4's `aventara new` or `aventara init` also get `prebuild`, `prestart`, `prestart:dev` and `prestart:debug` scripts, each `npm run aventara:prepare` (`pnpm run aventara:prepare` with pnpm), so building or starting regenerates the artifact first. An existing project does not get them from an upgrade; add them to `package.json` yourself if you want the same behaviour. They run under npm and pnpm; Yarn Berry, and pnpm with `enable-pre-post-scripts=false`, skip them, so run `aventara:prepare` yourself there.
+Projects made by pilot.4's `aventara new` or `aventara init` also get `prebuild`, `prestart`, `prestart:dev` and `prestart:debug` scripts, each `npm run aventara:prepare` (`pnpm run aventara:prepare` with pnpm), so building or starting regenerates the artifact first. An existing project does not get them from an upgrade; add them to `package.json` yourself if you want the same behaviour. They run under npm and pnpm; pnpm with `enable-pre-post-scripts=false` skips them, so run `aventara:prepare` yourself there.
 
 The frontend client needs no regeneration for this release. Update `@aventara/client` to the same version, exact (`npm install --save-dev --save-exact @aventara/client@0.1.0-pilot.4`); its generated output differs only in the documentation comments it copies from `@aventara/core`.
 
