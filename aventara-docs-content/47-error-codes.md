@@ -745,9 +745,9 @@ Two conditions are not errors. The server starts and answers correctly. Each pri
 
 #### `AVENTARA_STALE_GENERATED_TYPES`
 
-**The generated types are stale.** Printed at startup when the computed fields the discovery artifact was typed with differ from the configuration's `compute.create` and `compute.update` stages.
+**The generated types are stale.** Printed at startup when the discovery artifact was typed with computed fields that differ from the configuration's `compute.create` and `compute.update` stages, or with Json shapes and added fields that differ from the configuration's definitions. It is printed once, with a paragraph for each part that is stale.
 
-- Cause: A compute stage was added, moved or removed since `aventara:prepare` last ran. The message lists each field that differs. Until then the pre-compute stages and the creates a stage writes through `ctx` are typed with the old computed fields; a create that leaves out a field the configuration does not compute is still refused at runtime (`A2004`).
+- Cause: A compute stage was added, moved or removed, or a `definition` changed, since `aventara:prepare` last ran. The message lists each field that differs. Until then the stages are typed with the old facts: the pre-compute stages and the creates a stage writes through `ctx` with the old computed fields, a stage's `ctx` and arguments with the old shapes and added fields. A create that leaves out a field the configuration does not compute is still refused at runtime (`A2004`), and every call is still checked against the configuration as it is.
 - Fix: Run `npm run aventara:prepare`. The warning changes nothing at runtime.
 
 ### Client warnings
