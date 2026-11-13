@@ -568,7 +568,7 @@ Order: guards (layer, Resource, family, variant, then field write guards, then n
 | `$transport` | `{ method: "POST" \| "GET"; headers: Record<string, string> } \| undefined` | Present only for remote requests; `"GET"` for a [cached read](/docs/caching-reads). Header names are lower-cased; repeated headers are joined. |
 | `$sql` | tagged template | Run SQL now ([The pipeline context](/docs/pipeline-context#ctxsql)). |
 | `$transaction` | `(work: (tx) => Promise<T>) => Promise<T>` | Run calls in one transaction. |
-| `<Resource>` | `{ <family>: { <variant>(args) } }` | Raw application-origin calls ([The pipeline context](/docs/pipeline-context)). |
+| `<Resource>` | `{ <family>: AvContextFamilyFacade<…> }` | Raw application-origin calls ([The pipeline context](/docs/pipeline-context)). Each family, `ctx.<Resource>.<family>`, is an `AvContextFamilyFacade` (one call per variant, in the application forms), and compute's `ctx.<Resource>.find` is the same type. Like `AvApplicationFamilyFacade`, it exists so a hover or a declaration can name the node; you never write it yourself. |
 
 ```ts
 import { AvError, type AvGuard } from "@aventara/core";
