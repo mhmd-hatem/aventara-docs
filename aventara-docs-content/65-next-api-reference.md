@@ -17,7 +17,7 @@ The reference for [`@aventara/next`](/docs/nextjs-host) and the two entries `ave
 | Peers | `next` `>=16.4 <17`, `react` `^19`; `@aventara/mcp` optional, loaded only when `mcp` is configured |
 | Runtime | Next.js App Router, Node.js runtime |
 | Entry | `@aventara/next`, server-only: a Client Component that imports it fails `next build` |
-| Exports | `Aventara`, `avDehydrate`; types `AvNextHandlers`, `AvNextClientTransaction`, `AvNextAppTransaction`, `AvNextStateContext` |
+| Exports | `Aventara`, `avDehydrate`; types `AvDehydrated`, `AvNextHandlers`, `AvNextClientTransaction`, `AvNextAppTransaction`, `AvNextStateContext` |
 
 ## `Aventara(options)`
 
@@ -94,10 +94,23 @@ A Resource the client layer shows as `tx` or `transaction`, or the application l
 ```text
 import { avDehydrate } from "@aventara/next";
 
+avDehydrate<T>(data: T): AvDehydrated<T>
 avDehydrate(data: unknown): unknown
 ```
 
 Server side. Copies `data`, turning each `Date`, `bigint`, `Uint8Array` and decimal into a tagged plain object that React can pass from a Server Component to a Client Component. Arrays and plain objects are copied with their members dehydrated; anything else is returned as it is. Use it as TanStack Query's `dehydrate(queryClient, { serializeData: avDehydrate })`, or on an SWR `fallback`.
+
+Data of type `T` dehydrates to an `AvDehydrated<T>`, which `avHydrate` reads back as the `T`. A call with an `unknown` value is an `AvDehydrated<unknown>`; the `unknown` signature is the one a callback typed `(data: unknown) => unknown`, such as TanStack Query's `serializeData`, takes.
+
+### `AvDehydrated<T>`
+
+```text
+import type { AvDehydrated } from "@aventara/next";   // or from "@/aventara/client": the same type
+```
+
+Data of type `T` as `avDehydrate` sends it: opaque, read back as the `T` only by `avHydrate`. Type a Client Component's prop with it, and a Server Component can hand it `avDehydrate(data)` with no cast on either side. A plain object, the `T` itself, or the dehydrated form of another type is a compile error where an `AvDehydrated<T>` is expected. The generated `@/aventara/client` exports the same type, so a Client Component imports it from there.
+
+Pass `avHydrate(fallback)` on, never the dehydrated value itself: SWR's `fallback` is typed `any`, so the compiler cannot catch that mistake.
 
 Throws `TypeError` for a `Date` that has no wire form (an invalid date, or a year past four digits).
 
@@ -108,8 +121,9 @@ Throws `TypeError` for a `Date` that has no wire form (an invalid date, or a yea
 | Export | What it is |
 |---|---|
 | `avClient` | The typed client for the browser, calling the app's own `/api`. A call made on the server is refused and sends nothing. |
-| `avHydrate(dehydrated: unknown): unknown` | Revives what `avDehydrate` sent: tagged dates, `bigint`s, byte arrays and decimals become `Date`, `bigint`, `Uint8Array` and this client's `AvDecimal`. Throws `TypeError` for a tagged value `avDehydrate` does not write. |
+| `avHydrate<T>(dehydrated: AvDehydrated<T>): T`, `avHydrate(dehydrated: unknown): unknown` | Revives what `avDehydrate` sent, as the `T` it was dehydrated from: tagged dates, `bigint`s, byte arrays and decimals become `Date`, `bigint`, `Uint8Array` and this client's `AvDecimal`. Throws `TypeError` for a tagged value `avDehydrate` does not write. |
 | `AvDecimal` | The client's decimal class |
+| type `AvDehydrated<T>` | The type `avDehydrate` returns, the same type `@aventara/next` exports ([above](#avdehydratedt)) |
 | `AvError`, `AvValidationError`, `AvNotFoundError`, `AvConflictError`, `AvAuthError`, `AvInternalError`, `AvProtocolError`, `AvContractMismatchError`, `AvTransportError` | The error classes the client throws ([Client errors](/docs/client-errors)) |
 | your Resource types and enums | As `avclient generate`'s `AvClient.ts` exports them |
 | types `AvClient`, `AvClientOptions`, `AvCallOptions`, `AvFetch`, `AvOperation`, `AvCause`, `AvOperationCode`, `AvValidationCode`, `AvValidationIssue` | Type-only exports |

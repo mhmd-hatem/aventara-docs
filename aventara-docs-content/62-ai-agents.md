@@ -42,7 +42,7 @@ AGENTS.md
 To refresh them after upgrading, run `aventara skill` in the project, with the CLI at your `@aventara/core` version:
 
 ```bash
-npx @aventara/cli@1.0.0-rc.13 skill
+npx @aventara/cli@1.0.0-rc.14 skill
 ```
 
 It reads the installed `@aventara/core`'s version and `ERRORS.md` (it runs none of your packages), then:
@@ -75,14 +75,14 @@ description: Build and change this project's Aventara API (NestJS or Next.js, Pr
 
 # Aventara
 
-Aventara turns the Prisma schema into a typed API: every model is a Resource with standard operations (`find`, `create`, `update`, `delete`, `upsert`), served at `api` (`/api`) and called from the generated frontend client. You configure the models' operations; you do not wrap them in controllers. Logic that is not one of those operations (a health check, a report, a webhook) goes in your own Nest controller or service, which calls `framework.application` and sits behind Nest guards. Written for `@aventara/core` 1.0.0-rc.13.
+Aventara turns the Prisma schema into a typed API: every model is a Resource with standard operations (`find`, `create`, `update`, `delete`, `upsert`), served at `api` (`/api`) and called from the generated frontend client. You configure the models' operations; you do not wrap them in controllers. Logic that is not one of those operations (a health check, a report, a webhook) goes in your own Nest controller or service, which calls `framework.application` and sits behind Nest guards. Written for `@aventara/core` 1.0.0-rc.14.
 
 There is one way to do each task. Follow these rules; the reference files hold the detail:
 
 - `reference/config.md`: the configuration tree, where every key goes, exposure, limits.
 - `reference/stages.md`: which stage fits a task, the order stages run in, the rules.
 - `reference/recipes.md`: complete, type-checked examples for the common tasks.
-- `reference/client.md`: calling the API from frontend and server code: what a call returns, which error class each code throws (`error.cause.issues`), transactions with `$ref`, several calls in one request (`avClient.all`, `POST /_all`), hooks (`onCall`, `onSuccess`, `onError`), aborting, `avLazy`, `grouping: false`, cached reads. A separate frontend gets this guide and `reference/client-setup.md` as its own skill, `.claude/skills/aventara-client/`, from `avclient init` (refresh it with `avclient skill`).
+- `reference/client.md`: calling the API from frontend and server code: what a call returns, which error class each code throws (`error.cause.issues`), transactions with `$ref`, several calls in one request (`avClient.all`, `POST /_all`), hooks (`onCall`, `onSuccess`, `onError`), aborting, `avLazy`, `grouping: false`, cached reads. A separate frontend gets its own skill, `.claude/skills/aventara-client/`, from `avclient init` (refresh it with `avclient skill`): a `SKILL.md` that holds `reference/client.md`'s content, and `reference/client-setup.md`.
 - `reference/client-setup.md`: a separate frontend's `framework.client.ts`, regenerating its client, and the stale-client error (`A2005`).
 - `reference/avz.md`: every `AvZ` check and Json shape builder.
 - `reference/errors.md`: every code (`A…`, `V…`, `CONFIG_…`, `COMPILER_…`) with its cause and fix.
@@ -120,7 +120,7 @@ A Next.js app (`@aventara/next`, App Router under `src/app/`) keeps everything A
 
 Server Components and Server Actions call `avClient.<Resource>.<family>.<variant>(args)` (checked as the caller) or `avApp` (trusted code); Client Components call the generated `avClient` from `@/aventara/client`. There is no separate frontend to regenerate: `aventara:prepare` writes the browser client too, and `next build` runs it first. An `mcp` endpoint on Next.js needs `authorization`.
 
-Data a Server Component prefetches for a Client Component goes through TanStack Query, with the query written once over `@/aventara/universal` (it runs on both sides): the server dehydrates it with `avDehydrate` from `@aventara/next`, the browser revives it with `avHydrate` from `@/aventara/client` (`Date`, `bigint`, `Uint8Array` and `AvDecimal`, which React cannot pass as they are), and the Client Component reads it through the same query, which is where its type comes from. `avHydrate` returns `unknown`: never hand its output to a component as typed props. The pattern: `reference/recipes.md`, Prefetched data in a Client Component. Transactions on the server: `avClient.tx` with `avClient.transaction([...])` (the client layer), or `avApp.appTx` with `avApp.transaction([...])` (the application layer). They need the built Framework, which `instrumentation.ts`'s `await ready()` gives; elsewhere, `await ready()` first.
+Data a Server Component prefetches for a Client Component goes through TanStack Query, with the query written once over `@/aventara/universal` (it runs on both sides): the server dehydrates it with `avDehydrate` from `@aventara/next`, the browser revives it with `avHydrate` from `@/aventara/client` (`Date`, `bigint`, `Uint8Array` and `AvDecimal`, which React cannot pass as they are), and the Client Component reads it through the same query, which is where its type comes from. To hand data as props instead (an SWR `fallback`), type the prop `AvDehydrated<T>` (from `@/aventara/client`): `avDehydrate(data)` is an `AvDehydrated<typeof data>`, and `avHydrate(prop)` is the `T` again, so no cast is written; a plain object is refused where an `AvDehydrated<T>` is expected. Pass `avHydrate(fallback)` to SWR, never `fallback` itself: SWR's `fallback` is typed `any`, so the compiler cannot catch it. Read the data you dehydrate through `@/aventara/universal`, not `@/aventara/server`: the server entry types a decimal as core's `AvDecimal`, but `avHydrate` revives it as the browser client's. Both patterns: `reference/recipes.md`, Prefetched data in a Client Component. Transactions on the server: `avClient.tx` with `avClient.transaction([...])` (the client layer), or `avApp.appTx` with `avApp.transaction([...])` (the application layer). They need the built Framework, which `instrumentation.ts`'s `await ready()` gives; elsewhere, `await ready()` first.
 
 A call reads the database, so Next.js runs it at request time (Cache Components is on: `cacheComponents: true`). Give a page that calls `avClient` or `avApp` one of: the calling component inside `<Suspense fallback={…}>` (or a `loading.tsx`), `"use cache"` on a function that makes the call (the result is shared by every visitor: never with `state`), or `export const instant = false` to render the whole page at request time. Without one, `next build` fails naming these three: add one (no `connection()` is needed).
 
@@ -1178,7 +1178,7 @@ export class PostReader {
 
 ## Prefetched data in a Client Component (Next.js)
 
-Write the query once over `@/aventara/universal`, which runs on the server and in the browser; the Client Component's data is typed by that query. The browser's `QueryClient` takes `defaultOptions: { hydrate: { deserializeData: avHydrate } }` (`avHydrate` from `@/aventara/client`), set once in your providers. Use TanStack Query for this: SWR's `fallback` would need a cast, since `avHydrate` returns `unknown`.
+Write the query once over `@/aventara/universal`, which runs on the server and in the browser; the Client Component's data is typed by that query. The browser's `QueryClient` takes `defaultOptions: { hydrate: { deserializeData: avHydrate } }` (`avHydrate` from `@/aventara/client`), set once in your providers.
 
 ```ts
 // src/app/posts/posts.queries.ts
@@ -1226,6 +1226,57 @@ export default function Page() {
   return <Suspense fallback={<p>Loading</p>}><Prefetched /></Suspense>;
 }
 ```
+
+With SWR, the data crosses as a prop. Type it `AvDehydrated<T>` (from `@/aventara/client`, a type only): `avDehydrate(data)` on the server is an `AvDehydrated<typeof data>`, and `avHydrate(fallback)` in the Client Component is the `T` again, with its `Date`, `bigint` and `AvDecimal`, so neither side writes a cast. A plain object, or data of another type, is a compile error on the prop. `T` is named from the read itself, so the server's read and the browser's are the one function.
+
+```ts
+// src/app/drafts/drafts.queries.ts
+import { avClient } from "@/aventara/universal";
+
+export const readDrafts = () =>
+  avClient.Post.find.many({ where: { published: false }, select: ["id", "title"] });
+```
+
+```tsx
+// src/app/drafts/drafts.tsx
+"use client";
+import useSWR, { SWRConfig } from "swr";
+import { type AvDehydrated, avHydrate } from "@/aventara/client";
+import { readDrafts } from "./drafts.queries";
+
+export type DraftsFallback = AvDehydrated<{ drafts: Awaited<ReturnType<typeof readDrafts>> }>;
+
+function DraftList() {
+  const { data } = useSWR("drafts", readDrafts);
+  return <ul>{data?.map((post) => <li key={post.id}>{post.title}</li>)}</ul>;
+}
+
+export function Drafts({ fallback }: { readonly fallback: DraftsFallback }) {
+  return (
+    <SWRConfig value={{ fallback: avHydrate(fallback) }}>
+      <DraftList />
+    </SWRConfig>
+  );
+}
+```
+
+```tsx
+// src/app/drafts/page.tsx
+import { avDehydrate } from "@aventara/next";
+import { Suspense } from "react";
+import { Drafts } from "./drafts";
+import { readDrafts } from "./drafts.queries";
+
+async function Prefetched() {
+  return <Drafts fallback={avDehydrate({ drafts: await readDrafts() })} />;
+}
+
+export default function Page() {
+  return <Suspense fallback={<p>Loading</p>}><Prefetched /></Suspense>;
+}
+```
+
+The `fallback` key (`"drafts"`) is the `useSWR` key. Pass `avHydrate(fallback)` to `SWRConfig`, never `fallback` itself: SWR's `fallback` is typed `any`, so the compiler cannot catch it. TanStack Query's `serializeData: avDehydrate` and `deserializeData: avHydrate` take any data, as above.
 
 ## Compare-and-set: a status change two requests may race on
 

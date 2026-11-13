@@ -1,13 +1,45 @@
 ---
 title: Upgrading
-description: Move from 1.0.0-rc.12 to 1.0.0-rc.13 (the transaction write limit, validators before compute, 401 and 403 from state), from 1.0.0-rc.11 to 1.0.0-rc.12 (lookup keys need filter, the scaffold's String ids), from 1.0.0-rc.8 to 1.0.0-rc.11 (Node and Prisma floors, stricter policy checks, grouped client calls, regenerate clients), from 1.0.0-rc.4 to 1.0.0-rc.8 (rebuild after a discovery change, policy additions, request type names), from 1.0.0-rc.3 to 1.0.0-rc.4 (build-time Contracts, the policy seam), from 1.0.0-rc.2 to 1.0.0-rc.3, from 1.0.0-rc.1 to 1.0.0-rc.2, from 1.0.0-rc.0 to 1.0.0-rc.1 (the new configuration shape, Av names, the $ ctx members) and from earlier pilots step by step, and the general flow for upgrading Aventara packages.
+description: Move from 1.0.0-rc.13 to 1.0.0-rc.14 (typed avDehydrate and avHydrate), from 1.0.0-rc.12 to 1.0.0-rc.13 (the transaction write limit, validators before compute, 401 and 403 from state), from 1.0.0-rc.11 to 1.0.0-rc.12 (lookup keys need filter, the scaffold's String ids), from 1.0.0-rc.8 to 1.0.0-rc.11 (Node and Prisma floors, stricter policy checks, grouped client calls, regenerate clients), from 1.0.0-rc.4 to 1.0.0-rc.8 (rebuild after a discovery change, policy additions, request type names), from 1.0.0-rc.3 to 1.0.0-rc.4 (build-time Contracts, the policy seam), from 1.0.0-rc.2 to 1.0.0-rc.3, from 1.0.0-rc.1 to 1.0.0-rc.2, from 1.0.0-rc.0 to 1.0.0-rc.1 (the new configuration shape, Av names, the $ ctx members) and from earlier pilots step by step, and the general flow for upgrading Aventara packages.
 order: 34
 section: guides
 ---
 
 # Upgrading
 
-Aventara `1.0.0-rc.13` is the eleventh published release candidate (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were tagged but never published, and rc.9 and rc.10 sit between rc.8 and rc.11), and the next release follows it; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.13` from `1.0.0-rc.12`, the move to `1.0.0-rc.12` from `1.0.0-rc.11`, the move to `1.0.0-rc.11` from `1.0.0-rc.8`, the move to `1.0.0-rc.8` from `1.0.0-rc.4`, the move to `1.0.0-rc.4` from `1.0.0-rc.3`, the move to `1.0.0-rc.3` from `1.0.0-rc.2`, to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
+Aventara `1.0.0-rc.14` is the twelfth published release candidate (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were tagged but never published, and rc.9 and rc.10 sit between rc.8 and rc.11), and the next release follows it; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.14` from `1.0.0-rc.13`, the move to `1.0.0-rc.13` from `1.0.0-rc.12`, the move to `1.0.0-rc.12` from `1.0.0-rc.11`, the move to `1.0.0-rc.11` from `1.0.0-rc.8`, the move to `1.0.0-rc.8` from `1.0.0-rc.4`, the move to `1.0.0-rc.4` from `1.0.0-rc.3`, the move to `1.0.0-rc.3` from `1.0.0-rc.2`, to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
+
+## From 1.0.0-rc.13 to 1.0.0-rc.14
+
+A patch release: nothing in your configuration has to change, and no Contract changes, so a generated frontend client keeps working. Change the version numbers, rebuild, and refresh the agent skills.
+
+### 1. Install the new versions
+
+```bash
+npm install --save-exact @aventara/core@1.0.0-rc.14 @aventara/nest@1.0.0-rc.14 @aventara/prisma7-adapter@1.0.0-rc.14 @aventara/build@1.0.0-rc.14
+# add @aventara/mcp@1.0.0-rc.14 and @aventara/testing@1.0.0-rc.14 to the command if you use them
+```
+
+With pnpm, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
+
+```bash
+# pnpm (in a workspace, add --filter <your server package> after pnpm)
+pnpm add --save-exact @aventara/core@1.0.0-rc.14 @aventara/nest@1.0.0-rc.14 @aventara/prisma7-adapter@1.0.0-rc.14
+pnpm add --save-dev --save-exact @aventara/build@1.0.0-rc.14
+```
+
+In a Next.js app, move `@aventara/next` with `@aventara/core` and the rest. Move each frontend's `@aventara/client` to the same version. Then refresh both agent skills: run `npx @aventara/cli@1.0.0-rc.14 skill` (`pnpm dlx @aventara/cli@1.0.0-rc.14 skill`) on the server, and `npx avclient skill` (`pnpm exec avclient skill`) in each frontend. Run `npm run aventara:prepare` on the server (`pnpm run aventara:prepare`): the prebuilt Contracts file records the core version, and in a Next.js app it rewrites `src/aventara/client.ts` with the typed `avHydrate`.
+
+### 2. What changed
+
+| Change | What to do |
+| --- | --- |
+| `avDehydrate(data)` returns an `AvDehydrated<T>` for data of type `T`, and `avHydrate` of an `AvDehydrated<T>` returns the `T`. `AvDehydrated<T>` is exported by `@aventara/next` and by the generated `@/aventara/client`; it is opaque, so a plain object or data of another type is a compile error where one is expected | Type an SWR `fallback` prop `AvDehydrated<T>` and drop the cast after `avHydrate(fallback)` ([TanStack Query and SWR](/docs/tanstack-query-and-swr#swr)). Pass `avHydrate(fallback)` to `SWRConfig`, never the prop itself. Read data you dehydrate through `@/aventara/universal`. TanStack Query's `serializeData: avDehydrate` and `deserializeData: avHydrate` stay as they are. |
+| A Resource or enum named `AvDehydrated` or `avHydrate` is emitted in `src/aventara/client.ts` under its name with `Model` appended, with a warning, as other names the generated client owns are | Import it under the new name the warning gives. |
+| On SQLite, a plain operation or `ctx.$sql` that gives up waiting for another request's transaction still answers `A3002`; its diagnostic now names how long it waited, the `maxWait` that ran out and that it never ran | Nothing. Raise `transactionOptions.maxWait`, or keep the transaction that holds the connection shorter. |
+| The `A4000` and `A4001` entries of the error catalog (`ERRORS.md`, [Error codes](/docs/error-codes#a4000)) state the whole rule for a `state` that rejects with an authentication library's refusal | Nothing; behaviour is unchanged. |
+| The server skill's stage order lists every stage: policy admission, the policy write check, output validation, nested writes' targets and the order under `forceTransaction` | Refresh the skill (step 1). |
+| The frontend skill shows the typed SWR pattern and says an edited file is kept with a warning, and replaced with `--force` | Refresh the skill (step 1). |
 
 ## From 1.0.0-rc.12 to 1.0.0-rc.13
 

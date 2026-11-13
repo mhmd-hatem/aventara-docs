@@ -7,11 +7,34 @@ section: about
 
 # Changelog
 
-`1.0.0-rc.0` was the first release candidate, `1.0.0-rc.1` the second, `1.0.0-rc.2` the third, `1.0.0-rc.3` the fourth, `1.0.0-rc.4` the fifth, `1.0.0-rc.8` the sixth, `1.0.0-rc.9` the seventh, `1.0.0-rc.10` the eighth, `1.0.0-rc.11` the ninth, `1.0.0-rc.12` the tenth and `1.0.0-rc.13` is the eleventh (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published); the releases before them are pilots, and a pilot's API could change. A release candidate changes the API only to fix what testing finds. Pin exact versions. All `@aventara/*` packages are released together at one version. Each package also ships this history for itself as a `CHANGELOG.md` beside its README.
+`1.0.0-rc.0` was the first release candidate, `1.0.0-rc.1` the second, `1.0.0-rc.2` the third, `1.0.0-rc.3` the fourth, `1.0.0-rc.4` the fifth, `1.0.0-rc.8` the sixth, `1.0.0-rc.9` the seventh, `1.0.0-rc.10` the eighth, `1.0.0-rc.11` the ninth, `1.0.0-rc.12` the tenth, `1.0.0-rc.13` the eleventh and `1.0.0-rc.14` is the twelfth (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published); the releases before them are pilots, and a pilot's API could change. A release candidate changes the API only to fix what testing finds. Pin exact versions. All `@aventara/*` packages are released together at one version. Each package also ships this history for itself as a `CHANGELOG.md` beside its README.
+
+## 1.0.0-rc.14
+
+The current release, published under the `rc` dist-tag (install with `@rc`). `avDehydrate` and `avHydrate` are typed, the SQLite wait diagnostic names its cause, and the error catalog and agent skills say more. No Contract changes. Upgrading from rc.13: see [Upgrading](/docs/upgrading#from-100-rc13-to-100-rc14).
+
+**Next.js**
+
+- `avDehydrate(data)` (`@aventara/next`) returns an `AvDehydrated<T>` for data of type `T`, and `avHydrate(value)` (`@/aventara/client`) of an `AvDehydrated<T>` returns the `T`, its `Date`, `bigint`, `Uint8Array` and `AvDecimal` values included. Data handed from a Server Component to a Client Component as props keeps its type, with no cast: type an SWR `fallback` prop `AvDehydrated<T>` and pass `avHydrate(fallback)` to `SWRConfig`.
+- `AvDehydrated<T>` is new, exported by `@aventara/next` and by the `src/aventara/client.ts` that `aventara-build --client` writes; the two are one type. It is opaque: a plain object, the data itself, or the dehydrated form of another type is a compile error where an `AvDehydrated<T>` is expected.
+- A Resource or enum named `AvDehydrated` or `avHydrate` is emitted under a renamed identifier (`AvDehydratedModel`, `avHydrateModel`), with a warning, as other names the generated client owns are.
+- Read data you dehydrate through `@/aventara/universal`: `@/aventara/server` types a decimal as core's `AvDecimal`, while `avHydrate` revives it as the browser client's. Pass `avHydrate(fallback)` to `SWRConfig`, never the dehydrated value: SWR's `fallback` is typed `any`, so the compiler cannot catch it.
+- `avHydrate` still takes `unknown` and returns `unknown`, and `avDehydrate` of an `unknown` value returns an `AvDehydrated<unknown>`, so TanStack Query's `serializeData: avDehydrate` and `deserializeData: avHydrate` are written as before.
+
+**Prisma 7 adapter**
+
+- On SQLite (`@prisma/adapter-better-sqlite3`), a plain operation or `ctx.$sql` that gives up waiting for the connection another request's transaction holds still answers `A3002`, and its diagnostic now says how many milliseconds it waited, which `maxWait` ran out (the adapter's `transactionOptions.maxWait`, or else the PrismaClient's, 2000 ms unless set) and that it never ran. Before, it said the call's transaction "was no longer open".
+
+**Errors and agent skills**
+
+- The error catalog's `A4000` and `A4001` entries state the whole rule for a `state` that rejects with an authentication library's refusal: the envelope it answers, that nothing of the library's error is sent and nothing goes to `diagnostics`, which shapes are not a refusal (`500 A3000`), and every route, MCP tool call and in-process call it applies to.
+- The server skill's stage order in `reference/stages.md` lists every stage: policy admission before the guards, the policy write check after the re-check, output validation before the response, where a nested write's targets run their stages, the check of a value set in a field the caller's layer hides (`A3000`), and the full order under `forceTransaction`.
+- The skills show the SWR props pattern typed, with no cast. The frontend skill's refresh line no longer names `npx`, and says a file you edited is kept with a warning naming it, and replaced with `--force`.
+- `avclient skill` no longer ends with "the client skill is up to date" after keeping a file you edited: it says the skill is up to date apart from what the warnings above name, as `aventara skill` does. The server skill says what the frontend skill holds: a `SKILL.md` with `reference/client.md`'s content, and `reference/client-setup.md`.
 
 ## 1.0.0-rc.13
 
-The current release, published under the `rc` dist-tag (install with `@rc`). A transaction plan's writes get their own limit, field validators judge the caller's values before compute, a `state` that rejects with 401 or 403 answers as such, and `transactionsStyle` takes `"server"`. Every Contract hash changes, so regenerate your clients. Upgrading from rc.12: see [Upgrading](/docs/upgrading#from-100-rc12-to-100-rc13).
+Published under the `rc` dist-tag before rc.14. A transaction plan's writes get their own limit, field validators judge the caller's values before compute, a `state` that rejects with 401 or 403 answers as such, and `transactionsStyle` takes `"server"`. Every Contract hash changes, so regenerate your clients. Upgrading from rc.12: see [Upgrading](/docs/upgrading#from-100-rc12-to-100-rc13).
 
 **Transactions**
 
