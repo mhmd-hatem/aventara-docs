@@ -82,7 +82,7 @@ There is one way to do each task. Follow these rules; the reference files hold t
 - `reference/config.md`: the configuration tree, where every key goes, exposure, limits.
 - `reference/stages.md`: which stage fits a task, the order stages run in, the rules.
 - `reference/recipes.md`: complete, type-checked examples for the common tasks.
-- `reference/client.md`: calling the API from frontend and server code: what a call returns, which error class each code throws (`error.cause.issues`), transactions with `$ref`, several calls in one request (`avClient.all`, `POST /_all`), hooks (`onCall`, `onSuccess`, `onError`), aborting, `avLazy`, `grouping: false`, cached reads. A separate frontend gets this guide and `reference/client-setup.md` as its own skill, `.claude/skills/aventara-client/`, from `avclient init` (refresh it with `avclient skill`).
+- `reference/client.md`: calling the API from frontend and server code: what a call returns, which error class each code throws (`error.cause.issues`), transactions with `$ref`, several calls in one request (`avClient.all`, `POST /_all`), hooks (`onCall`, `onSuccess`, `onError`), aborting, `avLazy`, `grouping: false`, cached reads. A separate frontend gets its own skill, `.claude/skills/aventara-client/`, from `avclient init` (refresh it with `avclient skill`): a `SKILL.md` that holds `reference/client.md`'s content, and `reference/client-setup.md`.
 - `reference/client-setup.md`: a separate frontend's `framework.client.ts`, regenerating its client, and the stale-client error (`A2005`).
 - `reference/avz.md`: every `AvZ` check and Json shape builder.
 - `reference/errors.md`: every code (`A…`, `V…`, `CONFIG_…`, `COMPILER_…`) with its cause and fix.

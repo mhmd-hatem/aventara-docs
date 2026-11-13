@@ -30,6 +30,7 @@ The current release, published under the `rc` dist-tag (install with `@rc`). `av
 - The error catalog's `A4000` and `A4001` entries state the whole rule for a `state` that rejects with an authentication library's refusal: the envelope it answers, that nothing of the library's error is sent and nothing goes to `diagnostics`, which shapes are not a refusal (`500 A3000`), and every route, MCP tool call and in-process call it applies to.
 - The server skill's stage order in `reference/stages.md` lists every stage: policy admission before the guards, the policy write check after the re-check, output validation before the response, where a nested write's targets run their stages, the check of a value set in a field the caller's layer hides (`A3000`), and the full order under `forceTransaction`.
 - The skills show the SWR props pattern typed, with no cast. The frontend skill's refresh line no longer names `npx`, and says a file you edited is kept with a warning naming it, and replaced with `--force`.
+- `avclient skill` no longer ends with "the client skill is up to date" after keeping a file you edited: it says the skill is up to date apart from what the warnings above name, as `aventara skill` does. The server skill says what the frontend skill holds: a `SKILL.md` with `reference/client.md`'s content, and `reference/client-setup.md`.
 
 ## 1.0.0-rc.13
 
