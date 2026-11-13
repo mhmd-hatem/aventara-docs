@@ -14,7 +14,7 @@ Access goes into an Aventara app. Create one with the Aventara CLI, then add Acc
 | | Supported |
 |---|---|
 | Node.js | `^22.23.4 \|\| >=24.22.1` |
-| Aventara framework | `1.0.0-rc.12`: tested on it. `1.0.0-rc.10` or later works. |
+| Aventara framework | `1.0.0-rc.13`: tested on it. `1.0.0-rc.10` or later works. |
 | Better Auth | `~1.7.12`: 1.7.12 or any later 1.7 patch. Tested on 1.7.17, audited through 1.7.20. |
 | Package type | ESM (`"type": "module"`) |
 
@@ -32,10 +32,13 @@ Then set `DATABASE_URL` in `.env`, as the CLI says. On a terminal `aventara new`
 ## Install Access
 
 ```sh
-npm install --save-exact @aventara/access@rc better-auth@~1.7.12
+npm install --save-exact @aventara/access@rc better-auth@1.7.17
 # or, with pnpm:
-pnpm add --save-exact @aventara/access@rc better-auth@~1.7.12
+pnpm add --save-exact @aventara/access@rc better-auth@1.7.17
 ```
+
+`1.7.17` is the Better Auth release Access is tested with; any 1.7 patch from 1.7.12 runs too. Name one exact
+version: given a range (`better-auth@~1.7.12`), pnpm records a range even with `--save-exact`.
 
 npm installs the newest 1.7 patch of Better Auth, and `--save-exact` records it. There is no other Better Auth package to pin by hand.
 
@@ -45,7 +48,7 @@ Everything but `@aventara/access` is an optional peer, so install only what the 
 
 | Package | Range | You need it for |
 |---|---|---|
-| `@aventara/access` | `1.0.0-rc.3` (`@rc`) | Everything |
+| `@aventara/access` | `1.0.0-rc.4` (`@rc`) | Everything |
 | `better-auth` | `~1.7.12` | `createAccess`, `aventaraAccess()` and everything built on them. The engine alone (`definePolicies`, `createAccessEngine`) works without it, and type-checks without it with `skipLibCheck: false`. |
 | `@better-auth/oauth-provider` | `~1.7.12` | [Agents over MCP](/docs/agents-mcp), and one audience per service |
 | `@better-auth/cimd` | `~1.7.12` | Agent clients that register by a metadata document URL |
@@ -55,8 +58,8 @@ Two Better Auth plugins ship beside Access, at the same version. Each is a Bette
 
 | Package | Range | You need it for |
 |---|---|---|
-| `@aventara/better-auth-kiosk` | `1.0.0-rc.3` (`@rc`) | Shared tills with staff switching by PIN ([Kiosk mode](/docs/kiosk)) |
-| `@aventara/better-auth-onboarding` | `1.0.0-rc.3` (`@rc`) | Holding users at the door until they finish what your app asks ([Onboarding](/docs/onboarding)). It also needs the `@better-auth/utils` Better Auth brings (`^0.5.0`). |
+| `@aventara/better-auth-kiosk` | `1.0.0-rc.4` (`@rc`) | Shared tills with staff switching by PIN ([Kiosk mode](/docs/kiosk)) |
+| `@aventara/better-auth-onboarding` | `1.0.0-rc.4` (`@rc`) | Holding users at the door until they finish what your app asks ([Onboarding](/docs/onboarding)). It also needs the `@better-auth/utils` Better Auth brings (`^0.5.0`). |
 
 Install the agent packages in the same range as Better Auth:
 

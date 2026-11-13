@@ -120,9 +120,10 @@ Each declared claim is read from the user's field of the same name. That field n
 `banned` have above. A field without it is one the user sets themselves, at sign-up or with `/update-user`.
 `createAccess` refuses such a field (`ACCESS_OPTIONS_INVALID`), for fields a plugin adds too.
 
-- To read a claim from somewhere else, return it from `policies.claimsOf`. It must return every declared boolean
-  claim, as `banned: user.banned === true`. An answer without one is a type error (`AccessClaimsAnswer`), and at run
-  time it is refused and no token is issued.
+- To read a claim from somewhere else (a field your server alone writes, a table of your own, the session), return
+  it from `policies.claimsOf`. The check above runs only without `claimsOf`: with it, read no claim from a field the
+  user can set. `claimsOf` must return every declared boolean claim, as `banned: user.banned === true`. An answer
+  without one is a type error (`AccessClaimsAnswer`), and at run time it is refused and no token is issued.
 - `null` or `undefined` for a boolean claim is `false`. A token carries every declared boolean claim.
 - Read claims in `claimsOf` only from fields your server alone writes. Access does not check what it returns beyond
   the boolean claims.
@@ -265,8 +266,41 @@ export const endSessionsOf = async (userId: string, headers: Headers) => {
 - A till stays enrolled. Ending a user's sessions ends their PIN session on it, and they switch in again with their PIN;
   the device belongs to the till, not to its users. Revoke a device with `kioskOf(access).revokeDevice` ([Kiosk](/docs/kiosk)).
 - An app that builds Better Auth itself (the Better Auth plugin) can also end them with no admin request, through
-  Better Auth's internal adapter: `(await auth.$context).internalAdapter.deleteUserSessions(userId)`. `createAccess`
-  does not expose Better Auth's context.
+  Better Auth's internal adapter: `(await auth.$context).internalAdapter.deleteUserSessions(userId)`.
+
+`createAccess` does not hand out Better Auth's context, so a role change made where there is no admin's request (a
+job, a PIN-switched owner on a till, a change in your own tables) cannot call `revokeUserSessions`. A Better Auth
+plugin of your own can hold the context Better Auth gives its `init`, and your server ends the sessions through it,
+with no request:
+
+```ts nest
+// src/session-ender.plugin.ts
+import type { AuthContext, BetterAuthPlugin } from "better-auth";
+
+let context: AuthContext | undefined;
+
+/** Put `sessionEnder()` in `betterAuth.plugins`: it keeps Better Auth's context for `endSessionsOf`. */
+export const sessionEnder = (): BetterAuthPlugin => ({
+	id: "session-ender",
+	init: (ctx) => {
+		context = ctx;
+	},
+});
+
+/** Ends every session of `userId`, on every device, from server code alone. */
+export const endSessionsOf = async (userId: string): Promise<void> => {
+	if (context === undefined) {
+		throw new Error("sessionEnder() is not in betterAuth.plugins");
+	}
+	await context.internalAdapter.deleteUserSessions(userId);
+};
+```
+
+It needs neither `admin()` nor a second role source. Everything above holds for it too: the sessions end at once, a
+PIN session on a till included; the password and PIN still work; a token issued before lives out its `tokenTtl`.
+Call it only from your own server code, after the write that changed the role, with a user id your server chose,
+never one a request sent. `context` belongs to the module and the last `init` sets it: put `sessionEnder()` in one
+Better Auth instance only (a second instance's would end sessions in that instance's database instead).
 
 ### When someone leaves
 
@@ -351,6 +385,26 @@ Resources](/docs/auth-tables)).
 
 ## User ids
 
+Under pnpm with `declaration: true` (the NestJS scaffold's `tsconfig.json` sets it), exporting the `createAccess`
+instance fails with `TS2883` or `TS2742` when a Better Auth plugin in it has types your project cannot name. `admin()`,
+`twoFactor()` and `passkey()` do (their types reach zod's, and `passkey()`'s `@simplewebauthn/server`'s), and other
+plugins may. This is Better Auth's typing (an exported Better Auth instance of your own fails the same way: keep it
+unexported). Annotate the `createAccess` export with `Access` (from `@aventara/access/auth`) over Better Auth's own options type:
+`export const access: Access<BetterAuthOptions, typeof claims, Record<never, never>, AccessIdentity<typeof claims>> =
+createAccess({ … })`. Its four types are Better Auth's options (`BetterAuthOptions` from `better-auth`), the claims,
+the fields the rules govern, and the principal (`AccessIdentity<typeof claims>` without a `principal`
+option, else what it returns). The annotated `access.api` is Better Auth's API without the plugins' endpoints: call
+one of those through a type of its own, as [When a user's role changes](#when-a-users-role-changes) does. Left
+unannotated, the instance keeps every plugin's types. A server app that ships no declaration files can instead set
+`"declaration": false` in its `tsconfig.json`. Adding `zod` as a dependency does not help.
+
+Read the governed fields from your rules instead of writing them: with the builder's rules,
+`type Governed = ReturnType<typeof rules.contract> extends AccessPolicies<infer G> ? G : never` (`AccessPolicies` from
+`@aventara/access`) gives the type (`Record<never, never>` when they govern none, such as
+`{ readonly User: readonly "email"[] }` when they do). `Record<never, never>` type-checks whatever the rules govern,
+but the annotated instance then tells the framework's types and `access.policy` that no field is governed: use it
+only when the rules govern none.
+
 Better Auth's ids are strings. If `User.id` in `prisma/schema.prisma` is an `Int` (`aventara new` 1.0.0-rc.11 and
 earlier writes one), make it `id String @id @default(cuid())` before you run `generate`. Better Auth's numeric ids
 (`advanced.database.generateId: "serial"`) are refused: under them Better Auth does not enforce its single-use checks
@@ -382,6 +436,9 @@ import { PrismaClient } from "./generated/prisma/client.js";
 const prisma = new PrismaClient({
 	adapter: new PrismaBetterSqlite3({
 		url: process.env.DATABASE_URL ?? "file:./dev.db",
+		// Refused at once while another connection's transaction holds the file, instead
+		// of stopping the process for better-sqlite3's default 5 s busy wait.
+		timeout: 0,
 	}),
 });
 
@@ -497,9 +554,23 @@ arrives while one is open runs on the same connection, inside it. `examples/sqli
   database). A framework write or one of yours that arrives on a shared client while one is open runs inside it, and
   is undone if that Better Auth step fails.
 - **Better Auth on a connection of its own to the same file** (a second Prisma client, or its built-in SQLite). A write
-  while the other connection's transaction holds the file is refused at once: SQLite answers "database is locked", and
-  Better Auth answers, for a sign-up, `422 FAILED_TO_CREATE_USER`. The write is lost only if the client gives up;
-  nothing it was told succeeded is undone. Keep transactions short so such refusals stay rare.
+  while the other connection's transaction holds the file is refused: SQLite answers "database is locked". Nothing a
+  client was told succeeded is undone, and the write is lost only if the client gives up. How soon, and what the
+  client sees, depends on the connection:
+  - Both connections wait first, for better-sqlite3's busy timeout (its `timeout` option, 5000 ms by default), on
+    every write that does not fail before it waits (measured: a Prisma client's writes and the kiosk's on the built-in
+    SQLite wait; a sign-up on the built-in SQLite is refused at once). better-sqlite3 waits synchronously, so the
+    whole Node.js process stops while it does: the transaction that holds the file cannot commit either, and both
+    take the full 5 s. Give Better Auth's connection a short busy timeout, so the write is refused at once and the
+    other transaction is not held: `new PrismaBetterSqlite3({ url, timeout: 0 })`, or
+    `new Database(file, { timeout: 0 })` for the built-in SQLite on better-sqlite3 (node:sqlite's `DatabaseSync`
+    waits for none unless given a `timeout`) (or a few hundred milliseconds at most; the process
+    stops for as long).
+  - Better Auth answers what the route makes of the refusal: a sign-up `422 FAILED_TO_CREATE_USER`; the kiosk's
+    routes and `kioskOf(auth)`'s calls `409 KIOSK_DEVICE_BUSY`. Another route that does not map it may answer a `500`
+    with no code. Retry it.
+
+  Keep transactions on SQLite to milliseconds, so such refusals stay rare.
 - **Better Auth's built-in SQLite, on a database nothing else writes.** Its query builder (Kysely) runs one query or
   transaction at a time on that database, so its own writes never meet inside another's transaction.
 

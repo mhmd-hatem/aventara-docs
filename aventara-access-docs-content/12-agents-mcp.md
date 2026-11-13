@@ -144,6 +144,10 @@ holds it to the token before the rules:
 - Under any other origin it is refused everything. The token opens the MCP endpoint alone, never the protocol routes,
   `_access/can`, a server-side call or Access's own `GET /me` route.
 - A refused question is an audit event like any other, with the reason `deny:mcp-scope` or `deny:mcp-audience`.
+- A session token in `Authorization: Bearer` (a kiosk till that is a native app, beside Better Auth's
+  `bearer({ requireSignature: true })`) is refused every question under origin `agent`, with the reason
+  `deny:mcp-audience`, on the open loopback endpoint too: no tool reads or writes data with it. The `me` tool still
+  answers the caller's identity (`{ sub, claims }`), as a read: it does not count as the till's use of its session.
 
 The claims are read from the user on every request, so a ban or a role taken away reaches the agent on its next call.
 

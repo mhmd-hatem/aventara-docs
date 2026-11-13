@@ -353,7 +353,8 @@ The engine answers four questions. Each states `principal`, `origin` and `resour
 import { type Principal, policies } from "../src/access.policies.js";
 
 const engine = policies.engine();
-const pat: Principal = { id: "pat", claims: {} };
+// Every boolean claim a deny compares, as a token Access issues carries it.
+const pat: Principal = { id: "pat", claims: { banned: false } };
 
 // The fields pat may read on User.
 console.log(

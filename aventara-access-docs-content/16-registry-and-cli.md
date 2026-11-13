@@ -155,6 +155,33 @@ Exit codes: `0` done, `1` the check failed or the registry refused, `2` the comm
   `https:` only.
 - `pull` and `generate` write only inside the project. A path through a symbolic link that leads out of it is refused.
 
+`avaccess verify` checks the lock, the pulled files, the beacon pins and the generated clients, in that order, and
+stops at the first part that fails (of the clients, it names every stale one). It fails on:
+
+- The command cannot run (exit `2`): an argument it does not take (it takes no positional); no
+  `avAccess.lock.json`, one that is not JSON, or one that is not an `aventara-access/lock@1` lock (another `format`, a
+  member a lock does not have, a namespace that is not a namespace name, a pin that is not `{ path, hash }` with a
+  relative path inside the project and a `sha256:` hash); a pinned file that is there but cannot be read; an `--env`
+  (or `AVACCESS_ENV`) that is not an environment name; a `--client` that is not a `.ts` file inside the project.
+- The pulled files (`ACCESS_LOCK_MISMATCH`, exit `1`): the policies file, the guardrails file or the foreign facts
+  file (`access/foreign.json`) the lock pins is missing, is no longer JSON, is no longer a file the engine runs from,
+  or hashes to another hash than its pin; the policies file names no namespace, or another one than the lock pins; the
+  foreign facts are another namespace's.
+- The beacon pins (`ACCESS_LOCK_MISMATCH`, exit `1`): `--env` (or `AVACCESS_ENV`) names an environment with no
+  `avAccess.beacons.<env>.json`; or any `avAccess.beacons.<env>.json` at the project's root, selected or not, is not
+  JSON, is not `aventara-access/beacons@1`, holds a member besides `format`, `namespace`, `environment` and `beacons`,
+  is another namespace's or another environment's than its file name says, has a `beacons` that is not a map of other
+  namespaces' names to `sha256:` hashes, or holds no beacon of a namespace whose Resources the rules read as foreign.
+- The generated clients (exit `1`): each one the lock records in `clients`, the one `--client` names, and
+  `src/generated/avAccess.ts` when it is there. A recorded or named client whose `.ts` or `.internal.ts` file is gone
+  (the message names `avaccess generate --out <file>`, or `avaccess generate --prune` to drop a recorded one from the
+  lock); a client written by another `@aventara/access`
+  version (either file's banner); one generated from other pulled files than the lock pins (rules pulled since); either
+  file changed after `generate` wrote it (its text no longer hashes to its banner's stamp); one that is not what the
+  installed version writes for the pinned files (another build of the same version, or an `--orm` it does not know).
+  Each message names the `npx --no-install avaccess generate …` that writes the client again. CRLF line ends read as
+  LF, so a checkout that converts them passes.
+
 ## The lock
 
 `avAccess.lock.json` pins content, not a registry:

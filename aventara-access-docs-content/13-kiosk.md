@@ -145,7 +145,7 @@ silences it):
 | Better Auth's memory adapter (`memoryAdapter`, or no `database`, which Better Auth runs on it) | It enforces no unique index, and the PIN limits and single-use credentials rest on the kiosk tables' unique columns ([Tables and codes](#tables-and-codes)) |
 | Better Auth's cookie cache (`session.cookieCache`) | A locked or revoked session must end at once; the cookie would keep answering it |
 | `secondaryStorage` without `session.storeSessionInDatabase: true` | The kiosk finds a device's sessions in the database to end them |
-| `bearer()` | It hands page code the session's token and takes it back in `Authorization`, where the device's credential does not go. Under any other id, no answer carries its `set-auth-token` header |
+| `bearer()` without `requireSignature: true`, or listed after `kiosk()` | Unsigned, it takes the raw session token Better Auth stores and lists as a credential; listed after, its `set-auth-token` would be set after the kiosk's last word on an `auth.api` call. Signed and listed before, it is a native till's session transport ([A till that is a native app](#a-till-that-is-a-native-app-headers)). A plugin under another id that sets `set-auth-token` (a renamed `bearer()`) has it stripped from every answer, unless `bearer()` itself is installed and the answer is a native till's header call that sets the same session cookie |
 | `multiSession()` | The browser would keep the session before a switch and switch back to it |
 | Better Auth's own `jwt()` without `disableSettingJwtHeader: true`, where the kiosk runs without Access | It would hand page code a bound session's JWT on every `/get-session`. `GET /token` refuses a bound session |
 | `oneTimeToken({ setOttHeaderOnNewSession: true })` | It would hand page code a one-time token of every new session, a bound one's included |
@@ -187,7 +187,10 @@ never a credential. `POST /kiosk/change-pin` (`userId`, `pin`, `newPin`) replace
 Call the verbs' routes from the device, or their `call` from your server. A `call` of `switchUser`, `lock` or
 `enrollDevice` sets the session cookie and the device's credential through your cookie plugin (`nextCookies()` in a
 Server Action). Without one, the browser keeps the credential the switch replaced, and the device's next switch is
-refused as a copy: call the route from the device instead.
+refused as a copy: call the route from the device instead. A till that is a native app
+([below](#a-till-that-is-a-native-app-headers)) always calls the routes itself: a `call` of `switchUser` or
+`enrollDevice` with its headers (`Authorization` or `kiosk-device`) is refused `400` before it runs, since its answer
+would hand the till new credentials in headers that a server's `call` does not pass on.
 
 Without the plugin there is no PIN route: each answers `404`.
 
@@ -308,9 +311,9 @@ import { access } from "./access.kiosk.js";
 
 /**
  * Before a refund the cashier's rules do not allow alone: the supervisor's approval,
- * consumed once, from the headers of the till's own request. It throws
- * `KIOSK_APPROVAL_INVALID` (409) unless this session on this till was given it for a
- * refund of this order.
+ * consumed once, from the headers of the till's own request. It throws Better Auth's
+ * `APIError` (409, `error.body.code` `KIOSK_APPROVAL_INVALID`) unless this session on
+ * this till was given it for a refund of this order.
  */
 export const approvedBy = async (
 	headers: Headers,
@@ -401,7 +404,7 @@ nothing.
   `/api-key/create`, the device flow's `/device/*` and `@better-auth/electron`'s `/electron/*` (whatever plugin serves
   them) refuse it. No answer on an enrolled device carries a session's
   token (a sign-in's `token`, `session.token`, a session list's tokens, an `access_token`), no answer carries
-  `set-auth-token`, `set-auth-jwt` or `set-ott`, and an enrolled device is refused passkey registration, two-factor's
+  `set-auth-jwt` or `set-ott`, none but a native till's header call carries `set-auth-token` or `set-kiosk-device`, and an enrolled device is refused passkey registration, two-factor's
   `trustDevice` and the OAuth popup's start (enrolling expires a `trust_device` cookie and an OAuth popup marker the
   browser held). Do not turn a token you find
   in an answer into a cookie. A sign-in that brings the credential the last switch replaced, within 30 seconds of
@@ -561,6 +564,238 @@ lock and revoking work as they do in a browser. The sample above shows the serve
 - Under `insecureLan`, React Native refuses plain http by default. Allow the server's address in Android's network
   security configuration (`cleartextTrafficPermitted`) and in iOS's App Transport Security.
 
+## A till that is a native app (headers)
+
+A till can also be a native app that keeps no cookie jar: a Capacitor or Cordova WebView, an Electron app's main
+process, a native HTTP client. Its PIN session travels in `Authorization: Bearer`, read by Better Auth's own
+`bearer()`, and its device credential in a `kiosk-device` header. Answers hand them back in `set-auth-token`
+(`bearer()`'s) and `set-kiosk-device`. A PIN switch rotates the device credential, so its answer carries both.
+
+### The server
+
+Put `bearer({ requireSignature: true })` in `plugins` before `kiosk()`. The kiosk refuses `bearer()` without
+`requireSignature: true` (Better Auth stores and lists the raw session token, and an unsigned bearer would take it as
+a credential) and `bearer()` listed after `kiosk()` (its `set-auth-token` would be set after the kiosk's last word on a
+call of `auth.api`). With the onboarding plugin, list `onboarding()` first, then `bearer()`, then `kiosk()`.
+
+```ts nest
+// src/auth.native-till.ts
+import { kiosk } from "@aventara/better-auth-kiosk";
+import { betterAuth } from "better-auth";
+import { bearer } from "better-auth/plugins";
+import { Pool } from "pg";
+
+export const auth = betterAuth({
+	database: new Pool({ connectionString: process.env.DATABASE_URL }),
+	baseURL: "https://192.168.1.10:3443",
+	// Only for a password sign-in typed in a WebView till (Better Auth checks its Origin). An app-unique scheme and
+	// host, never capacitor://localhost, and never the server's own host.
+	trustedOrigins: ["capacitor://till.example", "app://till"],
+	plugins: [
+		bearer({ requireSignature: true }),
+		kiosk({ canEnrollDevice: ({ user }) => user.role === "manager" }),
+	],
+});
+```
+
+A WebView calls the server cross-origin, so the server answers CORS for the app's origins: the two request headers
+allowed, the two answer headers exposed, and no credentials (no cookie is sent). Browsers on your web origins still
+get credentialed CORS. Answer both from one `enableCors`, in place of the scaffold's in `src/main.ts`
+([Hosts](/docs/hosts)): a second `enableCors` adds a second CORS middleware, which answers every preflight before the
+other is reached. The native origins are the ones `trustedOrigins` lists.
+
+```ts nest
+// src/till.cors.ts
+import type { IncomingMessage } from "node:http";
+import type { INestApplication } from "@nestjs/common";
+
+/** The native tills' own origins: app-unique, and the ones `trustedOrigins` lists. */
+const NATIVE_TILL_ORIGINS = ["capacitor://till.example", "app://till"];
+
+/**
+ * The server's one CORS setup, called in `src/main.ts` in place of the scaffold's
+ * `app.enableCors(...)` (on Express): the web origins in CORS_ORIGINS with
+ * credentials, the native tills' without, with their two headers.
+ */
+export const tillCors = (app: INestApplication): void => {
+	const webOrigins = (process.env.CORS_ORIGINS ?? "")
+		.split(",")
+		.map((origin) => origin.trim())
+		.filter(Boolean);
+	app.enableCors(
+		(
+			request: IncomingMessage,
+			done: (error: Error | null, options: object) => void,
+		) => {
+			const origin = request.headers.origin;
+			if (origin !== undefined && NATIVE_TILL_ORIGINS.includes(origin)) {
+				done(null, {
+					origin,
+					allowedHeaders: ["content-type", "authorization", "kiosk-device"],
+					exposedHeaders: ["set-auth-token", "set-kiosk-device"],
+					credentials: false,
+				});
+				return;
+			}
+			done(null, {
+				origin: webOrigins.length > 0 ? webOrigins : false,
+				credentials: true,
+			});
+		},
+	);
+};
+```
+
+### Which calls are header calls
+
+Each call is read one way, decided once from the request as the client sent it:
+
+- With no signed `bearer()` before the kiosk, every call is a cookie call: `kiosk-device` is not read.
+- A request that brings `kiosk-device` and a kiosk cookie (the device cookie, or Better Auth's session cookie with
+  another value than the `Authorization` bearer) is refused `400 KIOSK_DEVICE_CREDENTIAL_CONFLICT`, with both cookies
+  expired. Behind it, a retired `kiosk-device` revokes its device, and so does a retired device cookie, unless the
+  header is that same device's current credential (a jar that missed a rotation). Every such answer is the same.
+- A request with a kiosk cookie is a cookie call.
+- So is one a browser marks as a page of the app's own site: `Sec-Fetch-Site` `same-origin` or `same-site`,
+  `Origin: null`, or an `Origin` (or, with none, a `Referer`) on the server's host, whatever its scheme or port.
+- Anything else is a header call: a cross-host `Origin` (`capacitor://till.example`, `app://till`) or no browser
+  signal at all (native HTTP).
+
+Serve a browser till's page from the server's own host. The test is the host, not the site: a page on another host
+of the same site (`pos.example.com` calling `api.example.com`) is a cookie call only when the browser sends
+`Sec-Fetch-Site: same-site`, which it does not over plain http (`insecureLan`) or in Safari before 16.4. Such a page's
+redeem or first sign-in is then a header call, and its answer hands `set-kiosk-device` to page code wherever your CORS
+lets that page read it.
+
+Other cookies (a load balancer's, the app's own) are ignored. A header call's answer sets no device cookie, and keeps
+`set-auth-token` only when it is `bearer()`'s copy of the session cookie the same answer sets. A cookie call's answer
+never carries `set-auth-token` or `set-kiosk-device`. `set-auth-jwt` and `set-ott` are never sent. A `kiosk-device`
+header sent on a cookie call is ignored, and a kiosk route answers `401 KIOSK_DEVICE_NOT_ENROLLED`, naming the
+conditions above.
+
+| Request | `Authorization` | `kiosk-device` |
+|---|---|---|
+| Redeem an enrollment code | none | none |
+| A manager's password sign-in on a till not enrolled yet | none | none |
+| `enroll-device` | `Bearer <manager's token>` | none |
+| `switch-user` | `Bearer <previous>`, if any | the credential |
+| `lock`, `change-pin`, `approve`, `get-session`, `sign-out` | `Bearer <token>` | the credential |
+| Your API (Access's state, `/me`) | `Bearer <token>` | the credential |
+
+A bound session sent without `kiosk-device` is ended, as a copied cookie is.
+
+### The client
+
+Attach both headers at send time, to the till's own server only, and keep what answers hand back. Store
+`set-kiosk-device` first: a switch whose rotated credential is lost revokes the till on its next call.
+
+```ts nest
+// src/till.client.ts
+import { kioskClient } from "@aventara/better-auth-kiosk/client";
+import { createAuthClient } from "better-auth/client";
+
+/** Keychain or Keystore backed (Electron: `safeStorage`), excluded from backups; never `localStorage`. */
+declare const vault: {
+	get(key: "session" | "device"): string | undefined;
+	set(key: "session" | "device", value: string): Promise<void>;
+	delete(key: "session" | "device"): Promise<void>;
+};
+
+const API = new URL("https://192.168.1.10:3443").origin;
+
+/** The credentials go to the till's own server only, never to a CDN, a payment provider or analytics. */
+const ours = (url: string | URL) => new URL(url, API).origin === API;
+
+const attach = (url: string | URL, headers: Headers) => {
+	if (!ours(url)) {
+		return;
+	}
+	const session = vault.get("session");
+	const device = vault.get("device");
+	if (session) {
+		headers.set("authorization", `Bearer ${session}`);
+	}
+	if (device) {
+		headers.set("kiosk-device", device);
+	}
+};
+
+const keep = async (url: string | URL, response: Response) => {
+	if (!ours(url)) {
+		return;
+	}
+	const device = response.headers.get("set-kiosk-device");
+	if (device) {
+		await vault.set("device", device);
+	}
+	const session = response.headers.get("set-auth-token");
+	if (session) {
+		await vault.set("session", session);
+	}
+};
+
+export const tillClient = createAuthClient({
+	baseURL: `${API}/api/auth`,
+	plugins: [kioskClient()],
+	fetchOptions: {
+		credentials: "omit",
+		onRequest: (context) => {
+			attach(context.url, context.headers);
+			return context;
+		},
+		onResponse: async (context) => {
+			await keep(context.request.url, context.response);
+		},
+	},
+});
+
+/** The till's calls to your API: the headers attached when the request is sent, never stored with it. */
+export const tillFetch = async (input: string | URL, init: RequestInit = {}) => {
+	const headers = new Headers(init.headers);
+	attach(input, headers);
+	const response = await fetch(input, { ...init, headers, credentials: "omit" });
+	await keep(input, response);
+	return response;
+};
+
+export const signOutTill = async () => {
+	await tillClient.kiosk.lock();
+	await vault.delete("session");
+};
+```
+
+- **No cookie jar.** A client that stores the session's `Set-Cookie` (CapacitorHttp with its cookies on, an Electron
+  session) sends it back beside `kiosk-device` and gets `400 KIOSK_DEVICE_CREDENTIAL_CONFLICT`; the answer expires the
+  cookies, so the next call works, but every switch costs one failed call. Turn the jar off.
+- **Retry once on `409 KIOSK_DEVICE_BUSY`.** A call sent while a switch rotates the credential is refused that way,
+  inside Access's state too (the framework call fails rather than reading nobody). Serialize calls around a switch.
+- **Never replay stored headers.** An offline queue that keeps a request's headers, or a vault restored from a backup,
+  sends a retired credential later, and that revokes the till. Attach the headers at send time, and exclude the vault
+  from backups.
+- **An app-unique origin.** `capacitor://localhost` and `https://localhost` are every Capacitor app's origins: give the
+  app its own scheme or host (Capacitor's iOS scheme setting and its `server.hostname`), and never the server's own host, which
+  would make its calls cookie calls. Prefer enrollment codes to a manager's password typed in a WebView.
+- **Fetch Metadata from the HTTP stack.** Better Auth checks the `Origin` of a redeem and of a sign-in whenever the
+  request carries Fetch Metadata, and some native stacks add it on their own (Node's `fetch` sends
+  `Sec-Fetch-Mode: cors`). Without an `Origin` such a request is refused `403 MISSING_OR_NULL_ORIGIN`: send the app's
+  own origin (`app://till`), listed in `trustedOrigins`.
+- **Electron.** Make the calls from the main process (`net.fetch`), keep both values encrypted with `safeStorage` and
+  refuse to start when it has no OS keyring to use (its plain-text fallback on Linux); the renderer gets IPC actions only. A renderer on `file://`
+  sends `Origin: null`, which is a cookie call. Check that your `net.fetch` setup sends no cookie and no
+  `Sec-Fetch-Site: same-origin` before you rely on it.
+- **Proxies and logs.** Keep `authorization` and `kiosk-device` out of request logs.
+- **Your server's own reads.** `kioskOf(auth).consumeApproval({ headers: request.headers, ... })` reads the till's
+  headers as they came, so a route that copies only the `cookie` header must forward `authorization` and
+  `kiosk-device` too. A nested `auth.api.getSession({ headers: ctx.headers })` inside an endpoint is fine: the kiosk
+  tells `bearer()`'s own copy of the token from a cookie.
+- **A plugin that answers early.** A plugin listed before the kiosk whose `onResponse` answers stops the ones after it,
+  so the kiosk's last strip of an answer does not run, and its internal mark reaches the client. Keep such plugins
+  after the kiosk.
+
+A native till's secrets are as exposed as Expo's: the app's own code can read them. A session token stolen alone is
+ended at its next use off the device; a device credential stolen alone needs a PIN, and the real till's next call after
+a switch made with it revokes the device.
+
 ## With Access
 
 Access imports nothing of the plugin. It finds it in `betterAuth.plugins` (or Better Auth's plugins under
@@ -696,13 +931,29 @@ An app that ran kiosk mode as `createAccess`'s `profile` keeps its tables with t
 `kiosk({ ..., schema: { kioskDevice: { modelName: "accessKioskDevice" }, kioskPin: { modelName: "accessKioskPin" },
 kioskLockout: { modelName: "accessKioskLockout" }, kioskRetiredSecret: { modelName: "accessKioskRetiredSecret" } } })`.
 
+In your server's code, a `kioskOf(auth)` method that refuses (`consumeApproval`, `issueDeviceEnrollmentCode`,
+`setUserPin` and the rest) throws Better Auth's `APIError`, as a route answers: the code is at `error.body.code`, the
+status at `error.status` (`"CONFLICT"` for `KIOSK_APPROVAL_INVALID`) and `error.statusCode` (`409`). The error has no
+`code` of its own. Test for it with Better Auth's `isAPIError` (`better-auth/api`). `KIOSK_OPTIONS_INVALID` is the
+one exception: `kiosk()` and `kioskOf` throw it as an `Error` whose `code` is on the error itself.
+
+```ts nest
+// src/approval.refusal.ts
+import { isAPIError } from "better-auth/api";
+
+/** Whether `consumeApproval` refused: the code is in the body of Better Auth's `APIError`, not on the error. */
+export const isApprovalRefused = (error: unknown): boolean =>
+	isAPIError(error) && error.body?.code === "KIOSK_APPROVAL_INVALID";
+```
+
 | Code | Status | When |
 |---|---|---|
 | `KIOSK_DEVICE_NOT_ENROLLED` | 401 | The request brings no current device credential |
 | `INVALID_USER_OR_PIN` | 401 | A wrong PIN, a user with none, or no such user (`400` for a PIN that is not 6 to 12 digits) |
 | `KIOSK_PIN_LOCKED` | 429 | The user's backoff on this device, or the device's limit; `X-Retry-After` says when |
 | `KIOSK_PIN_DISABLED` | 403 | 100 wrong PINs in a row for this user on this device |
-| `KIOSK_DEVICE_BUSY` | 409 | Two switches on one device at once, or a request or sign-in with the credential the last switch replaced within 30 seconds |
+| `KIOSK_DEVICE_CREDENTIAL_CONFLICT` | 400 | A `kiosk-device` header beside a kiosk cookie: both cookies are expired with the answer ([A till that is a native app](#a-till-that-is-a-native-app-headers)) |
+| `KIOSK_DEVICE_BUSY` | 409 | Two switches on one device at once, or a request or sign-in with the credential the last switch replaced within 30 seconds; or a kiosk write SQLite refused because another connection's transaction held the file ("database is locked"), on a route or in a `kioskOf(auth)` call |
 | `KIOSK_FULL_CREDENTIAL_REQUIRED`, `SESSION_NOT_FRESH` | 403 | Enrolling, listing, revoking, issuing a device enrollment code or setting a PIN from a session an admin impersonates, or a session older than `freshAge` (a PIN session gets `KIOSK_SESSION_NOT_ALLOWED` there: those routes are out of its reach) |
 | `KIOSK_DEVICE_ENROLLMENT_CODE_INVALID` | 401 | A device enrollment code that is unknown, used, revoked or expired, or whose issuer `canEnrollDevice` no longer allows |
 | `KIOSK_ENROLL_REFUSED` | 403 | `canEnrollDevice` did not answer `true` |
@@ -721,4 +972,6 @@ kioskLockout: { modelName: "accessKioskLockout" }, kioskRetiredSecret: { modelNa
 The plugin's own codes are listed on `kiosk(...).$ERROR_CODES`. `SESSION_NOT_FRESH`, `EMAIL_NOT_VERIFIED`,
 `USER_NOT_FOUND` and `FAILED_TO_CREATE_SESSION` are Better Auth's, listed in its `BASE_ERROR_CODES`. A refusal of the
 onboarding plugin's (`ONBOARDING_REQUIRED`, `ONBOARDING_BLOCKED`) passes through a PIN switch unchanged
-([Onboarding](/docs/onboarding)).
+([Onboarding](/docs/onboarding)), and the device is left as it was, even after a right PIN: its credential is not
+rotated, and the session of whoever was on it before stays (the refused switch ends nothing, as any switch refused
+before its new session stands). Lock the till when the refused user should not find the last one's session there.

@@ -78,56 +78,39 @@ A refused request is answered `403 A4002` by the framework. Every decision can g
 
 ## Status and requirements
 
-Access `1.0.0-rc.3` is a release candidate of 1.0. Its public API can still change before the stable release.
+Access `1.0.0-rc.4` is a release candidate of 1.0. Its public API can still change before the stable release.
 
 | | Version |
 |---|---|
-| `@aventara/access` | `1.0.0-rc.3` |
-| `@aventara/better-auth-kiosk`, `@aventara/better-auth-onboarding` | `1.0.0-rc.3`, beside it |
-| Aventara framework (`@aventara/core` and the packages that host it) | `1.0.0-rc.12` (tested). `1.0.0-rc.10` or later works. |
+| `@aventara/access` | `1.0.0-rc.4` |
+| `@aventara/better-auth-kiosk`, `@aventara/better-auth-onboarding` | `1.0.0-rc.4`, beside it |
+| Aventara framework (`@aventara/core` and the packages that host it) | `1.0.0-rc.13` (tested). `1.0.0-rc.10` or later works. |
 | Better Auth | `~1.7.12` (1.7.12 or a later 1.7 patch; tested on 1.7.17, audited through 1.7.20) |
 | Node.js | `^22.23.4 \|\| >=24.22.1` |
 
 Access has no dependency on the framework. Its engine and its instance fit the framework's types by shape. [Installation](/docs/installation) has the full list.
 
-## What changed in 1.0.0-rc.3
+## What changed in 1.0.0-rc.4
 
-Released beside the first releases of two Better Auth plugins, `@aventara/better-auth-kiosk` and
-`@aventara/better-auth-onboarding` (both `1.0.0-rc.3`), and beside `@aventara/core` `1.0.0-rc.12`, with which it is
-tested. It still works with `@aventara/core` `1.0.0-rc.10` or later. [Upgrading](/docs/upgrading) has the steps from
-1.0.0-rc.2; the package's `CHANGELOG.md` lists everything.
+Released beside `@aventara/better-auth-kiosk` and `@aventara/better-auth-onboarding` `1.0.0-rc.4`, and tested with
+`@aventara/core` `1.0.0-rc.13` and `better-auth` 1.7.17. It still works with `@aventara/core` `1.0.0-rc.10` or later
+and `better-auth` `~1.7.12`. [Upgrading](/docs/upgrading) has the steps from 1.0.0-rc.3; the package's `CHANGELOG.md`
+lists everything.
 
-- Breaking: kiosk mode moved out of Access into its own Better Auth plugin, `kiosk()` from
-  `@aventara/better-auth-kiosk`, with no shim. `profile: { kind: "kiosk" }` is refused with a sentence that names the
-  plugin. The plugin also fixes rc.2 kiosk-mode defects: a hang on a database with one connection, sessions other
-  plugins opened on a till escaping the device binding, `@better-auth/electron` beside it, and impersonated sessions
-  setting PINs and enrolling tills ([Kiosk mode](/docs/kiosk), [Upgrading](/docs/upgrading)).
-- New: the onboarding plugin, `onboarding()` from `@aventara/better-auth-onboarding`. Beside Access, a token or session
-  whose user has not finished onboarding proves nobody ([Onboarding](/docs/onboarding)).
-- Security: `createAccess` and `aventaraAccess()` refuse Better Auth's origin and CSRF opt-outs
-  (`advanced.disableOriginCheck`, `advanced.disableCSRFCheck`, the same checks off in Better Auth's context), its test
-  mode outside NODE_ENV=test, a `trustedOrigins` entry whose host is a wildcard alone, ids the database makes
-  (`generateId: false`), and, under `mcp` or `audience`, the OAuth provider's `allowInsecureRedirectUri`. They warn of
-  other trusted-origin wildcards outside production ([Hosts](/docs/hosts#trusted-origins-and-wildcards),
-  [Instead of turning the CSRF check off](/docs/hosts#instead-of-turning-the-csrf-check-off)).
-- Security: a user Better Auth's admin plugin holds banned is nobody to Access, whatever made their session, an API
-  key's included: `me` is `null` and `GET /token` answers `403 BANNED_USER` ([createAccess](/docs/create-access)).
-- Fixed: each rule matches what Prisma's `findMany({ where })` returns for it. NULL matches no comparison, `not`
-  included, and a to-one relation with no row behind it matches no condition on it. A rule with `null` inside `in` or
-  `notIn`, and an empty condition below a rule's root, are refused when the rules compile and in a pushed file
-  ([Rules](/docs/rules)). Run `avaccess generate` again in a service with a generated client.
-- `avaccess verify` refuses, and `avaccess status` reports, a generated client that is not what the installed Access
-  would write for the pinned files. `avaccess generate` records each client in `avAccess.lock.json` (`clients`), and
-  `generate --prune` drops the entries whose files are gone ([The generated client](/docs/generated-client)).
-- New command `avaccess skill [<name>...]`: it writes the agent skill into your project, and the optional skills you
-  name (`kiosk`, `onboarding`, `registry`, `mcp`, `server`, `service-client`) ([Installation](/docs/installation#ai-agents)).
-- `createAccess` builds nothing: start it with `await access.api.ok()` before your server listens, so a refusal of
-  Better Auth's options stops the start. `serve()` and `avaccess serve` start Better Auth before they listen.
-- The registry refuses Better Auth's memory adapter, and `rotateKey` refuses a rotation another one overtook. Set
-  `transaction: true` on Prisma's or Drizzle's adapter for a server that runs the registry
-  ([Namespaces, the registry and the CLI](/docs/registry-and-cli)).
-- `policies.claimsOf` runs once on each request read by a session cookie, not twice. The docs cover Access on SQLite,
-  ending a user's sessions when their role changes, and the rules with a development identity of your own.
+- New: a kiosk till that is a native app (a Capacitor or Cordova WebView, an Electron main process, a native HTTP
+  client) carries its PIN session in `Authorization: Bearer` and its device credential in a `kiosk-device` header
+  ([A till that is a native app](/docs/kiosk#a-till-that-is-a-native-app-headers)).
+- With `bearer({ requireSignature: true })` among Better Auth's plugins, on the `web` profile and without `audience`, a
+  signed session token in `Authorization: Bearer` makes the request its user's in the framework. Such a principal is
+  refused every question under origin `agent`.
+- A rule or a guardrail the engine cannot run is refused with an `AccessError` whose `code` is
+  `ACCESS_POLICIES_INVALID`, where it is compiled or loaded. It was a plain `Error` with no code.
+- `Access<BetterAuthOptions, typeof claims, Governed, Principal>` takes any `createAccess` instance: the fix for
+  `TS2883` under pnpm with `declaration: true`.
+- `access.client.verbs.me.call` no longer counts as a till's use of its session; a kiosk write SQLite refuses answers
+  `409 KIOSK_DEVICE_BUSY`; `avaccess verify --client` with a file it cannot check exits `2`.
+- Fixed: with the kiosk and the onboarding plugins together, a till's framework requests other than reads answered
+  `500` from about 15 seconds after each PIN switch.
 
 ## Where to start
 
