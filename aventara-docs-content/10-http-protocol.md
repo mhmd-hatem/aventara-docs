@@ -311,6 +311,8 @@ const step = {
 const plan = { operations: [{ ...step, fingerprint: await AvProtocol.fingerprint(step) }] };
 ```
 
+A `$ref` is read where a field's value stands, never inside a Json value: an object nested in a Json value is stored as written, even one shaped like a reference. A Json field's whole value may be a `$ref` to another Json field; one to a field of another type answers `422 A2007` / `V1011`.
+
 The route exists only on a layer whose `transactionsStyle` is `"interactive"`. Under `"server"` or `"none"` a plan answers `404 A2002` with one `V1006` at `["operations"]`, as an absent route does ([Configuration](/docs/configuration#transactions)).
 
 Plan-level errors: an empty `operations` array answers `422 A2004` / `V1004`; a missing `operations` answers `422 A2004` / `V1000` (`Required property "operations" is missing.`); more than `maxTransactionOperations` steps, or more than `maxTransactionWrites` write steps, answers `422 A2009` / `V1014` at `["operations"]`; a wrong fingerprint answers `422 A2007` / `V1017` at `["operations", i, "fingerprint"]` with `cause.operation` set to `i`.
