@@ -160,7 +160,7 @@ A call reads the database, so Next.js runs it at request time (Cache Components 
 | Share request information (the signed-in user) | `ctx.$state` | `AventaraModule`'s `state` option, or a call's `{ state }` |
 | Call another operation from a stage | `ctx.<Resource>.<family>.<variant>(args)` | the `ctx` every stage gets (compute can only read) |
 
-Order: framework validation → policy admission (with a policy) → guards → pipes (operation, then field; then a nested write's targets') → field validators and Json shapes on every value the caller sent, a field with a compute stage included (`A2004`) → write compute (create/update) → re-check (Aventara's checks on pipe and compute output: `A3004`, `A3000`; then validators and Json shapes on what compute set or changed: `A2004`) → policy write check (with a policy) → interceptors → `hooks.before` → the operation (then compute read) → `hooks.after` → interceptors unwind → output validation; filters handle a failure. With `forceTransaction` or in a plan, guards, pipes and the validators of the caller's values run before `BEGIN` (`reference/stages.md`). `ctx` calls are raw: they run validation, field pipes, compute and validators, and none of your guards, pipes, hooks, interceptors or filters.
+Order: framework validation → policy admission (with a policy) → guards (then a nested write's targets') → pipes (operation, then field; then a nested write's targets') → field validators and Json shapes on every value the caller sent, a field with a compute stage included (`A2004`) → write compute (create/update) → re-check (Aventara's checks on pipe and compute output: `A3004`, `A3000`; then validators and Json shapes on what compute set or changed: `A2004`; then the root's validators on what compute or a pipe set in a field the caller's layer hides: `A3000`) → policy write check (with a policy) → interceptors → `hooks.before` → the operation (then compute read) → `hooks.after` → interceptors unwind → output validation; filters handle a failure. With `forceTransaction` or in a plan, framework validation, policy admission, guards, pipes and the validators of the caller's values run before `BEGIN` (`reference/stages.md`). `ctx` calls are raw: they run validation, field pipes, compute and validators, and none of your guards, pipes, hooks, interceptors or filters.
 
 ## The shape of a configuration
 
@@ -851,23 +851,30 @@ The root's stages run for every origin; an overlay's only for its own (`ctx.$ori
 ## Order
 
 ```text
-framework validation (required create fields included; a field compute.create fills is not required yet)
--> guards       layer -> Resource -> family -> variant (root, then overlay, at each), then field write guards
--> pipes        the same levels, then field pipes
--> validators   field validators and Json shapes on every value the caller sent, a field with a compute stage included (A2004)
--> compute      create or update (write compute)
--> re-check     Aventara's own checks on the pipe and compute output (A3004, A3000), then validators and Json shapes on the values compute set or changed (A2004)
+framework validation (required create fields included, top level and nested; a field compute.create fills is not required yet)
+-> policy admission   only with a policy: may this action run, on which rows and fields; before any guard, never filtered
+-> guards       layer -> Resource -> family -> variant (root, then overlay, at each), then field write guards,
+                then each nested write target's Resource and family guards and field write guards
+-> pipes        the same levels, then field pipes, then nested targets' field pipes
+-> validators   field validators and Json shapes on every value the caller sent, a field with a compute stage included (A2004),
+                top level then nested targets'
+-> compute      create or update (write compute), then nested targets'
+-> re-check     Aventara's own checks on the pipe and compute output, top level and nested targets' in one pass (A3004, A3000),
+                then validators and Json shapes on the values compute set or changed, top level then nested targets' (A2004),
+                then the root's validators on a value compute or a pipe set in a field the caller's layer hides (A3000)
+-> policy write check   only with a policy: the checks on what the write is about to write; never filtered
 -> interceptors enter, outer to inner
 -> hooks.before
 -> operation    one adapter call, then compute read on the returned rows
 -> hooks.after
 -> interceptors unwind
+-> output validation, then the response
 on a failure after validation: filters, inner to outer; the first that handles it wins
 ```
 
-A call refused by a guard, the re-check or a validator runs no interceptor and no hook. A `unique` operation that matches no row fails at the operation (`AvNotFoundError`, `A2003`); no `after` hook runs.
+A call refused by the policy, a guard, the re-check or a validator runs no interceptor and no hook. A `unique` operation that matches no row fails at the operation (`AvNotFoundError`, `A2003`); no `after` hook runs.
 
-With `forceTransaction` (or as a step of a transaction plan), guards, pipes and the validators of every literal value the caller sent run before the transaction; a refusal there opens nothing. Then: `BEGIN -> the Resource's transaction stages -> validators of $ref values (and of what a transaction pipe changed) -> write compute -> re-check (values compute set or changed) -> interceptors -> hooks.before -> adapter call -> hooks.after -> interceptors -> COMMIT`. A refusal inside rolls the transaction back. The hooks' `ctx` calls and `ctx.$sql` join it; the guards' and pipes' calls do not. So a guard's database check can be stale by the time the write commits (check-then-act): re-check a rule that must hold at commit in `hooks.before` or a transaction stage. `forceTransaction` needs transactions: under an effective `transactionsStyle: "none"` it is a startup error (`CONFIG_INVALID_VALUE`).
+With `forceTransaction` (or as a step of a transaction plan), framework validation, policy admission, guards, pipes and the validators of every literal value the caller sent run before the transaction; a refusal there opens nothing. Then: `BEGIN -> the Resource's transaction stages -> validators of $ref values (and of what a transaction pipe changed) -> write compute -> re-check (values compute set or changed) -> policy write check -> interceptors -> hooks.before -> adapter call -> hooks.after -> interceptors -> output validation -> COMMIT`. A refusal inside, an output that fails output validation (`A3000`) included, rolls the transaction back. The hooks' `ctx` calls and `ctx.$sql` join it; the guards' and pipes' calls do not. So a guard's database check can be stale by the time the write commits (check-then-act): re-check a rule that must hold at commit in `hooks.before` or a transaction stage. `forceTransaction` needs transactions: under an effective `transactionsStyle: "none"` it is a startup error (`CONFIG_INVALID_VALUE`).
 
 ## Resource transaction stages
 

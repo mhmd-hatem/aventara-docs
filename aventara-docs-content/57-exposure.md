@@ -197,7 +197,14 @@ client: {
 },
 ```
 
-Every field of `Category` can be selected, filtered on, sorted by and, for a relation, included and paged, as far as the root allows; none can be written. A field the root hid stays hidden, and a capability the root took away (a filter, say) does not come back: `"read"` only asks for what the layer above offers. A field whose every read capability the root hid (a write-only `passwordHash`) is left out.
+Every field of `Category` the layer above offers is in it, including any a hand-written list would leave out, and none can be written. Each gets every read capability the layer above gives it:
+
+| Field | What `"read"` grants |
+|---|---|
+| A scalar, Json included | `select`, `filter`, `order` and, on a nullable field, `orderNulls` (a Json field's `filter` and `order` are its Json filter and ordering) |
+| A relation | `select`, `include`, `filter`, `order`, `pagination` (`limit`, `offset`, `cursor`) and `reducers` (`$count`) |
+
+So `fields: "read"` is wider than a list such as `["select", "filter"]` on every field: it adds `orderNulls`, ordering, paging and counting through relations, and ordering on Json fields, and a field you leave out of a list (a `lastError` column, say) is open too. Use it per Resource only where opening every column for reading is what you want; elsewhere keep the lists. Switching a Resource from lists to it changes the ClientContract hash whenever it opens more, so regenerate the client. A field the root hid stays hidden, and a capability the root took away (a filter, say) does not come back: `"read"` only asks for what the layer above offers. A field whose every read capability the root hid (a write-only `passwordHash`) is left out.
 
 `fields: "read"` names every field, relations included. A relation into a Resource the layer does not expose then has no target, and startup fails with `COMPILER_DANGLING_RELATION`, as it would for `true` on that relation. Expose the target too, or list the fields one by one. A read-only Resource takes no nested write either: under `exposed: false` a relation into it that you grant `$create` is refused at startup (`COMPILER_READ_ONLY_NESTED_WRITE`, see [Read-only means no nested write](#read-only-means-no-nested-write)), so grant that relation `create: ["$connect"]`.
 

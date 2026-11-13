@@ -272,7 +272,7 @@ npx prisma generate
 npm run aventara:prepare  # regenerates src/generated/aventara/ (the discovery artifact, then aventara-build's files)
 ```
 
-`aventara:prepare` also runs on every `npm install`, and in a project made by `aventara new` or `aventara init` before `build`, `start`, `start:dev` and `start:debug` (the `prebuild` and `prestart*` scripts), so restarting `npm run start:dev` is enough there. Yarn Berry, and pnpm with `enable-pre-post-scripts=false`, skip those hooks: run `aventara:prepare` yourself. Restart the server afterwards. Because the contract changes, you must also [regenerate the frontend client](/docs/contract-hash#the-regenerate-workflow).
+`aventara:prepare` also runs on every `npm install`, and in a project made by `aventara new` or `aventara init` before `build`, `start`, `start:dev` and `start:debug` (the `prebuild` and `prestart*` scripts), so restarting `npm run start:dev` is enough there. pnpm with `enable-pre-post-scripts=false` skips those hooks: run `aventara:prepare` yourself. Restart the server afterwards. Because the contract changes, you must also [regenerate the frontend client](/docs/contract-hash#the-regenerate-workflow).
 
 ## 3. Set up the frontend client
 

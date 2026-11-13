@@ -69,7 +69,7 @@ A project made by `aventara new` has this in `package.json`. The Aventara versio
 }
 ```
 
-With PostgreSQL the driver is `@prisma/adapter-pg`. `aventara:prepare` runs three things in order: `prisma generate`, the adapter's discovery step (`aventara-prisma7-generate`), then `aventara-build`. Between them they write `src/generated/aventara/discovery.artifact.ts`, `resources.generated.ts`, `computed-fields.generated.ts` and `contracts.generated.ts`. The `postinstall` script runs it on a plain `npm install`, and the `prebuild`, `prestart`, `prestart:dev` and `prestart:debug` scripts run it before `npm run build` and the start scripts, so a schema change needs no separate step. npm and pnpm run these `pre` hooks; Yarn Berry, and pnpm with `enable-pre-post-scripts=false`, do not, so run `aventara:prepare` yourself there (pnpm projects get `pnpm run aventara:prepare` in these scripts). Run `npm run aventara:prepare` yourself after changing `prisma/schema.prisma`, and after adding or upgrading a package by name (`npm install <package>` did not run `postinstall` with npm 11.19).
+With PostgreSQL the driver is `@prisma/adapter-pg`. `aventara:prepare` runs three things in order: `prisma generate`, the adapter's discovery step (`aventara-prisma7-generate`), then `aventara-build`. Between them they write `src/generated/aventara/discovery.artifact.ts`, `resources.generated.ts`, `computed-fields.generated.ts` and `contracts.generated.ts`. The `postinstall` script runs it on a plain `npm install`, and the `prebuild`, `prestart`, `prestart:dev` and `prestart:debug` scripts run it before `npm run build` and the start scripts, so a schema change needs no separate step. npm and pnpm run these `pre` hooks; pnpm with `enable-pre-post-scripts=false` does not, so run `aventara:prepare` yourself there (pnpm projects get `pnpm run aventara:prepare` in these scripts). Run `npm run aventara:prepare` yourself after changing `prisma/schema.prisma`, and after adding or upgrading a package by name (`npm install <package>` did not run `postinstall` with npm 11.19).
 
 ### Frontend side
 
@@ -136,6 +136,8 @@ Naming the exact version does not get past a delay you set yourself (`minimumRel
 minimumReleaseAgeExclude:
   - "@aventara/*"
 ```
+
+Add this entry yourself, also under pnpm's built-in delay. Without it, recent pnpm versions (seen with 11.25 and 12.11) may add one exact-version entry per package to `minimumReleaseAgeExclude` when an install takes a version still inside the delay (`'@aventara/core@1.0.0-rc.13'`, and so on); some versions print a line saying so. pnpm does this, not the CLI. `aventara new` inside a pnpm workspace runs its install at the root, so the entries go into the root `pnpm-workspace.yaml`. With `"@aventara/*"` already listed, nothing is added.
 
 For one run, `pnpm --config.minimum-release-age=0 dlx @aventara/cli@<version> new …` turns the delay off. In npm the setting is `min-release-age-exclude`.
 

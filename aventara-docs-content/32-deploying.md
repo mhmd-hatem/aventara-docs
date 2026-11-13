@@ -162,15 +162,15 @@ On Cloudflare D1 (`@prisma/adapter-d1`) there are no transactions, so `update.fi
 
 ## Creating and changing the schema
 
-Aventara never touches your database or your schema: that is Prisma's job. Two commands:
+Aventara never touches your database or your schema: that is Prisma's job. Three commands:
 
 | Command | Use it for |
 |---|---|
-| `npx prisma db push` | Development and prototypes. Makes the database match `schema.prisma` right now. No migration history. |
-| `npx prisma migrate dev --name <change>` | Development, when you want a history. Writes `prisma/migrations/<timestamp>_<change>/migration.sql` and applies it. Commit the folder. |
-| `npx prisma migrate deploy` | Production. Applies the committed migrations that have not run yet. Never generates or resets. |
+| `npx prisma db push` (`pnpm exec prisma db push`) | Development and prototypes. Makes the database match `schema.prisma` right now. No migration history. |
+| `npx prisma migrate dev --name <change>` (`pnpm exec prisma migrate dev --name <change>`) | Development, when you want a history. Writes `prisma/migrations/<timestamp>_<change>/migration.sql` and applies it. Commit the folder. |
+| `npx prisma migrate deploy` (`pnpm exec prisma migrate deploy`) | Production. Applies the committed migrations that have not run yet. Never generates or resets. |
 
-For production, use migrations: `migrate dev` while developing, commit `prisma/migrations/`, and run `migrate deploy` as a release step before the new server version starts:
+For production, use migrations: `migrate dev` while developing, commit `prisma/migrations/`, and run `migrate deploy` as a release step before the new server version starts. With pnpm, write `pnpm exec prisma` where these say `npx prisma`:
 
 ```bash
 DATABASE_URL=file:./mig.db npx prisma migrate dev --name init
@@ -182,7 +182,7 @@ DATABASE_URL=file:./mig2.db npx prisma migrate deploy
 
 Prisma 7 reads the connection from `prisma.config.ts`, which the scaffold writes to load `.env` and read `DATABASE_URL`, so the commands see the same variable as the server.
 
-After any schema change, in this order: change `schema.prisma`; migrate (or push); `npm run aventara:prepare`; rebuild; deploy. A new contract has a new hash, so regenerate the frontend client too.
+After any schema change, in this order: change `schema.prisma`; migrate (or push); `npm run aventara:prepare` (`pnpm run aventara:prepare`); rebuild; deploy. A new contract has a new hash, so regenerate the frontend client too.
 
 ## The frontend client
 

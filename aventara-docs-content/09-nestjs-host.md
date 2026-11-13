@@ -134,7 +134,7 @@ Your own controllers may live beside it, for example `GET /api/health`, as long 
 
 The same Nest process can serve a built single-page app (a Vite or React build, the files of a desktop shell) beside the protocol. Serve its files, and answer `index.html` to a browser asking for any other page, so the app's own routes load on refresh.
 
-The fallback is `app.use` middleware, and on Express that runs before every route Nest registers: Aventara's ([What runs on Aventara routes](#what-runs-on-aventara-routes)) and your own controllers'. So it answers only a browser's page request (`GET`, `Accept` naming `text/html`, no file extension), and it skips every path something else owns: `<api>` and everything under it, the MCP path and `/.well-known/` (the MCP endpoint's OAuth metadata lives there), and each of your own controllers outside `<api>`.
+The fallback is `app.use` middleware, and on Express that runs before every route Nest registers: Aventara's ([What runs on Aventara routes](#what-runs-on-aventara-routes)) and your own controllers'. So it answers only a browser's page request (`GET`, an `Accept` header that lists `text/html` itself, with a `q` other than `0`, no file extension). A script's `Accept: */*`, the default of `curl` and `fetch`, is not a page request, so it falls through to a `404`, and it skips every path something else owns: `<api>` and everything under it, the MCP path and `/.well-known/` (the MCP endpoint's OAuth metadata lives there), and each of your own controllers outside `<api>`.
 
 ```ts
 // src/main.ts (Express)
@@ -153,7 +153,13 @@ async function bootstrap() {
   app.useStaticAssets(client);
   app.use((req: Request, res: Response, next: NextFunction) => {
     const owned = notPages.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`));
-    const page = req.method === "GET" && req.accepts("html") === "html" && extname(req.path) === "";
+    // A browser lists text/html itself; curl's and fetch's */* do not, and text/html;q=0 refuses it.
+    const wantsHtml = (req.get("accept") ?? "").split(",").some((entry) => {
+      const [type, ...params] = entry.split(";").map((part) => part.trim().toLowerCase());
+      const q = params.find((param) => param.startsWith("q="));
+      return type === "text/html" && (q === undefined || Number(q.slice(2)) > 0);
+    });
+    const page = req.method === "GET" && wantsHtml && extname(req.path) === "";
     if (page && !owned) {
       res.sendFile(join(client, "index.html"));
       return;
@@ -224,7 +230,7 @@ client: { pipelines: { guards: [(ctx: AvContext) => ctx.$state.user !== undefine
 
 - Run the middleware that finds the user with `app.use(...)`: it runs on Aventara routes on both platforms. Nest guards never do, and `MiddlewareConsumer` middleware does not on Express.
 - On Fastify, `app.use` middleware writes to the Node request, so read `request.raw.user`.
-- Throw `new AvError("A4001", "...")` from `state` to refuse the request with `403`. A rejection whose `status` or `statusCode` is 401 or 403 (how an authentication library refuses a bad credential) answers `401 A4000` or `403 A4001` with Aventara's own message, not the library's ([Policies](/docs/policies#when-state-refuses-a-credential)). Any other throw answers `500 A3000`.
+- Throw `new AvError("A4001", "...")` from `state` to refuse the request with `403`. A rejection whose `status` or `statusCode` is 401 or 403 (how an authentication library refuses a bad credential) answers `401 A4000` or `403 A4001` with Aventara's own message, not the library's ([Error codes](/docs/error-codes#a4000)). Any other throw answers `500 A3000`.
 - `forRootAsync`'s `useFactory` returns `state` beside `framework` or `config`.
 
 The same object reaches every stage of the request, a transaction's steps and the ctx calls they make. See [The pipeline context](/docs/pipeline-context#request-state).
