@@ -1029,7 +1029,10 @@ export const post = defineResource<Model>()("Post", {
       pipelines: {
         compute: {
           create: ({ data }) => slugify(String(data.title)),
-          update: ({ data, value }) => (data.title === undefined ? value : slugify(String(data.title))),
+          update: ({ data, value }) => {
+            if (data.title !== undefined) return slugify(String(data.title));
+            return typeof value === "string" ? value : undefined;
+          },
         },
       },
     },
@@ -1039,7 +1042,7 @@ export const post = defineResource<Model>()("Post", {
           create: ({ value, ctx }) => {
             const user = ctx.$state.user;
             if (user !== undefined) return user.id;
-            if (value !== undefined) return value; // server code may pass the owner itself
+            if (typeof value === "number") return value; // server code may pass the owner itself
             throw new AvError("A4000", "Sign in first.");
           },
         },

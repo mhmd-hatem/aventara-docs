@@ -77,7 +77,10 @@ export const post = defineResource<Model>()("Post", {
       pipelines: {
         compute: {
           create: ({ data }) => slugify(String(data.title)),
-          update: ({ data, value }) => (data.title === undefined ? value : slugify(String(data.title))),
+          update: ({ data, value }) => {
+            if (data.title !== undefined) return slugify(String(data.title));
+            return typeof value === "string" ? value : undefined;
+          },
         },
       },
     },
@@ -118,9 +121,17 @@ firstEmployeeName: {
 },
 ```
 
-Written inline in a configuration that is an `as const` object, the same stages need their parameters annotated (`({ record }: { record: Readonly<Record<string, unknown>> }) => ...`), because nothing gives them a contextual type there.
+Written inline in a configuration that is an `as const` object, the same stages need their parameters annotated (`({ record }: { record: Readonly<Record<string, unknown>> }) => ...`), because nothing gives them a contextual type there. An annotated stage must still return the field's type: a stage whose return type is `unknown` is refused.
 
 Written inline in `createFramework({ ... })`, the stages need no annotation, and a `compute.create` there takes its field out of the create types as it does in a `defineResource` block. A `create` or `update` stage's `field` and `data` are keyed by `string`; their values are `unknown`, as everywhere.
+
+What a stage returns is typed by its field. A field from your model takes its model type, and an added `VIRTUAL` field takes the type in its `definition`. A Decimal is an `AvDecimal` (a number or a string is refused at run time too), a datetime is a `Date`, a list field takes an array, and `null` fits only a nullable field. `undefined` always fits: it keeps the current value. A Json field takes any JSON value, and its shape is checked at run time. A wrong return is a type error, for example `Type 'number' is not assignable to type 'string | Promise<string | undefined> | undefined'`, where it would otherwise answer `A3000`. The inputs `value`, `data` and `record` stay `unknown`, so a stage that returns one (`return data.title`) needs `String(data.title)` or a type check first.
+
+In a `defineResource` block, an enum literal returned bare widens to `string` and is refused. Write it `as const`:
+
+```ts
+status: { pipelines: { compute: { create: () => "DRAFT" as const } } },
+```
 
 ## Recipe 1: a field computed on read
 
@@ -178,7 +189,7 @@ A `create` or `update` stage runs on every create or update, whether or not the 
 {"data":{"id":2,"title":"A","slug":"a"},"code":"A1002","cause":null}
 ```
 
-To keep a value the caller sent and derive one otherwise, return it: `create: ({ value, data }) => value ?? slugify(String(data.title))`. Returning `undefined` keeps the current value.
+To keep a value the caller sent and derive one otherwise, return it: `create: ({ value, data }) => (typeof value === "string" ? value : slugify(String(data.title)))`. Returning `undefined` keeps the current value.
 
 A stage receives one object:
 
