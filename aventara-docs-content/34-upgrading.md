@@ -20,19 +20,15 @@ npm install --save-exact @aventara/core@1.0.0-rc.13 @aventara/nest@1.0.0-rc.13 @
 # add @aventara/mcp@1.0.0-rc.13 and @aventara/testing@1.0.0-rc.13 to the command if you use them
 ```
 
-With pnpm or yarn, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
+With pnpm, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
 
 ```bash
 # pnpm (in a workspace, add --filter <your server package> after pnpm)
 pnpm add --save-exact @aventara/core@1.0.0-rc.13 @aventara/nest@1.0.0-rc.13 @aventara/prisma7-adapter@1.0.0-rc.13
 pnpm add --save-dev --save-exact @aventara/build@1.0.0-rc.13
-
-# yarn
-yarn add --exact @aventara/core@1.0.0-rc.13 @aventara/nest@1.0.0-rc.13 @aventara/prisma7-adapter@1.0.0-rc.13
-yarn add --dev --exact @aventara/build@1.0.0-rc.13
 ```
 
-Move the frontend's `@aventara/client` to the same version, and run `npx @aventara/cli@1.0.0-rc.13 skill` (`pnpm dlx @aventara/cli@1.0.0-rc.13 skill`, `yarn dlx @aventara/cli@1.0.0-rc.13 skill` on Yarn Berry) to refresh the agent skill. Then run `npm run aventara:prepare` on the server (`pnpm run aventara:prepare`, `yarn aventara:prepare`) and `avclient generate` in each frontend.
+Move the frontend's `@aventara/client` to the same version, and run `npx @aventara/cli@1.0.0-rc.13 skill` (`pnpm dlx @aventara/cli@1.0.0-rc.13 skill`) on the server to refresh the server's agent skill, and `npx avclient skill` (`pnpm exec avclient skill`) in each frontend to write or refresh its client skill. Then run `npm run aventara:prepare` on the server (`pnpm run aventara:prepare`) and `avclient generate` in each frontend.
 
 ### 2. Changes in behavior
 
@@ -54,7 +50,7 @@ These change only what `aventara new`, `aventara init` and `avclient init` write
 - They add a `typecheck` script: `tsc --noEmit` in a NestJS project, `next typegen && tsc --noEmit` in a Next.js one. A project scaffolded before can add the same line by hand.
 - They work inside a monorepo: inside a git repository the new project gets no `.git` of its own, and under a pnpm workspace the install runs at the root ([Inside a pnpm workspace](/docs/cli-reference#inside-a-pnpm-workspace)). `aventara new --skip-lint` leaves out `nest new`'s oxlint and prettier.
 - The agent skill spells its commands for the project's package manager. `aventara skill` (step 1) refreshes it.
-- `avclient init` writes a client-only agent skill, `.claude/skills/aventara-client/SKILL.md`. In a frontend set up before, run `npx avclient skill` to add it.
+- `avclient init` writes a client-only agent skill, `.claude/skills/aventara-client/SKILL.md`. In a frontend set up before, run `npx avclient skill` (`pnpm exec avclient skill`) to add it.
 - A failed `aventara-build` run now changes no generated file. If an older build left `Type 'AvModel' does not satisfy the constraint 'AvAdapterModel'` in every Resource file, run `aventara:prepare` again and fix the first error it prints.
 
 ### 4. New and optional
@@ -72,19 +68,15 @@ npm install --save-exact @aventara/core@1.0.0-rc.12 @aventara/nest@1.0.0-rc.12 @
 # add @aventara/mcp@1.0.0-rc.12 and @aventara/testing@1.0.0-rc.12 to the command if you use them
 ```
 
-With pnpm or yarn, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
+With pnpm, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
 
 ```bash
 # pnpm (in a workspace, add --filter <your server package> after pnpm)
 pnpm add --save-exact @aventara/core@1.0.0-rc.12 @aventara/nest@1.0.0-rc.12 @aventara/prisma7-adapter@1.0.0-rc.12
 pnpm add --save-dev --save-exact @aventara/build@1.0.0-rc.12
-
-# yarn
-yarn add --exact @aventara/core@1.0.0-rc.12 @aventara/nest@1.0.0-rc.12 @aventara/prisma7-adapter@1.0.0-rc.12
-yarn add --dev --exact @aventara/build@1.0.0-rc.12
 ```
 
-Move the frontend's `@aventara/client` to the same version, and run `npx @aventara/cli@1.0.0-rc.12 skill` (`pnpm dlx @aventara/cli@1.0.0-rc.12 skill`, `yarn dlx @aventara/cli@1.0.0-rc.12 skill` on Yarn Berry) to refresh the agent skill. Then run `npm run aventara:prepare` on the server (`pnpm run aventara:prepare`, `yarn aventara:prepare`) and `avclient generate` in each frontend.
+Move the frontend's `@aventara/client` to the same version, and run `npx @aventara/cli@1.0.0-rc.12 skill` (`pnpm dlx @aventara/cli@1.0.0-rc.12 skill`) on the server to refresh the server's agent skill, and `npx avclient skill` (`pnpm exec avclient skill`) in each frontend to write or refresh its client skill. Then run `npm run aventara:prepare` on the server (`pnpm run aventara:prepare`) and `avclient generate` in each frontend.
 
 ### 2. Breaking changes
 
@@ -118,16 +110,12 @@ npm install --save-exact @aventara/core@1.0.0-rc.11 @aventara/nest@1.0.0-rc.11 @
 # add @aventara/mcp@1.0.0-rc.11 and @aventara/testing@1.0.0-rc.11 to the command if you use them
 ```
 
-With pnpm or yarn, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
+With pnpm, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
 
 ```bash
 # pnpm (in a workspace, add --filter <your server package> after pnpm)
 pnpm add --save-exact @aventara/core@1.0.0-rc.11 @aventara/nest@1.0.0-rc.11 @aventara/prisma7-adapter@1.0.0-rc.11
 pnpm add --save-dev --save-exact @aventara/build@1.0.0-rc.11
-
-# yarn
-yarn add --exact @aventara/core@1.0.0-rc.11 @aventara/nest@1.0.0-rc.11 @aventara/prisma7-adapter@1.0.0-rc.11
-yarn add --dev --exact @aventara/build@1.0.0-rc.11
 ```
 
 One command moves every `@aventara/*` package together, as in earlier steps. Move the frontend's `@aventara/client` to the same version, and run `npx @aventara/cli@1.0.0-rc.11 skill` to refresh the agent skill.
@@ -172,16 +160,12 @@ npm install --save-exact @aventara/core@1.0.0-rc.8 @aventara/nest@1.0.0-rc.8 @av
 # add @aventara/mcp@1.0.0-rc.8 and @aventara/testing@1.0.0-rc.8 to the command if you use them
 ```
 
-With pnpm or yarn, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
+With pnpm, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
 
 ```bash
 # pnpm (in a workspace, add --filter <your server package> after pnpm)
 pnpm add --save-exact @aventara/core@1.0.0-rc.8 @aventara/nest@1.0.0-rc.8 @aventara/prisma7-adapter@1.0.0-rc.8
 pnpm add --save-dev --save-exact @aventara/build@1.0.0-rc.8
-
-# yarn
-yarn add --exact @aventara/core@1.0.0-rc.8 @aventara/nest@1.0.0-rc.8 @aventara/prisma7-adapter@1.0.0-rc.8
-yarn add --dev --exact @aventara/build@1.0.0-rc.8
 ```
 
 One command moves every `@aventara/*` package together. `@aventara/build` stays in `devDependencies`: npm updates a package in the section where it already is. Installing the packages in two commands makes npm print a peer-dependency warning (`ERESOLVE`), because `@aventara/build` needs the same version of `@aventara/core`.
@@ -190,7 +174,7 @@ Move the frontend's `@aventara/client` to the same version, and run `npx @aventa
 
 ### 2. Regenerate the discovery artifact and rebuild the prebuilt Contracts
 
-Discovery now records, on the end of a relation that holds the reference, which fields of the target its reference fields name. The artifact's model hash changes, and so does the fingerprint of a prebuilt Contracts file. Run your generate step and `aventara-build` again (`npm run aventara:prepare` in the scaffold; `pnpm run aventara:prepare` with pnpm, `yarn aventara:prepare` with yarn). Until you do, the prebuilt file reads as stale (`AVENTARA_PREBUILT_STALE`) and the Contracts compile at startup.
+Discovery now records, on the end of a relation that holds the reference, which fields of the target its reference fields name. The artifact's model hash changes, and so does the fingerprint of a prebuilt Contracts file. Run your generate step and `aventara-build` again (`npm run aventara:prepare` in the scaffold; `pnpm run aventara:prepare` with pnpm). Until you do, the prebuilt file reads as stale (`AVENTARA_PREBUILT_STALE`) and the Contracts compile at startup.
 
 ### 3. The construction error message names the first problem
 
@@ -228,7 +212,7 @@ Change the import; the shapes are the same. The old names are gone from `@aventa
 
 This matters only if your code reads the discovery artifact (`src/generated/aventara/discovery.artifact.ts`). In `referentialActions.<Resource>.owningEdges[]`, the fields of the Resource itself that hold the reference are now called `referenceFields`; they were called `references`. A model's relation fields already use `references` for the target's fields, so the same word meant two lists in one file. Code that read `owningEdges[i].references` reads `owningEdges[i].referenceFields`.
 
-Regenerate the artifact (`npm run aventara:prepare`; `pnpm run aventara:prepare` with pnpm, `yarn aventara:prepare` with yarn). The artifact changes only in those keys: the model hash and the prebuilt Contracts file are the same as before the rename.
+Regenerate the artifact (`npm run aventara:prepare`; `pnpm run aventara:prepare` with pnpm). The artifact changes only in those keys: the model hash and the prebuilt Contracts file are the same as before the rename.
 
 ### 6. Policy additions
 

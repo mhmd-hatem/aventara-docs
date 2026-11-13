@@ -137,6 +137,8 @@ minimumReleaseAgeExclude:
   - "@aventara/*"
 ```
 
+Add this entry yourself, also under pnpm's built-in delay. Without it, pnpm 11 and later (not the CLI) write one exact-version entry per package into the workspace's `minimumReleaseAgeExclude` when an install takes a version still inside the delay (`'@aventara/core@1.0.0-rc.13'`, and so on for each `@aventara/*` package), and print `Added N entries to minimumReleaseAgeExclude`. `aventara new` inside a pnpm workspace runs its install at the root, so the root `pnpm-workspace.yaml` gains those lines. With `"@aventara/*"` already listed, nothing is added.
+
 For one run, `pnpm --config.minimum-release-age=0 dlx @aventara/cli@<version> new …` turns the delay off. In npm the setting is `min-release-age-exclude`.
 
 The newer version is read from the registry npm and pnpm use for `@aventara` (`@aventara:registry`, else `registry`). Behind an HTTP proxy, Node reads `HTTPS_PROXY` only with `NODE_USE_ENV_PROXY=1`; without it the line shows the pinned version alone.
