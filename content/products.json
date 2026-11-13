@@ -305,10 +305,10 @@
     "headline": "Know exactly who can do what.",
     "detail": "Write role-first rules that follow your schema. Access decides which rows and fields a caller may use. Better Auth handles sign-in and credentials.",
     "accent": "mint",
-    "currentVersion": "1.0.0-rc.2",
+    "currentVersion": "1.0.0-rc.3",
     "versions": [
       {
-        "version": "1.0.0-rc.2",
+        "version": "1.0.0-rc.3",
         "source": {
           "kind": "local",
           "path": "aventara-access-docs-content",
@@ -325,7 +325,8 @@
           ["introduction", "Introduction", "code"],
           ["why-access", "Why access", "code"],
           ["installation", "Installation", "code"],
-          ["getting-started", "Getting started", "code"]
+          ["getting-started", "Getting started", "code"],
+          ["upgrading", "Upgrading", "code"]
         ]
       },
       {
@@ -344,7 +345,8 @@
           ["passwords", "Passwords", "code"],
           ["hosts", "Hosts", "code"],
           ["access-verbs", "Access verbs", "code"],
-          ["better-auth-plugin", "Better auth plugin", "code"]
+          ["better-auth-plugin", "Better auth plugin", "code"],
+          ["onboarding", "Onboarding", "code"]
         ]
       },
       {

@@ -387,7 +387,32 @@ checked after the write) and `paths` (the relation paths and operators each rule
 `fieldsOf` takes `access: "read"`, or `access: "write"` with an optional `action` (`"create"` or `"update"`). Anything
 else is refused with `ACCESS_QUESTION_INVALID`.
 
-A deny on a nullable field lets the NULL rows through, in `can` and in `scopeOf` alike: `scopeOf` writes the deny's
-negation with an `OR` that keeps the NULL rows. A `where` that matches no row is written `{ OR: [] }`.
+Each rule matches what Prisma's `findMany({ where })` would return for it: NULL matches no comparison, `not`
+included. To refuse NULL too, say so: `{ OR: [{ status: { not: "PUBLISHED" } }, { status: null }] }`.
+
+- `deny("update", "Post", { where: { status: { not: "PUBLISHED" } } })` does not refuse a post whose `status` is NULL:
+  Prisma's query for `{ status: { not: "PUBLISHED" } }` returns no NULL row. `NOT` drops a NULL row the same way, so
+  `{ NOT: { status: "DRAFT" } }` matches no post whose `status` is NULL either.
+- `{ status: null }` is IS NULL and `{ status: { not: null } }` is IS NOT NULL.
+- A to-one relation with no row behind it (a NULL reference, a reference to a row that is not there, a back side with
+  none) matches no condition on it, and its `NOT` matches: a deny through an optional relation lets a row with no
+  related row through.
+- `some` and `none` count the related rows the condition matches; `every` passes a related row whose compared field
+  is NULL, as Prisma's `every` does.
+- `in: []` matches no row and `notIn: []` every row. Prisma refuses a list that holds `null`, and so does Access: the
+  rule is refused when it compiles. Compare with `null` on its own: `{ OR: [{ status: { in: ["DRAFT"] } }, { status:
+  null }] }`, or `{ status: { not: null, notIn: ["DRAFT"] } }`.
+- A grant reads the same way: a NULL row matches a grant only through `{ field: null }`.
+- An empty condition below the root (`NOT: {}`, `{ campaign: {} }`, `{ OR: [{}] }`, an empty `AND: []` beside other
+  members) is refused when the rule compiles: Prisma drops an empty filter there, so the rule would not mean what its
+  `findMany` returns. A root `where: {}` is every row, as in Prisma. To ask that a related row is there, compare its
+  reference: `{ campaignId: { not: null } }`.
+- A grant's `in:` to a row role whose `where` is empty reads as "has a related row", as Prisma's
+  `{ rel: { is: {} } }` does (not the unwrapped `{ rel: {} }`, which Prisma drops): it is never negated, so it never
+  widens.
+
+`can` and `scopeOf` keep the same rows. `scopeOf` negates each deny so that the rows its query does not return stay:
+`{ OR: [{ NOT: { status: { not: "PUBLISHED" } } }, { status: { equals: null } }] }`, an IS NULL branch only where the
+deny compares a nullable field. A `where` that matches no row is written `{ OR: [] }`.
 
 Next: [Updates](/docs/updates), or [createAccess](/docs/create-access) to put the rules behind Better Auth.

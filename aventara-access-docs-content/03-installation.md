@@ -15,7 +15,7 @@ Access goes into an Aventara app. Create one with the Aventara CLI, then add Acc
 |---|---|
 | Node.js | `^22.23.4 \|\| >=24.22.1` |
 | Aventara framework | `1.0.0-rc.12`: tested on it. `1.0.0-rc.10` or later works. |
-| Better Auth | `~1.7.12`: 1.7.12 or any later 1.7 patch. Tested on 1.7.14. |
+| Better Auth | `~1.7.12`: 1.7.12 or any later 1.7 patch. Tested on 1.7.17, audited through 1.7.20. |
 | Package type | ESM (`"type": "module"`) |
 
 `createAccess` refuses another Better Auth version (an older one, 1.8, a prerelease) with `ACCESS_BETTER_AUTH_VERSION`.
@@ -45,11 +45,18 @@ Everything but `@aventara/access` is an optional peer, so install only what the 
 
 | Package | Range | You need it for |
 |---|---|---|
-| `@aventara/access` | `1.0.0-rc.2` (`@rc`) | Everything |
+| `@aventara/access` | `1.0.0-rc.3` (`@rc`) | Everything |
 | `better-auth` | `~1.7.12` | `createAccess`, `aventaraAccess()` and everything built on them. The engine alone (`definePolicies`, `createAccessEngine`) works without it, and type-checks without it with `skipLibCheck: false`. |
 | `@better-auth/oauth-provider` | `~1.7.12` | [Agents over MCP](/docs/agents-mcp), and one audience per service |
 | `@better-auth/cimd` | `~1.7.12` | Agent clients that register by a metadata document URL |
 | `@node-rs/argon2` | `2.2.2`, exact | Password and PIN hashing on Node.js 22 only. Node.js 24.7.0 and later has `crypto.argon2` and never loads it. |
+
+Two Better Auth plugins ship beside Access, at the same version. Each is a Better Auth plugin of its own that any Better Auth app can use, with or without Access, and needs only `better-auth` `~1.7.12`:
+
+| Package | Range | You need it for |
+|---|---|---|
+| `@aventara/better-auth-kiosk` | `1.0.0-rc.3` (`@rc`) | Shared tills with staff switching by PIN ([Kiosk mode](/docs/kiosk)) |
+| `@aventara/better-auth-onboarding` | `1.0.0-rc.3` (`@rc`) | Holding users at the door until they finish what your app asks ([Onboarding](/docs/onboarding)). It also needs the `@better-auth/utils` Better Auth brings (`^0.5.0`). |
 
 Install the agent packages in the same range as Better Auth:
 
@@ -63,7 +70,7 @@ Install the Node.js 22 hasher at the exact version Access is tested against:
 npm install --save-exact @node-rs/argon2@2.2.2
 ```
 
-Two more packages appear in the guides without being Access peers: `pg` when Better Auth runs on a `pg` `Pool`, and `@better-auth/expo` when the kiosk's tills are an Expo app ([The kiosk profile](/docs/kiosk#a-till-that-is-an-expo-app)). Use Expo's package in the same 1.7 range as Better Auth.
+Two more packages appear in the guides without being Access peers: `pg` when Better Auth runs on a `pg` `Pool`, and `@better-auth/expo` when the kiosk's tills are an Expo app ([Kiosk mode](/docs/kiosk)). Install a `@better-auth/*` package at the `better-auth` version the app has (`npm ls better-auth`), with `@better-auth/core` at that same version.
 
 ## Install safely
 
@@ -125,16 +132,29 @@ The first `createAccess` call loads Better Auth and checks its version. A missin
 
 ## AI agents
 
-From `1.0.0-rc.1`, the package ships an agent skill at `node_modules/@aventara/access/skill/`: a short `SKILL.md`
-and reference pages an agent loads when a task needs them (setup, the rules, recipes, signed-out callers and cached
-reads, error codes). Copy it into your agent's skills folder, or point your agent at
-`node_modules/@aventara/access/skill/SKILL.md`:
+The package ships an agent skill: a short `SKILL.md` and reference pages an agent loads when a task needs them (setup
+and wiring, the rule language, recipes, signed-out callers and cached reads, error codes), and optional skills for the
+areas not every app has. Write them into your project from the project's root, with the `avaccess` the project
+installed (`--no-install`, so npx never fetches a package of that name from the registry):
 
 ```sh
-mkdir -p .claude/skills
-cp -R node_modules/@aventara/access/skill .claude/skills/aventara-access
+npx --no-install avaccess skill
+#   wrote .claude/skills/aventara-access/
+#   optional: kiosk onboarding registry mcp server service-client
+#   add with: npx --no-install avaccess skill <name>...
+
+npx --no-install avaccess skill kiosk mcp
+#   wrote .claude/skills/aventara-kiosk/   (from @aventara/better-auth-kiosk)
+#   wrote .claude/skills/aventara-access-mcp/
 ```
 
-Copy it again after you upgrade Access.
+The base skill always goes to `.claude/skills/aventara-access/`, and an Access section to `AGENTS.md` (created when
+there is none) points other agents to it and tells them which optional skill to add for which task. The optional ones
+are written only when named: `kiosk` and `onboarding` from the installed `@aventara/better-auth-kiosk` and
+`@aventara/better-auth-onboarding`, and `registry`, `mcp`, `server` and `service-client` from Access
+(`.claude/skills/aventara-access-<name>/`). A name that is no skill, or a plugin the project has not installed, is
+refused, and nothing is written. Run it again after you upgrade Access or a plugin: it refreshes every skill already
+written, removes the files a new release dropped, keeps a file you changed (with a warning) unless `--force`, and says
+"up to date" when nothing changed. The [CLI reference](/docs/cli-reference) has the flags and the files it writes.
 
 Next: [Getting started](/docs/getting-started).

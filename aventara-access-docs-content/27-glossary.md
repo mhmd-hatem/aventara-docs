@@ -22,7 +22,7 @@ section: reference
 | Scope | The rows a principal may read, update or delete: `true`, `false`, or an Aventara `where`. |
 | Policies file | The rules compiled to passive JSON, format `aventara-access/policies@1`. |
 | Engine | The thing that answers `can`, `scopeOf`, `fieldsOf` and `grantsOf` from a policies file. |
-| Profile | How the instance treats sessions: `web`, `service` or `kiosk`. |
+| Profile | How the instance treats sessions: `web` or `service`. |
 | Namespace | One service's name in the registry. It owns the rules for its own Resources. |
 | Registry | The part of Access that stores each namespace's policies file and the org's guardrails. |
 | Push key, pull key | A namespace's keys: push may push and read, pull only reads. |
@@ -30,7 +30,8 @@ section: reference
 | Guardrail | An org-wide, deny-only rule every namespace's engine adds. |
 | Foreign Resource | A Resource another namespace owns. Rules may read it in conditions but not grant, deny or govern on it. |
 | Beacon | A random value one service writes to its own database to prove other services share that database. |
-| Kiosk | A shared device that staff switch on by PIN. |
+| Kiosk | A shared device that staff switch on by PIN, with the kiosk plugin (`@aventara/better-auth-kiosk`). |
+| Onboarding | The steps a user finishes before a session or token proves them, with the onboarding plugin (`@aventara/better-auth-onboarding`). |
 | Bridge | The organization bridge: it puts a member's role and organization into token claims. |
 | Hub | An app that runs Better Auth and is also the registry other services push to. |
 | Aventara | The [framework](https://aventara.razor34.dev/framework/docs/introduction) Access decides for. |

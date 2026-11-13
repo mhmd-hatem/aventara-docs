@@ -45,7 +45,12 @@ hub](/docs/better-auth-plugin#the-app-as-the-hub)).
 
 The registry's tables (`accessNamespace`, `accessKey`, `accessPolicyRevision`, `accessGuardrailRevision`, `accessHead`,
 `accessPushLog`, `accessResourceOwner`, `accessBeacon`) are Better Auth plugin tables, created by Better Auth's migration or by
-`npx auth@~1.7.12 generate --yes`. `access.handler` serves the registry's routes under Better Auth's base path:
+`npx auth@~1.7.12 generate --yes`. Their unique indexes are what keep one live key per namespace and kind
+(`accessKey.slot`), one owner per Resource (`accessResourceOwner.resource`) and one head per namespace
+(`accessHead.line`) when calls run at once. The migration creates them; tables made by hand must have them too, since
+Better Auth's schema check compares tables and columns, not indexes. Better Auth's memory adapter enforces no index:
+the registry refuses it when Better Auth starts (`ACCESS_OPTIONS_INVALID`), as it refuses no `database` at all, which
+Better Auth runs on it. `access.handler` serves the registry's routes under Better Auth's base path:
 
 | Route | Does |
 |---|---|
@@ -83,6 +88,9 @@ avaccess keys revoke campaign pull --server access.config.ts
   and `BETTER_AUTH_URL`.
 - The same calls are on `access.registry`: `createNamespace(name)`, `rotateKey(namespace, kind)`,
   `revokeKey(namespace, kind)` and `pushGuardrails(file)`.
+- A namespace has one live key of each kind. A rotation another rotation overtook is refused (`ACCESS_KEY_REFUSED`)
+  and issues nothing, so it never revokes the key the other one handed back. The key a rotation hands back is live
+  when it is handed back; a later rotation or revocation may replace it.
 
 A push key pushes and reads its own namespace. A pull key only reads it. A wrong, revoked or rotated-out key, a pull key
 that pushes, or another namespace's key is refused with `ACCESS_KEY_REFUSED`. Another namespace's key gets the same
@@ -91,8 +99,15 @@ answer as a namespace the registry does not have (`401`), so a key tells its hol
 ## Who owns a Resource
 
 A namespace owns the Resources its file names as its own. Only the owner grants, denies or governs fields on them. The
-registry keeps one owner per Resource, and claims ownership in the push's own transaction, so two pushes at the same
-moment cannot both claim one.
+registry keeps one owner per Resource (the owners table's unique Resource name), and claims ownership in the push's own
+transaction, so two pushes at the same moment cannot both claim one, and a refused push leaves nothing behind.
+
+That transaction is a database transaction only when Better Auth's adapter runs one. Its built-in database adapters
+(a `pg` `Pool`, SQLite, MySQL) do. Prisma's and Drizzle's run the registry's writes one by one unless you set
+`transaction: true`: `prismaAdapter(prisma, { provider: "postgresql", transaction: true })`. Without it a push refused
+partway, for a Resource another push claimed a moment before, keeps what it wrote until then: the Resources it had
+claimed (which no other namespace can then claim, though no head of its names them) and its beacon. Turn it on for an
+Access server that runs the registry.
 
 `registry.ownership` says how a Resource gets its owner:
 
@@ -120,11 +135,12 @@ address, since the key travels in a header. The CLI follows no redirect.
 |---|---|
 | `avaccess push <rules> [--beacon <module>]` | Pushes the namespace's policies file: a `.json` file, or the module that holds the rules (default export, or `rules`), TypeScript included. `--beacon` sends the beacons too ([Beacons and `foreign`](/docs/beacons-and-foreign)). |
 | `avaccess pull [--namespace <ns>] [--out <dir>] [--foreign <ns>:<Resource>,…] [--beacon <module>] [--env <env>]` | Writes the namespace's current file to `access/<ns>.policies.json`, and the org's guardrails to `access/guardrails.json`, and pins their hashes in `avAccess.lock.json` |
-| `avaccess verify [--env <env>]` | Holds the pulled files to the lock, offline. A file edited by hand fails with `ACCESS_LOCK_MISMATCH`. It holds every `avAccess.beacons.<env>.json` in the project to the rules too, and with `--env` (or `AVACCESS_ENV`) fails when that environment's file is missing. |
-| `avaccess status` | Says whether the lock is behind the registry's current revisions, and exits `1` when it is. Run it in CI. |
+| `avaccess verify [--env <env>] [--client <file>]` | Holds the pulled files to the lock, offline. A file edited by hand fails with `ACCESS_LOCK_MISMATCH`. It holds every `avAccess.beacons.<env>.json` in the project to the rules too, and with `--env` (or `AVACCESS_ENV`) fails when that environment's file is missing. With generated clients (each one `avAccess.lock.json` records in `clients`, which `avaccess generate` writes in normal form; `--client` names one more beside them; and `src/generated/avAccess.ts` when it is there), it fails when a client is not what the installed `@aventara/access` would write for the pinned files: another version, rules pulled since it was generated (its banner's pins are not the lock's), a hand edit of either file (each banner holds its file's hash), or another build; and when a recorded client is gone. It names the `npx --no-install avaccess generate …` that writes it again. CRLF line ends read as LF. The check is the CLI's alone: run `verify` in CI. |
+| `avaccess status [--client <file>]` | Says whether the lock is behind the registry's current revisions, or the generated client is from another Access version, and exits `1` when either is. Run it in CI. |
 | `avaccess diff [<from> [<to>]] [--namespace <ns>]` | Names the rules that changed between two revisions: `lock`, `head`, a hash, or its first seven or more hex digits. The default, `lock` to `head`, is what a pull would bring. The namespace is `--namespace`, else the lock's. |
 | `avaccess generate`, `avaccess schema` | The generated client ([The generated client](/docs/generated-client)) |
 | `avaccess serve` | The standalone server ([The standalone server](/docs/standalone-server)) |
+| `avaccess skill [<name>...] [--force]` | Writes the installed package's agent skill to `.claude/skills/aventara-access/` and its section of `AGENTS.md`, each optional skill named (`kiosk` and `onboarding` from their installed plugins, `registry`, `mcp`, `server` and `service-client` from Access), and refreshes the optional ones already written; [Installation](/docs/installation#ai-agents) says what it keeps and what it refuses |
 
 Exit codes: `0` done, `1` the check failed or the registry refused, `2` the command could not run.
 

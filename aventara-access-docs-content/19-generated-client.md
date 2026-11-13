@@ -51,10 +51,14 @@ export const rules = definePolicies(model, { namespace: "chat" })
 
 Only the rules file imports `@aventara/access`. It is authoring, not run time.
 
+`avaccess generate` records each client it writes in `avAccess.lock.json` (`clients`), and `avaccess verify` holds
+every recorded client to what the installed Access would write for the pinned files. An entry stays until its file
+is gone and you run `avaccess generate --prune`. A lock edited by hand to drop an entry is not checked for it.
+
 `avaccess generate` runs the same check as `avaccess verify` first: a pulled file edited by hand is refused and nothing
 is written. Regenerate after each pull, for example in the service's `postinstall`:
-`avaccess verify && avaccess generate --orm prisma7`. The same pulled files, translator and Access version give the same
-bytes. Never edit the generated files.
+`avaccess generate --orm prisma7 && avaccess verify`: `verify` after `generate`, since it refuses a client another
+Access version wrote. The same pulled files, translator and Access version give the same bytes. Never edit the generated files.
 
 | Command | Flags |
 |---|---|

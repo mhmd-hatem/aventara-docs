@@ -66,9 +66,11 @@ Each value was checked against the package. Where an option sets it, the option 
 
 ## The kiosk
 
+The kiosk plugin's (`@aventara/better-auth-kiosk`), set in `kiosk({ … })` ([Kiosk mode](/docs/kiosk)).
+
 | What | Value | Set by |
 |---|---|---|
-| Idle timeout | 300 seconds. Whole seconds from 60 to 3600. | `profile.idleTimeout` |
+| Idle timeout | 300 seconds. Whole seconds from 60 to 3600. | `idleTimeout` |
 | Device credential | 32 random bytes, HTTP-only cookie, kept 400 days, `SameSite=Lax` | fixed |
 | Freshness of an enrolling session | Better Auth's `session.freshAge` (one day by default) | `session.freshAge` |
 | PIN length | 6 to 12 digits | fixed |
@@ -77,6 +79,9 @@ Each value was checked against the package. Where an option sets it, the option 
 | Device limit | 10 wrong PINs at once for any users, then one more every 90 seconds | fixed |
 | Replaced credential grace | 30 seconds (`409 KIOSK_DEVICE_BUSY`) | fixed |
 | Replaced credentials kept (as hashes) | 400 days | fixed |
+| Device enrollment code lifetime | 300 seconds. Whole seconds from 60 to 900. | `deviceEnrollmentCode.lifetime` |
+| Device enrollment codes per call | 1. From 1 to 10. | `deviceEnrollmentCode.batch` |
+| Supervisor approval lifetime | 60 seconds. Whole seconds from 10 to 300. | `approval.lifetime` |
 
 ## The audit log
 

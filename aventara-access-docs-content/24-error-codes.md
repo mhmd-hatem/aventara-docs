@@ -27,13 +27,14 @@ try {
 |---|---|---|
 | `ACCESS_BETTER_AUTH_VERSION` | `better-auth` is missing, or outside `~1.7.12` (1.7.12 or a later 1.7 patch). Under `mcp` or `audience`, `@better-auth/oauth-provider` or `@better-auth/cimd` outside it. | `npm i better-auth@~1.7.12`. Under `mcp` or `audience`, also `npm i @better-auth/oauth-provider@~1.7.12 @better-auth/cimd@~1.7.12`. |
 | `ACCESS_CLAIMS_UNDECLARED` | The rules or the guardrails read a claim, or a token carries one, that `policies.claims` does not declare | Declare the claim in `policies.claims` |
-| `ACCESS_PLUGIN_DUPLICATE` | `betterAuth.plugins` holds `jwt()` or `aventaraAccess()`, which `createAccess` installs itself. Or a second Access plugin beside `aventaraAccess()`. Or one `aventaraAccess()` in two Better Auth instances whose options differ. Or a plugin that defines `jwt()`'s endpoints, Access's `/me`, (kiosk profile) anything under `/kiosk/`, or (registry on) a registry route. | Remove it from the plugins |
+| `ACCESS_PLUGIN_DUPLICATE` | `betterAuth.plugins` holds `jwt()` or `aventaraAccess()`, which `createAccess` installs itself. Or a second Access plugin beside `aventaraAccess()`. Or one `aventaraAccess()` in two Better Auth instances whose options differ. Or a plugin that defines `jwt()`'s endpoints, Access's `/me`, or (registry on) a registry route. | Remove it from the plugins |
 | `ACCESS_OPTIONS_INVALID` | An option Access does not take or cannot accept. [Every case is below.](#access_options_invalid) | Follow the message |
+| `ACCESS_KIOSK_UNSUPPORTED` | Better Auth's plugins hold the kiosk plugin (`@aventara/better-auth-kiosk`) with facts of a version this Access does not read | Install the `@aventara/better-auth-kiosk` release that matches this `@aventara/access` |
 | `ACCESS_RESOURCE_MISSING` | A table `resources` opens is missing: Better Auth lacks its plugin, or the rules' schema lacks its Resource. Or the organization bridge without `organization()`. | Add the plugin, or run `npx auth@~1.7.12 generate --yes` and regenerate the model |
 | `ACCESS_LOCK_MISMATCH` | A pulled file no longer hashes to its pin in `avAccess.lock.json`, the engine was given files the lock does not pin, or `requireLock` is set and no lock was given | Run `avaccess pull` again. Never edit a pulled file. Pass the lock. |
-| `ACCESS_KEY_REFUSED` | A registry key that is wrong, revoked, rotated out or another namespace's (`401`), or a pull key that pushes (`403`) | Use the namespace's current key of the right kind |
+| `ACCESS_KEY_REFUSED` | A registry key that is wrong, revoked, rotated out or another namespace's (`401`), or a pull key that pushes (`403`). Also a `rotateKey` (or `avaccess keys rotate`) that another rotation or revocation of the same key overtook; it issues nothing. | Use the namespace's current key of the right kind |
 | `ACCESS_OWNERSHIP` | A pushed file names a Resource another namespace owns, or one the operator has not assigned it (`ownership: "assigned"`), or the org's guardrails grant (`403`) | Grant only on your own Resources. Ask the owner or the operator, or add a guardrail. |
-| `ACCESS_POLICIES_INVALID` | A pushed file is not a file the engine would run from (`400`), or is over 1 MiB (`413`) | Push the `.contract()` of your rules, or the pulled file unchanged |
+| `ACCESS_POLICIES_INVALID` | A pushed file is not a file the engine would run from (`400`), or is over 1 MiB (`413`). That includes a rule with `null` inside an `in` or `notIn` list, and an empty condition below a rule's root ([Rules](/docs/rules)). | Push the `.contract()` of your rules, or the pulled file unchanged |
 | `ACCESS_NAMESPACE` | A namespace name that is not one, one the registry does not have, or one it has already | Check the name. Use `keys rotate` for an existing namespace. |
 | `ACCESS_REVISION_CHANGED` | A stored revision no longer hashes to its key: it was changed outside the registry (`500`) | Restore the registry's tables, and push the file again |
 | `ACCESS_FOREIGN_CROSS_DATABASE` | The rules read another namespace's Resources as foreign, and this service is on another database: the owner's beacon as its connection reads it is missing or not the one the owner pushed, or the owner pushed none (`403`) | Run the service on the owner's database, or carry the fact in a JWT claim (`policies.claims`) |
@@ -48,34 +49,28 @@ One code, many causes. The message names the option and the reason. The cases, b
 |---|---|
 | Options | An option or block `createAccess` does not take, or cannot read. `accessOf` given an instance without `aventaraAccess()`. |
 | Base URL and cookies | No base URL to fix the tokens' issuer. A session cookie with `sameSite: "none"` and no `trustedOrigins`. |
+| Origin and CSRF checks | `advanced.disableOriginCheck` or `advanced.disableCSRFCheck`, or the same checks turned off in Better Auth's context. Better Auth's test mode (the `TEST` environment variable) outside NODE_ENV=test. A `trustedOrigins` entry whose host is a wildcard alone (`"*"`, `"http://*"`). See [Instead of turning the CSRF check off](/docs/hosts#instead-of-turning-the-csrf-check-off) and [Trusted origins and wildcards](/docs/hosts#trusted-origins-and-wildcards). |
 | Claims and principal | A claim read from a user field a user can set (no `input: false`). A `principal` object shared by two users. |
-| User ids | Better Auth's numeric ids (`advanced.database.generateId: "serial"`), in every app and in `avaccess serve` and `avaccess keys` ([User ids](/docs/create-access#user-ids)). |
+| User ids | Better Auth's numeric ids (`advanced.database.generateId: "serial"`) and ids the database makes (`advanced.database.generateId: false`, or `advanced.generateId: false`), in every app and in `avaccess serve` and `avaccess keys` ([User ids](/docs/create-access#user-ids)). |
 | Passwords | `passwords` set beside your own `emailAndPassword.password`. Node.js 22 without `@node-rs/argon2`. |
 | Better Auth tables | A grant on a table `resources` leaves closed. Better Auth off its Prisma adapter without `resources.authTables`. An opened table whose secret column is not found. |
 | Organizations | An organization plugin without `requireEmailVerificationOnInvitation: true` under `resources.members` or the bridge. Under the bridge: one that lets any user create an organization, or that maps a role dynamic access control lets admins name. |
-| MCP and `audience` | No OAuth provider, or two. One listed before `aventaraAccess()`. `disableJwtPlugin`. A resource missing from its `resources`. No `aventara:read` among its `scopes`. A `refreshTokenReuseInterval` other than 0. A `validateRedirectUri`, a `requestUriResolver` or a `postLogin.consentReferenceId`. `allowUnauthenticatedClientRegistration` without `mcp.openRegistration` (never under `audience` alone). A resource that is the provider's UserInfo URL. The `service` profile. Under `mcp`, an http issuer off `127.0.0.1` and `[::1]`. Under `audience`, `enforcePerClientResources: false`, and, beside `mcp`, the audience in `clientRegistrationDefaultResources` or `clientRegistrationAllowedResources`. |
-| Profiles | A `profile` of two kinds, or the kiosk's keys on another kind. |
-| Kiosk | Better Auth's cookie cache. `secondaryStorage` with sessions kept out of the database. `bearer()` or `multiSession()`. `crossSubDomainCookies` or `SameSite=None`. A plain http: base URL off a loopback host and off `insecureLan`. A dynamic `baseURL` that serves a non-loopback host over http:. |
-| `insecureLan` | A range that is not a canonical private IPv4 CIDR of /16 or narrower. An empty or repeated list. A base URL that is a hostname, IPv6, outside every range, or dynamic. A cookie setting that makes a cookie `Secure`. |
+| MCP and `audience` | No OAuth provider, or two. One listed before `aventaraAccess()`. `disableJwtPlugin`. A resource missing from its `resources`. No `aventara:read` among its `scopes`. A `refreshTokenReuseInterval` other than 0. A `validateRedirectUri`, an `allowInsecureRedirectUri`, a `requestUriResolver` or a `postLogin.consentReferenceId`. `allowUnauthenticatedClientRegistration` without `mcp.openRegistration` (never under `audience` alone). A resource that is the provider's UserInfo URL. The `service` profile. Under `mcp`, an http issuer off `127.0.0.1` and `[::1]`. Under `audience`, `enforcePerClientResources: false`, and, beside `mcp`, the audience in `clientRegistrationDefaultResources` or `clientRegistrationAllowedResources`. |
+| Profiles | A `profile` that is not `web` or `service`: `kind: "kiosk"` and the kiosk's keys included, since kiosk mode moved to `@aventara/better-auth-kiosk` ([Upgrading](/docs/upgrading)). |
+| Kiosk plugin | The kiosk plugin under the `service` profile. Beside the kiosk plugin, a plain http: IPv4 base URL written in another form than dotted decimal (`http://3232235786`). The plugin refuses the rest of the Better Auth options that break a device-bound session itself, with `KIOSK_OPTIONS_INVALID` ([Kiosk mode](/docs/kiosk#what-the-kiosk-refuses)). |
+| Onboarding plugin | The onboarding plugin with facts of a version this Access does not read. Off Better Auth's Prisma adapter, a `resources.authTables` that does not name the plugin's tables. |
+| Registry | The registry on Better Auth's memory adapter, or with no `database` (which Better Auth runs on that adapter): the registry's keys, owners and heads rest on unique indexes the memory adapter does not enforce. |
 
-## Kiosk and password codes
+## Plugin and password codes
 
-These are Better Auth `APIError` codes from Access's routes.
+These are Better Auth `APIError` codes. The kiosk plugin's codes (`KIOSK_*`, `INVALID_USER_OR_PIN`, `PIN_TOO_WEAK` and
+the rest) are on [Kiosk mode](/docs/kiosk#tables-and-codes), and the onboarding plugin's on
+[Onboarding](/docs/onboarding#tables-and-codes).
 
 | Code | Status | When |
 |---|---|---|
-| `KIOSK_DEVICE_NOT_ENROLLED` | 401 | The request brings no current device credential |
-| `INVALID_USER_OR_PIN` | 401 | A wrong PIN, a user with none, or no such user (`400` for a PIN that is not 6 to 12 digits) |
-| `KIOSK_PIN_LOCKED` | 429 | The user's backoff on this device, or the device's limit. `X-Retry-After` says when. |
-| `KIOSK_PIN_DISABLED` | 403 | 100 wrong PINs in a row for this user on this device |
-| `KIOSK_DEVICE_BUSY` | 409 | Two switches on one device at once, or a request or sign-in with the credential the last switch replaced within 30 seconds |
-| `KIOSK_FULL_CREDENTIAL_REQUIRED`, `SESSION_NOT_FRESH` | 403 | Enrolling, listing, revoking or setting a PIN from a PIN session, or a session older than `freshAge` |
-| `KIOSK_ENROLL_REFUSED` | 403 | `canEnrollDevice` did not answer `true` |
-| `KIOSK_SESSION_NOT_ALLOWED` | 403 | A PIN session on a route it does not reach, a bound session asking for a token or managing OAuth clients or consents, or a sign-in on a till that would resume an authorization request |
-| `KIOSK_DEVICE_NOT_FOUND` | 404 | Revoking a device that is not enrolled |
-| `USER_NOT_FOUND` | 404 | `kioskSetUserPin` for no such user |
-| `PIN_TOO_WEAK` | 400 | A PIN that is not 6 to 12 digits, or one a guesser tries first |
 | `PASSWORD_TOO_LONG` | 400 | A password longer than Better Auth's `emailAndPassword.maxPasswordLength` (128 by default) |
+| `BANNED_USER` | 403 | `GET /token` for a user Better Auth's admin plugin holds banned ([createAccess](/docs/create-access)) |
 
 ## Framework codes you will see
 

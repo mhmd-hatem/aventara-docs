@@ -40,7 +40,7 @@ A verb the instance does not serve is left out:
 - `signUp` is left out with `disableSignUp`.
 - A path in `disabledPaths` takes its verb out.
 - The `service` profile has no `signIn` or `signUp`.
-- The kiosk profile adds `switchUser` and its other verbs ([The kiosk profile](/docs/kiosk)).
+- The kiosk plugin in `betterAuth.plugins` adds `switchUser` and its other verbs ([Kiosk mode](/docs/kiosk)).
 
 ## Calling a verb on the server
 

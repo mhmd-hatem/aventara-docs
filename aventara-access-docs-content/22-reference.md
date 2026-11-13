@@ -16,12 +16,13 @@ is a file of another format.
 |---|---|---|
 | `aventara-access/policies@1` | `format`, `namespace` (optional), `claims`, `schema`, `roles`, `govern`, `governModes` (optional), `grants`, `denies` | `.contract()`, `avaccess pull` |
 | `aventara-access/guardrails@1` | `format`, `claims`, `denies` | `defineGuardrails(…).contract()`, `avaccess pull` |
-| `aventara-access/lock@1` | `format`, `namespace`, `policies`, `guardrails`, `foreign` (optional) | `avaccess pull` |
+| `aventara-access/lock@1` | `format`, `namespace`, `policies`, `guardrails`, `foreign` (optional), `clients` (optional: the generated clients' files, each once) | `avaccess pull`; `avaccess generate` adds its `--out` to `clients`, and `--prune` drops the ones whose files are gone |
 | `aventara-access/foreign@1` | `format`, `namespace`, `schema` (the owners' entries, each marked `foreign`) | `avaccess pull --foreign` |
 | `aventara-access/beacons@1` | `format`, `namespace`, `environment`, `beacons` (owner to beacon hash) | `avaccess pull --env` |
 
 A policies file's schema entry lists, beside its fields, the nullable ones (`nullable`) and the ones `can` compares by
-type (`types`: `bigint`, `datetime` or `decimal`). A rule's literal is written in its field's canonical form. The engine
+type (`types`: `bigint`, `datetime` or `decimal`). `nullable` decides where `scopeOf` adds an IS NULL branch to a deny's
+negation ([Rules](/docs/rules)). A rule's literal is written in its field's canonical form. The engine
 checks every member of a file it is handed, and refuses a number JSON cannot carry (`NaN`, `Infinity`).
 
 ## Hashes
@@ -75,4 +76,4 @@ copy of the file.
 
 ## Error codes
 
-Refusals from `createAccess`, the registry and the engine are `AccessError`, exported from `@aventara/access`, each with a `code`. [Error codes](/docs/error-codes) lists every code with its fix, and every case of `ACCESS_OPTIONS_INVALID`. The kiosk's codes are on [The kiosk profile](/docs/kiosk#tables-and-codes).
+Refusals from `createAccess`, the registry and the engine are `AccessError`, exported from `@aventara/access`, each with a `code`. [Error codes](/docs/error-codes) lists every code with its fix, and every case of `ACCESS_OPTIONS_INVALID`. The kiosk plugin's codes are on [Kiosk mode](/docs/kiosk#tables-and-codes), and the onboarding plugin's on [Onboarding](/docs/onboarding#tables-and-codes).

@@ -101,7 +101,7 @@ its next sign-in.
 - An account with two-factor on may not be rehashed by a password sign-in that its second step holds back: once
   two-factor's hook has ended the session that sign-in opened, there is none to rehash for.
 - With your own `emailAndPassword.password` hook, Access rehashes nothing.
-- Kiosk PINs move the same way at the next switch ([The kiosk profile](/docs/kiosk)).
+- Kiosk PINs are hashed again only by a `pinHasher` that says when a hash is outdated ([Kiosk mode](/docs/kiosk)).
 
 ## Moving off scrypt
 
@@ -126,4 +126,5 @@ It computes the same function, and Access writes and reads the PHC strings itsel
 verifies on Node.js 24 and back. On Node.js 24 it is never loaded. On Node.js 22 without it, `createAccess` refuses
 with `ACCESS_OPTIONS_INVALID`, unless you hash passwords yourself.
 
-Kiosk PINs are hashed with argon2id at the same profile ([The kiosk profile](/docs/kiosk)).
+Kiosk PINs are hashed by Better Auth's password hasher, so under `createAccess` with argon2id at the same profile
+([Kiosk mode](/docs/kiosk)).

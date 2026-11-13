@@ -155,8 +155,9 @@ app decided:
 
 - `requireEmailVerificationOnInvitation` must be `true`. Better Auth's advisory
   [GHSA-fmh4-wcc4-5jm3](https://github.com/better-auth/better-auth/security/advisories/GHSA-fmh4-wcc4-5jm3) lets a
-  user whose email is not verified accept an invitation sent to that email without it. Better Auth has no fixed
-  version, and `npm audit` reports 1.7.14 as clean because the advisory database's entry is out of date.
+  user whose email is not verified accept an invitation sent to that email without it. Better Auth fixed it in 1.7.16
+  (its advisory lists `>= 1.6.14, < 1.7.16`), and `npm audit` reports the affected 1.7.12 to 1.7.15 as clean because
+  the GitHub advisory database's entry is out of date. Access refuses the plugin without the flag on every version.
 - `allowUserToCreateOrganization` must be `false`, or a function that decides who may.
 - With `dynamicAccessControl` on, `roles` may map only the plugin's static roles.
 
