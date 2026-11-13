@@ -7,11 +7,39 @@ section: about
 
 # Changelog
 
-`1.0.0-rc.0` was the first release candidate, `1.0.0-rc.1` the second, `1.0.0-rc.2` the third, `1.0.0-rc.3` the fourth, `1.0.0-rc.4` the fifth, `1.0.0-rc.8` the sixth, `1.0.0-rc.9` the seventh, `1.0.0-rc.10` the eighth, `1.0.0-rc.11` the ninth, `1.0.0-rc.12` the tenth, `1.0.0-rc.13` the eleventh and `1.0.0-rc.14` is the twelfth (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published); the releases before them are pilots, and a pilot's API could change. A release candidate changes the API only to fix what testing finds. Pin exact versions. All `@aventara/*` packages are released together at one version. Each package also ships this history for itself as a `CHANGELOG.md` beside its README.
+`1.0.0-rc.0` was the first release candidate, `1.0.0-rc.1` the second, `1.0.0-rc.2` the third, `1.0.0-rc.3` the fourth, `1.0.0-rc.4` the fifth, `1.0.0-rc.8` the sixth, `1.0.0-rc.9` the seventh, `1.0.0-rc.10` the eighth, `1.0.0-rc.11` the ninth, `1.0.0-rc.12` the tenth, `1.0.0-rc.13` the eleventh, `1.0.0-rc.14` the twelfth and `1.0.0-rc.15` is the thirteenth (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published); the releases before them are pilots, and a pilot's API could change. A release candidate changes the API only to fix what testing finds. Pin exact versions. All `@aventara/*` packages are released together at one version. Each package also ships this history for itself as a `CHANGELOG.md` beside its README.
+
+## 1.0.0-rc.15
+
+The current release, published under the `rc` dist-tag (install with `@rc`). A compute stage's return is type-checked, stage types read the root's field definitions, and every generated file passes a default `biome check`. No Contract changes. Run the generate steps once after upgrading. Upgrading from rc.14: see [Upgrading](/docs/upgrading#from-100-rc14-to-100-rc15).
+
+**Stage types**
+
+- A compute stage's return is typed by its field, so a wrong return is a type error instead of an `A3000` at run time. A discovered field takes its model type and an added `VIRTUAL` field takes the type in its `definition`, in the root, in overlays, in `defineResource` blocks and inline. A Decimal is an `AvDecimal`, a datetime a `Date`, a list an array, an enum one of its members, and `null` fits only a nullable field. Returning `undefined`, or not returning at all, still keeps the current value. A Json field takes any JSON value, and its shape is still checked at run time; type a Json value with a `type` alias, not an `interface`.
+- `AvComputeCreate`, `AvComputeUpdate`, `AvComputeRead`, `AvFieldCompute` and `AvScalarFieldPipeline` take an optional last type argument for the value, `unknown` by default. Code that no longer compiles: a stage that returns one of its `unknown` inputs (`return data.title`), a stage annotated without the field's value type (write `AvComputeCreate<Model, string>`), and a bare enum literal in a `defineResource` block or inline (write `() => "LIVE" as const`). A stage annotated for any model no longer turns off the checks of the other stages beside it.
+- `aventara-build` writes `src/generated/aventara/config-facts.generated.ts` after it compiles the Contracts, and the discovery artifact puts it on the model's type. A Json field the root shapes reads as its shape in a stage's `ctx` calls, in `tx` and in compute's read-only `ctx`. A `VIRTUAL` field the root adds is in a variant's typed `ctx.$args`, and a `ctx` create must write a non-null added input it can create. A compute stage on a shaped Json field returns the shape's type.
+- A variant's hooks and interceptors are told resolved arguments: their `ctx.$args` holds no `$ref` (`AvTransactionReference`). Guards, pipes and filters still may see one.
+- A write takes a shaped Json value read-only, deep, on every surface (`framework.application`, `ctx`, the generated client), so a frozen value, such as a stage's `ctx.$args`, fits as well as a mutable one.
+- Pipeline stages type-check faster: on one server application the check fell by about 40 %. A stage's `ctx.<Resource>.<family>` (and compute's `ctx.<Resource>.find`) is now named `AvContextFamilyFacade`, a new export of `@aventara/core`.
+
+**Generated files and build**
+
+- The discovery artifact's format is now 5: regenerate it with `aventara:prepare` (an artifact of format 4 is refused).
+- The startup warning `AVENTARA_STALE_GENERATED_TYPES` also names Json shapes and added fields that differ from the ones the generated types were written with. One stale build gives one warning, with a paragraph for each part that is stale, including a facts file it cannot read. `aventara-build --check` fails on a stale file.
+- Every file `avclient generate`, `aventara-build` (with `--client`'s `src/aventara/client.ts` and `src/aventara/universal.ts`) and `aventara-prisma7-generate` writes passes a default `biome check` as written, on Biome 2.4.0 and later: it opens with `biome-ignore-all` lines for formatting, lint and import order (`organizeImports`) and ends without a final line break. A file an earlier version wrote is reported stale by `aventara-build --check` and replaced by the next run.
+
+**Transactions**
+
+- A transaction plan's references are installed and resolved in time linear in their number. Before, the cost grew with the square of the references in one nested list, so a plan with a few thousand of them took seconds to validate. The plan's answer is unchanged.
+- The docs and skills say where a `$ref` works with a Json field: as the field's whole value, from another Json field. Inside a Json value nothing is read as a reference, and a Json value cannot have `$ref` as its own root key (`A2004`). No behaviour changed.
+
+**Agent skills**
+
+- The server skill's `SKILL.md` and `reference/stages.md` cover typed compute returns and the configuration's definitions, and its post recipe no longer returns an `unknown` input. The client skill says the generated files need no exclusion under Biome's default rules, and how to skip them in another linter or formatter.
 
 ## 1.0.0-rc.14
 
-The current release, published under the `rc` dist-tag (install with `@rc`). `avDehydrate` and `avHydrate` are typed, the SQLite wait diagnostic names its cause, and the error catalog and agent skills say more. No Contract changes. Upgrading from rc.13: see [Upgrading](/docs/upgrading#from-100-rc13-to-100-rc14).
+Published under the `rc` dist-tag before rc.15. `avDehydrate` and `avHydrate` are typed, the SQLite wait diagnostic names its cause, and the error catalog and agent skills say more. No Contract changes. Upgrading from rc.13: see [Upgrading](/docs/upgrading#from-100-rc13-to-100-rc14).
 
 **Next.js**
 
