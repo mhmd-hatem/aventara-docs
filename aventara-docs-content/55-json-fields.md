@@ -171,7 +171,7 @@ Filter operators for `Json` still depend on the database ([Enums and scalar type
 
 ## In your code and in the client
 
-With a shape declared, `framework.application`, `framework.client`, `framework.appTx`, `framework.clientTx` and the generated client read and write the field as the shape's type instead of generic JSON:
+With a shape declared, `framework.application`, `framework.client`, `framework.appTx`, `framework.clientTx`, a pipeline stage's `ctx` calls and typed `ctx.$args` (through the file `aventara:prepare` generates, [Pipeline context](/docs/pipeline-context#the-configurations-definitions)), a compute stage's return, and the generated client read and write the field as the shape's type instead of generic JSON:
 
 ```ts
 // server side
