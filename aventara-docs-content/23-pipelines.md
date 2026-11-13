@@ -121,7 +121,7 @@ validate the arguments against the contract: types, unknown fields, structure, a
                           and nested targets' in one pass (A3004, or A3000 for a computed value);
                           then the validators on the values compute set or changed (A2004), top
                           level then nested targets'; then the root's validators on a value
-                          compute set in a field the caller's layer hides (A3000)
+                          compute or a pipe set in a field the caller's layer hides (A3000)
 -> policy write check     only when a policy is configured: the checks on what a write is about to
                           write (see Policies)
    (a refusal so far runs no interceptor and no hook)

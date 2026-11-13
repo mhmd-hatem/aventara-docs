@@ -160,7 +160,7 @@ A call reads the database, so Next.js runs it at request time (Cache Components 
 | Share request information (the signed-in user) | `ctx.$state` | `AventaraModule`'s `state` option, or a call's `{ state }` |
 | Call another operation from a stage | `ctx.<Resource>.<family>.<variant>(args)` | the `ctx` every stage gets (compute can only read) |
 
-Order: framework validation → policy admission (with a policy) → guards (then a nested write's targets') → pipes (operation, then field; then a nested write's targets') → field validators and Json shapes on every value the caller sent, a field with a compute stage included (`A2004`) → write compute (create/update) → re-check (Aventara's checks on pipe and compute output: `A3004`, `A3000`; then validators and Json shapes on what compute set or changed: `A2004`; then the root's validators on what compute set in a field the caller's layer hides: `A3000`) → policy write check (with a policy) → interceptors → `hooks.before` → the operation (then compute read) → `hooks.after` → interceptors unwind → output validation; filters handle a failure. With `forceTransaction` or in a plan, framework validation, policy admission, guards, pipes and the validators of the caller's values run before `BEGIN` (`reference/stages.md`). `ctx` calls are raw: they run validation, field pipes, compute and validators, and none of your guards, pipes, hooks, interceptors or filters.
+Order: framework validation → policy admission (with a policy) → guards (then a nested write's targets') → pipes (operation, then field; then a nested write's targets') → field validators and Json shapes on every value the caller sent, a field with a compute stage included (`A2004`) → write compute (create/update) → re-check (Aventara's checks on pipe and compute output: `A3004`, `A3000`; then validators and Json shapes on what compute set or changed: `A2004`; then the root's validators on what compute or a pipe set in a field the caller's layer hides: `A3000`) → policy write check (with a policy) → interceptors → `hooks.before` → the operation (then compute read) → `hooks.after` → interceptors unwind → output validation; filters handle a failure. With `forceTransaction` or in a plan, framework validation, policy admission, guards, pipes and the validators of the caller's values run before `BEGIN` (`reference/stages.md`). `ctx` calls are raw: they run validation, field pipes, compute and validators, and none of your guards, pipes, hooks, interceptors or filters.
 
 ## The shape of a configuration
 
@@ -861,7 +861,7 @@ framework validation (required create fields included, top level and nested; a f
 -> compute      create or update (write compute), then nested targets'
 -> re-check     Aventara's own checks on the pipe and compute output, top level and nested targets' in one pass (A3004, A3000),
                 then validators and Json shapes on the values compute set or changed, top level then nested targets' (A2004),
-                then the root's validators on a value compute set in a field the caller's layer hides (A3000)
+                then the root's validators on a value compute or a pipe set in a field the caller's layer hides (A3000)
 -> policy write check   only with a policy: the checks on what the write is about to write; never filtered
 -> interceptors enter, outer to inner
 -> hooks.before

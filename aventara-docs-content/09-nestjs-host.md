@@ -134,7 +134,7 @@ Your own controllers may live beside it, for example `GET /api/health`, as long 
 
 The same Nest process can serve a built single-page app (a Vite or React build, the files of a desktop shell) beside the protocol. Serve its files, and answer `index.html` to a browser asking for any other page, so the app's own routes load on refresh.
 
-The fallback is `app.use` middleware, and on Express that runs before every route Nest registers: Aventara's ([What runs on Aventara routes](#what-runs-on-aventara-routes)) and your own controllers'. So it answers only a browser's page request (`GET`, an `Accept` header that names `text/html` itself, no file extension). A script's `Accept: */*`, the default of `curl` and `fetch`, is not a page request, so it falls through to a `404`, and it skips every path something else owns: `<api>` and everything under it, the MCP path and `/.well-known/` (the MCP endpoint's OAuth metadata lives there), and each of your own controllers outside `<api>`.
+The fallback is `app.use` middleware, and on Express that runs before every route Nest registers: Aventara's ([What runs on Aventara routes](#what-runs-on-aventara-routes)) and your own controllers'. So it answers only a browser's page request (`GET`, an `Accept` header that lists `text/html` itself, with a `q` other than `0`, no file extension). A script's `Accept: */*`, the default of `curl` and `fetch`, is not a page request, so it falls through to a `404`, and it skips every path something else owns: `<api>` and everything under it, the MCP path and `/.well-known/` (the MCP endpoint's OAuth metadata lives there), and each of your own controllers outside `<api>`.
 
 ```ts
 // src/main.ts (Express)
@@ -153,7 +153,13 @@ async function bootstrap() {
   app.useStaticAssets(client);
   app.use((req: Request, res: Response, next: NextFunction) => {
     const owned = notPages.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`));
-    const page = req.method === "GET" && /\btext\/html\b/.test(req.get("accept") ?? "") && extname(req.path) === "";
+    // A browser lists text/html itself; curl's and fetch's */* do not, and text/html;q=0 refuses it.
+    const wantsHtml = (req.get("accept") ?? "").split(",").some((entry) => {
+      const [type, ...params] = entry.split(";").map((part) => part.trim().toLowerCase());
+      const q = params.find((param) => param.startsWith("q="));
+      return type === "text/html" && (q === undefined || Number(q.slice(2)) > 0);
+    });
+    const page = req.method === "GET" && wantsHtml && extname(req.path) === "";
     if (page && !owned) {
       res.sendFile(join(client, "index.html"));
       return;
