@@ -172,21 +172,48 @@ The result type follows the `select`, as with a direct call. The modules that de
 npm install swr
 ```
 
-Read on the server with the universal client, and pass the result as SWR's `fallback`, dehydrated:
+With SWR, the data crosses as a prop. Type the prop `AvDehydrated<T>` (a type from `@/aventara/client`): on the server `avDehydrate(data)` is an `AvDehydrated<typeof data>`, and in the Client Component `avHydrate(fallback)` is the `T` again, its `Date`, `bigint` and `AvDecimal` values included. Neither side writes a cast, and a plain object, or data of another type, is a compile error on the prop. Name `T` from the read itself, so the server's read and the browser's are one function:
+
+```ts
+// src/app/drafts/drafts.queries.ts
+import { avClient } from "@/aventara/universal";
+
+export const readDrafts = () =>
+  avClient.Post.find.many({ where: { published: false }, select: ["id", "title", "publishedAt"] });
+```
+
+```tsx
+// src/app/drafts/drafts.tsx
+"use client";
+import useSWR, { SWRConfig } from "swr";
+import { type AvDehydrated, avHydrate } from "@/aventara/client";
+import { readDrafts } from "./drafts.queries";
+
+export type DraftsFallback = AvDehydrated<{ drafts: Awaited<ReturnType<typeof readDrafts>> }>;
+
+function DraftList() {
+  const { data } = useSWR("drafts", readDrafts);
+  return <ul>{data?.map((post) => <li key={post.id}>{post.title}</li>)}</ul>;
+}
+
+export function Drafts({ fallback }: { readonly fallback: DraftsFallback }) {
+  return (
+    <SWRConfig value={{ fallback: avHydrate(fallback) }}>
+      <DraftList />
+    </SWRConfig>
+  );
+}
+```
 
 ```tsx
 // src/app/drafts/page.tsx
 import { avDehydrate } from "@aventara/next";
 import { Suspense } from "react";
-import { avClient } from "@/aventara/universal";
 import { Drafts } from "./drafts";
+import { readDrafts } from "./drafts.queries";
 
 async function Prefetched() {
-  const drafts = await avClient.Post.find.many({
-    where: { published: false },
-    select: ["id", "title", "publishedAt"],
-  });
-  return <Drafts fallback={avDehydrate({ drafts })} />;
+  return <Drafts fallback={avDehydrate({ drafts: await readDrafts() })} />;
 }
 
 export default function Page() {
@@ -198,32 +225,9 @@ export default function Page() {
 }
 ```
 
-```tsx
-// src/app/drafts/drafts.tsx
-"use client";
-import useSWR, { SWRConfig } from "swr";
-import { avClient, avHydrate } from "@/aventara/client";
+The `fallback` key (`"drafts"`) is the `useSWR` key. Pass `avHydrate(fallback)` to `SWRConfig`, never `fallback` itself: SWR's `fallback` is typed `any`, so the compiler cannot catch that mistake.
 
-function DraftList() {
-  const { data } = useSWR("drafts", () =>
-    avClient.Post.find.many({
-      where: { published: false },
-      select: ["id", "title", "publishedAt"],
-    }),
-  );
-  return <ul>{data?.map((post) => <li key={post.id}>{post.title}</li>)}</ul>;
-}
-
-export function Drafts({ fallback }: { readonly fallback: unknown }) {
-  return (
-    <SWRConfig value={{ fallback: avHydrate(fallback) as Record<string, unknown> }}>
-      <DraftList />
-    </SWRConfig>
-  );
-}
-```
-
-The `fallback` key (`"drafts"`) is the `useSWR` key. `avHydrate` returns `unknown`, so the value is typed for `SWRConfig` where it is used. SWR runs its fetcher in the browser only, so `@/aventara/client` is enough here; the universal client works as well.
+Read the data you dehydrate through `@/aventara/universal`, as `readDrafts` does. `@/aventara/server` types a decimal as core's `AvDecimal`, while `avHydrate` revives it as the browser client's, so data read through `@/aventara/server` does not match the type the browser gets back.
 
 ## Mistakes to avoid
 
@@ -234,6 +238,7 @@ The `fallback` key (`"drafts"`) is the `useSWR` key. `avHydrate` returns `unknow
 | No `instrumentation.ts` awaiting `ready()` | The universal call on the server is refused, naming `instrumentation.ts` and `ready()`. |
 | `dehydrate` without `serializeData: avDehydrate` | React refuses to pass a decimal from the Server Component. |
 | No `deserializeData: avHydrate` in the browser | The query's data holds tagged objects (`{ "$av": "datetime", "v": "..." }`) instead of a `Date`. |
+| `SWRConfig value={{ fallback }}` with the dehydrated prop instead of `avHydrate(fallback)` | SWR's data holds tagged objects. SWR's `fallback` is typed `any`, so it compiles. |
 | One `QueryClient` shared by every request on the server | One user's prefetched data can reach another. Make one per request. |
 
 ## See also
