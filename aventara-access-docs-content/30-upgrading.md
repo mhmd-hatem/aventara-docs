@@ -16,6 +16,64 @@ matches the new release ([the CLI](/docs/registry-and-cli#a-services-commands)).
 1.0.0-rc.2 and earlier: on the way from 1.0.0-rc.1 to 1.0.0-rc.2, copy the skill out of
 `node_modules/@aventara/access/skill/` by hand, as that release's README says.
 
+## 1.0.0-rc.3 to 1.0.0-rc.4
+
+Access 1.0.0-rc.4 ships beside `@aventara/better-auth-kiosk` and `@aventara/better-auth-onboarding` 1.0.0-rc.4. It is
+tested with `better-auth` 1.7.17 and `@aventara/core` 1.0.0-rc.13, and still works with `better-auth` `~1.7.12` and
+`@aventara/core` 1.0.0-rc.10 or later. Move the plugins you use to the same release:
+
+```sh
+npm install --save-exact @aventara/access@1.0.0-rc.4
+npm install --save-exact @aventara/better-auth-kiosk@1.0.0-rc.4
+npm install --save-exact @aventara/better-auth-onboarding@1.0.0-rc.4
+```
+
+Then run `npx --no-install avaccess skill` again.
+
+### A till that is a native app (opt in)
+
+A browser till and an Expo till change nothing. A till that is a native app with no cookie jar (a Capacitor or Cordova
+WebView, an Electron app's main process, a native HTTP client) can now carry its PIN session in `Authorization: Bearer`
+and its device credential in a `kiosk-device` header
+([A till that is a native app](/docs/kiosk#a-till-that-is-a-native-app-headers)). To use it:
+
+1. Put `bearer({ requireSignature: true })` (from `better-auth/plugins`) in `plugins` before `kiosk()`. With the
+   onboarding plugin the order is `onboarding()`, then `bearer()`, then `kiosk()`. 1.0.0-rc.3 refused `bearer()`
+   beside the kiosk outright; now the kiosk refuses it (`KIOSK_OPTIONS_INVALID`) only without
+   `requireSignature: true` or when it is listed after `kiosk()`.
+2. Answer CORS for the app's origins, allowing the `authorization` and `kiosk-device` request headers and exposing the
+   `set-auth-token` and `set-kiosk-device` answer headers, with no credentials.
+3. Give the app an origin of its own (never `capacitor://localhost`, `https://localhost` or the server's host), list it
+   in `trustedOrigins`, and send it as `Origin` when the app's HTTP stack adds Fetch Metadata (Node's `fetch` sends
+   `Sec-Fetch-Mode: cors`). Without it Better Auth refuses a redeem or a sign-in with `403 MISSING_OR_NULL_ORIGIN`.
+4. Such a till calls `switch-user` and `enroll-device` itself: `access.client.verbs.switchUser.call` and
+   `enrollDevice.call` refuse (`400`) a request that carries its credentials in headers.
+
+### Everything else
+
+- **A signed bearer token is a credential.** With `bearer({ requireSignature: true })` among Better Auth's plugins, on
+  the `web` profile and without `audience`, a signed session token in `Authorization: Bearer` now makes the request
+  its user's in the framework, kiosk or not. Such a principal is refused every question under origin `agent`. If your
+  app lists signed `bearer()`, check that its tokens should reach your rules. Without `requireSignature: true`, a
+  bearer token is read only as Access's own token, as before.
+- **`KIOSK_DEVICE_BUSY` on SQLite.** A kiosk write SQLite refuses because another connection holds the file now
+  answers `409 KIOSK_DEVICE_BUSY` (and `kioskOf(auth)` throws it as Better Auth's `APIError`) instead of a `500`. Retry
+  once on it.
+- **`ACCESS_POLICIES_INVALID`.** A rule or a guardrail the engine cannot run is refused with an `AccessError` whose
+  `code` is `ACCESS_POLICIES_INVALID` (`.contract()`, `.engine()`, `createAccessEngine`, `createAccess`,
+  `defineGuardrails`, `policiesHash`). It was a plain `Error` with no code; the messages are the same. Code that
+  tells these apart by class or by a missing `code` should read the code.
+- **`TS2883` under pnpm with `declaration: true`.** An exported `createAccess` instance with `admin()`, `twoFactor()`
+  or `passkey()` fails with `TS2883` (or `TS2742`). Annotate the export with
+  `Access<BetterAuthOptions, typeof claims, Governed, Principal>`, which now takes any `createAccess` instance, or set
+  `"declaration": false` ([Better Auth's tables](/docs/create-access#better-auths-tables)).
+- **`avaccess verify --client`** with a file that is not a `.ts` file inside the project exits `2` (the command could
+  not run), not `1`. A script that reads exit `1` as a stale client should treat `2` as a broken call.
+- **`access.client.verbs.me.call` no longer counts as a till's use** of its session (the `idleTimeout` timer),
+  whatever the method of the request it stands for. A till kept open only by calls to `me` now locks when idle.
+- **Fixed, and a reason to move:** with the kiosk and the onboarding plugins together, a till's framework requests
+  other than reads answered `500` from about 15 seconds after each PIN switch.
+
 ## 1.0.0-rc.2 to 1.0.0-rc.3
 
 Access 1.0.0-rc.3 ships beside two new Better Auth plugins, `@aventara/better-auth-kiosk` and

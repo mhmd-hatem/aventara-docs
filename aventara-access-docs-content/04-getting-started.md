@@ -16,8 +16,11 @@ You need Node.js `^22.23.4 || >=24.22.1` and a PostgreSQL database. For Next.js,
 ```sh
 npx @aventara/cli@rc new notes-api --orm prisma7 --db postgresql --package-manager npm
 cd notes-api
-npm install --save-exact @aventara/access@rc better-auth@~1.7.12
+npm install --save-exact @aventara/access@rc better-auth@1.7.17
 ```
+
+`1.7.17` is the Better Auth release Access is tested with; any 1.7 patch from 1.7.12 runs too. Name one exact
+version: given a range (`better-auth@~1.7.12`), pnpm records a range even with `--save-exact`.
 
 npm 11 may print `npm warn install-scripts ... @prisma/engines, prisma ... not yet covered by allowScripts` after the install. It is expected, and the install still works.
 

@@ -538,10 +538,14 @@ user, and `onboardingPasskeyVerified` checks the ticket again and binds the pass
 false` the passkey plugin no longer asks a signed-in user's registration for a fresh session, so
 `onboardingPasskeyVerified` does (`SESSION_NOT_FRESH`), whether or not `passkeyStep()` is listed.
 
-Under pnpm with `declaration: true`, exporting the Better Auth instance (or its options) with `passkey()` in its
-plugins fails with `TS2883` or `TS2742`: the inferred type names `@simplewebauthn/server`'s and zod's types, which
-Better Auth's own types reach and your project does not depend on. This is Better Auth's typing, not the onboarding
-plugin's. Give the export a type annotation, or keep it unexported.
+Under pnpm with `declaration: true`, exporting the Better Auth instance (or its options, or the `createAccess`
+instance) with `passkey()`, `twoFactor()` or `admin()` in its plugins fails with `TS2883` or `TS2742`: the inferred
+type names zod's (and `passkey()`'s `@simplewebauthn/server`'s) types, which Better Auth's own types reach and your
+project does not depend on. This is Better Auth's typing, not the onboarding plugin's. Annotate the export: a
+`createAccess` instance with `Access<BetterAuthOptions, …>` ([Better Auth's tables](/docs/create-access#better-auths-tables)
+says what the four types are). Better Auth's own `Auth<BetterAuthOptions>` does not take an instance with plugins, so
+keep a Better Auth instance of your own unexported, or, in a server app that ships no declaration files, set
+`"declaration": false` in its `tsconfig.json`.
 
 Without `twoFactor()`, or with a method it does not offer (`otp` needs `otpOptions.sendOTP`; `totpOptions.disable`
 turns `totp` off), or with `passkeyStep()` and the passkey plugin not wired as above, the plugin refuses to start.

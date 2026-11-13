@@ -261,6 +261,10 @@ Any object with `policy` (an engine) and `state` (`({ headers }) => ({ me })`) a
 option, so an app with its own authentication gets the same wiring. With `access`, the configuration has no `policy`
 and the host has no `state` option: either one beside it is refused at startup.
 
+A host of its own passes `ctx.$state.me` to the policy as it is, by reference: a copy (a spread, `structuredClone`)
+loses the marks Access puts on the principal (an OAuth access token's grant, a session bearer's), and the policy would
+then answer the copy as the user's own principal under every origin.
+
 ## Standalone
 
 `serve` runs Access as its own HTTP server around the same handler, with `GET /health` answering `200 {"status":"ok"}`:
@@ -405,7 +409,9 @@ export const devIdentityState = (request: unknown): AvState => {
 	) {
 		return {};
 	}
-	const user: Principal = { id, claims: {} };
+	// Every boolean claim a deny compares, set: a deny such as `banned: true` matches a
+	// principal that lacks the claim, so a user without it would be refused everything.
+	const user: Principal = { id, claims: { banned: false } };
 	return { user };
 };
 ```
@@ -496,7 +502,14 @@ the refusal. What a request needs instead depends on who sends it:
 
 - **An API that clients call with bearer tokens, and no cookies.** Nothing to turn off: Better Auth checks the origin
   of a request that carries a cookie, and Access reads `Authorization: Bearer <token>` with the JWT `GET /token`
-  issues. Signing in is the exception: sign-in, sign-up, magic-link and email-OTP requests from a browser are checked
+  issues. With Better Auth's `bearer({ requireSignature: true })` among the plugins, a signed session token (the
+  `set-auth-token` a sign-in answers) is a bearer token too: Access reads its session through Better Auth with every
+  cookie stripped, so the bearer alone decides. A different session cookie beside it makes the request nobody's;
+  other cookies are ignored. It is not read under `audience` or the `service` profile, and the policy refuses its
+  principal on the MCP endpoint (origin `agent`, rule `mcp-audience`). A kiosk till that is a native app works this
+  way ([A till that is a native app](/docs/kiosk#a-till-that-is-a-native-app-headers)); its server answers CORS with
+  `authorization` and `kiosk-device` allowed and `set-auth-token` and `set-kiosk-device` exposed. Signing in is the
+  exception: sign-in, sign-up, magic-link and email-OTP requests from a browser are checked
   even with no cookie (their `Origin`, and Fetch Metadata's `Sec-Fetch-*` headers), so a browser client served from
   another origin must have that origin in `trustedOrigins` to sign in.
 - **A native or mobile app that sends no `Origin`.** List its scheme in `trustedOrigins` (`myapp://`) and send it as
