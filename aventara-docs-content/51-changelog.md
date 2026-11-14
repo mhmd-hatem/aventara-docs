@@ -27,6 +27,8 @@ The current release, published under the `rc` dist-tag (install with `@rc`). A c
 - The discovery artifact's format is now 5: regenerate it with `aventara:prepare` (an artifact of format 4 is refused).
 - The startup warning `AVENTARA_STALE_GENERATED_TYPES` also names Json shapes and added fields that differ from the ones the generated types were written with. One stale build gives one warning, with a paragraph for each part that is stale, including a facts file it cannot read. `aventara-build --check` fails on a stale file.
 - Every file `avclient generate`, `aventara-build` (with `--client`'s `src/aventara/client.ts` and `src/aventara/universal.ts`) and `aventara-prisma7-generate` writes passes a default `biome check` as written, on Biome 2.4.0 and later: it opens with `biome-ignore-all` lines for formatting, lint and import order (`organizeImports`) and ends without a final line break. A file an earlier version wrote is reported stale by `aventara-build --check` and replaced by the next run.
+- When a stage does not type-check, `aventara-build` prints the type errors and keeps `computed-fields.generated.ts` as it was, now logged as `kept (configuration does not type-check)` instead of `unchanged`. It still exits 0, so the install completes; fix the errors, then run `aventara:prepare` again.
+- `npx --package <@aventara/cli spec or tarball> aventara new` works: the commands `aventara` runs no longer inherit the outer `npx`'s package setting.
 
 **Transactions**
 
