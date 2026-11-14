@@ -227,6 +227,8 @@ Writes or refreshes the frontend's agent skill in `.claude/skills/aventara-clien
 
 `avclient generate` takes only `--yes`; everything else it needs is in `framework.client.ts` ([Frontend client](/docs/frontend-client)). `--yes` overwrites or removes content in `AvClient.ts` or `generated/` that the generator did not produce, without asking. Without it such content is listed and you are asked; with no terminal (CI) the run is refused and nothing is touched.
 
+The generated files pass a default `biome check` as written (Biome 2.4 or later), so a project on Biome's default rules needs no exclusion for them. A rule or assist you turn on beyond the defaults, such as `useSortedKeys`, is not covered. Another linter or formatter should skip `AvClient.ts` and `generated/` under `generateAt` through its own ignore setting, such as `ignores` in an ESLint flat config or a `.prettierignore` line.
+
 ### Refusals and errors
 
 The messages:
