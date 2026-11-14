@@ -76,7 +76,7 @@ aventara: warning: src/main.ts was not edited: it has no `const app = await Nest
 
 ## The build step and where generated files go
 
-`init` adds `@aventara/build` as a dev dependency and ends the `aventara:prepare` script with `aventara-build`. Aventara's generated files (the discovery artifact, `resources.generated.ts`, `computed-fields.generated.ts` and `contracts.generated.ts`) go in `src/generated/aventara/`. When your Prisma client is already generated into `src/generated`, they go in `src/aventara/` instead, because `prisma generate` empties its own output directory and would delete them. `src/aventara.config.ts` then imports the Resource tree from `./aventara/resources.generated`, and `.gitignore` gets one `/src/aventara/` line that covers all four files. What each file is: [Deploying](/docs/deploying#build-time-contracts).
+`init` adds `@aventara/build` as a dev dependency and ends the `aventara:prepare` script with `aventara-build`. Aventara's generated files (the discovery artifact, `resources.generated.ts`, `computed-fields.generated.ts`, `config-facts.generated.ts` and `contracts.generated.ts`) go in `src/generated/aventara/`. When your Prisma client is already generated into `src/generated`, they go in `src/aventara/` instead, because `prisma generate` empties its own output directory and would delete them. `src/aventara.config.ts` then imports the Resource tree from `./aventara/resources.generated`, and `.gitignore` gets one `/src/aventara/` line that covers all four files. What each file is: [Deploying](/docs/deploying#build-time-contracts).
 
 ## After init
 

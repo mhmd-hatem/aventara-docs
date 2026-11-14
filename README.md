@@ -77,7 +77,7 @@ The public launch enables indexing on Vercel production (`VERCEL_ENV=production`
 
 Publication was authorized on 31 October 2026. Deploy production directly to the intended Vercel account. The maintainer noted that the GitHub integration belongs to a different account; do not use a `main` push as a substitute for direct deployment. Before subsequent releases:
 
-1. Recheck npm releases and update `currentVersion` plus its matching version entry in the registry. The site is prepared for Framework `1.0.0-rc.14` and Access `1.0.0-rc.2` as requested in the 31 October handoff. The maintainer explicitly chose to publish these upcoming labels while npm still has Framework rc.11 and Access rc.1.
+1. Recheck npm releases and update `currentVersion` plus its matching version entry in the registry. The site is prepared for Framework `1.0.0-rc.15` and Access `1.0.0-rc.2` as requested in the 31 October handoff. The maintainer explicitly chose to publish these upcoming labels while npm still has Framework rc.11 and Access rc.1.
 2. Pull any final content commits from both release content branches. Both sources are available in this repository for cloud builds.
 3. Run tests, the production build, and built-output verification.
 4. Attach `aventara.razor34.dev` to the existing Vercel project before deploying the old-host redirects. Check redirects and fragments on the deployed hosts.

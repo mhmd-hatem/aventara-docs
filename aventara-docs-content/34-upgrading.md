@@ -1,13 +1,58 @@
 ---
 title: Upgrading
-description: Move from 1.0.0-rc.13 to 1.0.0-rc.14 (typed avDehydrate and avHydrate), from 1.0.0-rc.12 to 1.0.0-rc.13 (the transaction write limit, validators before compute, 401 and 403 from state), from 1.0.0-rc.11 to 1.0.0-rc.12 (lookup keys need filter, the scaffold's String ids), from 1.0.0-rc.8 to 1.0.0-rc.11 (Node and Prisma floors, stricter policy checks, grouped client calls, regenerate clients), from 1.0.0-rc.4 to 1.0.0-rc.8 (rebuild after a discovery change, policy additions, request type names), from 1.0.0-rc.3 to 1.0.0-rc.4 (build-time Contracts, the policy seam), from 1.0.0-rc.2 to 1.0.0-rc.3, from 1.0.0-rc.1 to 1.0.0-rc.2, from 1.0.0-rc.0 to 1.0.0-rc.1 (the new configuration shape, Av names, the $ ctx members) and from earlier pilots step by step, and the general flow for upgrading Aventara packages.
+description: Move from 1.0.0-rc.14 to 1.0.0-rc.15 (typed compute returns, stage types from the configuration's definitions, regenerate once), from 1.0.0-rc.13 to 1.0.0-rc.14 (typed avDehydrate and avHydrate), from 1.0.0-rc.12 to 1.0.0-rc.13 (the transaction write limit, validators before compute, 401 and 403 from state), from 1.0.0-rc.11 to 1.0.0-rc.12 (lookup keys need filter, the scaffold's String ids), from 1.0.0-rc.8 to 1.0.0-rc.11 (Node and Prisma floors, stricter policy checks, grouped client calls, regenerate clients), from 1.0.0-rc.4 to 1.0.0-rc.8 (rebuild after a discovery change, policy additions, request type names), from 1.0.0-rc.3 to 1.0.0-rc.4 (build-time Contracts, the policy seam), from 1.0.0-rc.2 to 1.0.0-rc.3, from 1.0.0-rc.1 to 1.0.0-rc.2, from 1.0.0-rc.0 to 1.0.0-rc.1 (the new configuration shape, Av names, the $ ctx members) and from earlier pilots step by step, and the general flow for upgrading Aventara packages.
 order: 34
 section: guides
 ---
 
 # Upgrading
 
-Aventara `1.0.0-rc.14` is the twelfth published release candidate (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were tagged but never published, and rc.9 and rc.10 sit between rc.8 and rc.11), and the next release follows it; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.14` from `1.0.0-rc.13`, the move to `1.0.0-rc.13` from `1.0.0-rc.12`, the move to `1.0.0-rc.12` from `1.0.0-rc.11`, the move to `1.0.0-rc.11` from `1.0.0-rc.8`, the move to `1.0.0-rc.8` from `1.0.0-rc.4`, the move to `1.0.0-rc.4` from `1.0.0-rc.3`, the move to `1.0.0-rc.3` from `1.0.0-rc.2`, to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
+Aventara `1.0.0-rc.15` is the thirteenth published release candidate (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were tagged but never published, and rc.9 and rc.10 sit between rc.8 and rc.11), and the next release follows it; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.15` from `1.0.0-rc.14`, the move to `1.0.0-rc.14` from `1.0.0-rc.13`, the move to `1.0.0-rc.13` from `1.0.0-rc.12`, the move to `1.0.0-rc.12` from `1.0.0-rc.11`, the move to `1.0.0-rc.11` from `1.0.0-rc.8`, the move to `1.0.0-rc.8` from `1.0.0-rc.4`, the move to `1.0.0-rc.4` from `1.0.0-rc.3`, the move to `1.0.0-rc.3` from `1.0.0-rc.2`, to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
+
+## From 1.0.0-rc.14 to 1.0.0-rc.15
+
+No Contract changes, so a generated frontend client keeps working. What changes is the generated files and the types: stage types now read the root's field definitions, and a compute stage's return is type-checked. Some stage code that compiled under rc.14 no longer does; step 2 lists each case. Change the version numbers, fix what no longer compiles, run the generate steps, and refresh the agent skills.
+
+### 1. Install the new versions
+
+```bash
+npm install --save-exact @aventara/core@1.0.0-rc.15 @aventara/nest@1.0.0-rc.15 @aventara/prisma7-adapter@1.0.0-rc.15 @aventara/build@1.0.0-rc.15
+# add @aventara/mcp@1.0.0-rc.15 and @aventara/testing@1.0.0-rc.15 to the command if you use them
+```
+
+With pnpm, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
+
+```bash
+# pnpm (in a workspace, add --filter <your server package> after pnpm)
+pnpm add --save-exact @aventara/core@1.0.0-rc.15 @aventara/nest@1.0.0-rc.15 @aventara/prisma7-adapter@1.0.0-rc.15
+pnpm add --save-dev --save-exact @aventara/build@1.0.0-rc.15
+```
+
+In a Next.js app, move `@aventara/next` with `@aventara/core` and the rest. In each frontend, move `@aventara/client`, a dev dependency, to the same version:
+
+```bash
+npm install --save-dev --save-exact @aventara/client@1.0.0-rc.15
+# pnpm (in a workspace, add --filter <your frontend package> after pnpm)
+pnpm add --save-dev --save-exact @aventara/client@1.0.0-rc.15
+```
+
+Next, fix the compile errors (`npx tsc --noEmit`, `pnpm exec tsc --noEmit`): a compute stage's return is now type-checked, and step 2 lists each case. The install runs `aventara:prepare` already, but while a stage does not type-check, `aventara-build` cannot read which fields the configuration computes: it prints the type errors and keeps `computed-fields.generated.ts` as it was (`kept (configuration does not type-check)`). So once the errors are fixed, run the generate steps. On the server, run `npm run aventara:prepare` (`pnpm run aventara:prepare`). The discovery artifact's format is now 5, and the server refuses an artifact of format 4 until it is regenerated. `aventara-build` also writes a new file, `src/generated/aventara/config-facts.generated.ts`, which the discovery artifact imports. Every file `aventara-build` writes (and, in a Next.js app, `src/aventara/client.ts` and `src/aventara/universal.ts`) now opens with `biome-ignore-all` lines, `organizeImports` among them, and ends without a final line break. `aventara-build --check` reports a file an earlier version wrote as stale until you run it. In each frontend, run `npm run avclient:generate` (`pnpm run avclient:generate`) so its client files are written the same way.
+
+Last, refresh both agent skills: run `npx @aventara/cli@1.0.0-rc.15 skill` (`pnpm dlx @aventara/cli@1.0.0-rc.15 skill`) on the server, and `npx avclient skill` (`pnpm exec avclient skill`) in each frontend.
+
+### 2. What changed
+
+| Change | What to do |
+| --- | --- |
+| A compute stage's return is typed by its field: a model field takes its model type, an added `VIRTUAL` field the type in its `definition`. A Decimal is an `AvDecimal`, a datetime a `Date`, an enum one of its members, and `null` fits only a nullable field. `undefined`, or no `return`, still keeps the current value ([Computed fields](/docs/computed-fields)) | Fix what no longer compiles. A stage that returns one of its `unknown` inputs (`return data.title`): convert it (`String(data.title)`) or check its type first. A stage annotated without the value type (`const slug: AvComputeCreate<Model> = …`) returns `unknown`, which no field takes: write `AvComputeCreate<Model, string>`, with the field's value type (`AvComputeUpdate` and `AvComputeRead` the same). A bare enum literal can widen to `string`: write `() => "LIVE" as const`. |
+| A stage's `ctx` calls, a transaction's `tx` and compute's read-only `ctx` type a Json field the root shapes as its shape. A `VIRTUAL` input the root adds is in a variant's typed `ctx.$args` (`ctx.$args.data.tenderedMinor`), and a `ctx` create must write a non-null added input it can create ([The pipeline context](/docs/pipeline-context#the-configurations-definitions)) | Remove the type guards and casts you wrote for those values. Add any missing added input to a `ctx` create. Run `aventara:prepare` again after you change a `definition`. |
+| A variant's hooks and interceptors are given resolved arguments: their `ctx.$args` holds no `$ref` (`AvTransactionReference`). Guards, pipes and filters can still see one | Remove the code that narrowed a `$ref` out of a hook's or an interceptor's `ctx.$args`. Keep it in guards, pipes and filters. |
+| A write takes a shaped Json value read-only, deep, on every surface (`framework.application`, `ctx`, the generated client), so a frozen value such as a stage's `ctx.$args` fits | Nothing. You can drop a copy or a cast you made only to pass a read-only value. |
+| A stage's `ctx.<Resource>.<family>`, and compute's `ctx.<Resource>.find`, is named `AvContextFamilyFacade`, a new export of `@aventara/core`, as `framework.application.<Resource>.<family>` is `AvApplicationFamilyFacade` | Nothing. It is the name a hover or a declaration shows; you never write it yourself. Stages also type-check faster. |
+| The docs now state where a transaction `$ref` works with a Json field: as the field's whole value, from another Json field. A `$ref` nested inside a Json value is stored as the reference object, unresolved, and a Json value cannot have `$ref` as its own root key (`A2004`) ([Transactions](/docs/transactions#ref)) | Nothing; behaviour is unchanged. To build Json from an earlier step's result, write the `$ref` into a `VIRTUAL` input field and build the Json in a compute stage. |
+| The stale-types warning at startup (`AVENTARA_STALE_GENERATED_TYPES`) covers the root's definitions as well as the computed fields. One stale build gives one warning, with a paragraph for each part that is stale ([Error codes](/docs/error-codes)) | Run `aventara:prepare` when you see it. `aventara-build --check` fails on a stale file too. |
+| A transaction plan's references are resolved in time linear in their number, so a plan with thousands of `$ref`s in one nested list no longer takes seconds to validate | Nothing. |
+| The server skill covers typed compute returns and the configuration's definitions; the frontend skill says the generated files pass Biome's default rules | Refresh the skills (step 1). |
 
 ## From 1.0.0-rc.13 to 1.0.0-rc.14
 

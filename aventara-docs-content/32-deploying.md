@@ -36,7 +36,7 @@ npm run build          # nest build -> dist/
 npm run start:prod     # node --env-file-if-exists=.env dist/main
 ```
 
-`npm ci` runs the project's `postinstall` script, which runs `aventara:prepare`: it reads `prisma/schema.prisma`, runs `prisma generate`, writes `src/generated/aventara/discovery.artifact.ts`, then runs `aventara-build`, which writes `resources.generated.ts`, `computed-fields.generated.ts` and `contracts.generated.ts` beside it. All are generated and git-ignored, and `nest build` needs them. If your pipeline installs with scripts disabled (`npm ci --ignore-scripts`), run `npm run aventara:prepare` yourself before `npm run build`. Re-run it whenever the schema changes.
+`npm ci` runs the project's `postinstall` script, which runs `aventara:prepare`: it reads `prisma/schema.prisma`, runs `prisma generate`, writes `src/generated/aventara/discovery.artifact.ts`, then runs `aventara-build`, which writes `resources.generated.ts`, `computed-fields.generated.ts`, `config-facts.generated.ts` and `contracts.generated.ts` beside it. All are generated and git-ignored, and `nest build` needs them. If your pipeline installs with scripts disabled (`npm ci --ignore-scripts`), run `npm run aventara:prepare` yourself before `npm run build`. Re-run it whenever the schema changes.
 
 Prefer building once and running the same artifact everywhere: build in CI, copy `dist/` and a production `node_modules`, and give each environment its own `DATABASE_URL`. Your Prisma client is generated for the provider in `schema.prisma` (SQLite or PostgreSQL), so build with the same schema you deploy.
 
@@ -80,7 +80,7 @@ Add a check to CI so a stale file fails the pipeline before the deploy:
 npx aventara-build --check
 ```
 
-`--check` writes nothing. It exits `1` when `resources.generated.ts`, `computed-fields.generated.ts` or `contracts.generated.ts` is missing or differs from what a build would write now, and says what changed, in the words of the `AVENTARA_PREBUILT_STALE` warning at startup:
+`--check` writes nothing. It exits `1` when `resources.generated.ts`, `computed-fields.generated.ts`, `config-facts.generated.ts` or `contracts.generated.ts` is missing or differs from what a build would write now, and says what changed, in the words of the `AVENTARA_PREBUILT_STALE` warning at startup:
 
 ```text
 aventara-build: src/generated/aventara/contracts.generated.ts is stale: it was built by @aventara/core 1.0.0-rc.7, and this is 1.0.0-rc.8. Run aventara-build (npm run aventara:prepare) and deploy the file it writes.
@@ -94,7 +94,7 @@ Two things follow from `aventara-build` running your configuration:
 - `src/aventara.config.ts` and everything it imports run at build time. Keep their top level free of side effects: no connection, no request.
 - A value read from `process.env` in the configuration is read when the build runs. If the deployed environment gives another value, the file reads as stale and the framework compiles at startup.
 
-Where the three files go: beside the discovery artifact, in `src/generated/aventara/`, or in `src/aventara/` in a project whose Prisma client is generated into `src/generated` (`prisma generate` empties that directory). See [CLI reference](/docs/cli-reference#aventara-build).
+Where the four files go: beside the discovery artifact, in `src/generated/aventara/`, or in `src/aventara/` in a project whose Prisma client is generated into `src/generated` (`prisma generate` empties that directory). See [CLI reference](/docs/cli-reference#aventara-build).
 
 ### The server starts without a database
 

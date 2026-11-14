@@ -9,7 +9,7 @@ section: reference
 
 Two commands: `aventara` scaffolds the server, on NestJS or Next.js; `avclient` sets up a separate frontend and generates its typed client. Both are run once through `npx` (or installed globally); neither is a runtime dependency of your application.
 
-The examples use the `@rc` tag, which points to the newest release candidate (`1.0.0-rc.14`).
+The examples use the `@rc` tag, which points to the newest release candidate (`1.0.0-rc.15`).
 
 ```bash
 npx @aventara/cli@rc <command>        # or: npm i -g @aventara/cli@rc
@@ -46,7 +46,7 @@ aventara: no initial commit: /path/to/repo is inside a git repository already; c
 aventara: no initial commit: git has no user.name and user.email set; set them, then commit the project yourself.
 ```
 
-Every `new` and `init` run prints the version it pins first: `Aventara 1.0.0-rc.14`. When the registry's tag for that channel (`rc` or `latest`) names a newer release, the line says so and gives a command that takes it; a release-age delay is the usual cause ([Installation](/docs/installation)). The lookup happens once the run passes its checks, reads the registry's tags only, gives up after a moment, and prints nothing more when offline. The frontend's next step names `@aventara/client` at the same exact version.
+Every `new` and `init` run prints the version it pins first: `Aventara 1.0.0-rc.15`. When the registry's tag for that channel (`rc` or `latest`) names a newer release, the line says so and gives a command that takes it; a release-age delay is the usual cause ([Installation](/docs/installation)). The lookup happens once the run passes its checks, reads the registry's tags only, gives up after a moment, and prints nothing more when offline. The frontend's next step names `@aventara/client` at the same exact version.
 
 #### Inside a pnpm workspace
 
@@ -249,11 +249,11 @@ The bin of `@aventara/prisma7-adapter`, run by the scaffold's `aventara:prepare`
 
 ## aventara-build
 
-The bin of `@aventara/build`, a dev dependency, run by the scaffold's `aventara:prepare` script right after `aventara-prisma7-generate`. It writes `resources.generated.ts`, `computed-fields.generated.ts` and `contracts.generated.ts`, in that order, beside the discovery artifact.
+The bin of `@aventara/build`, a dev dependency, run by the scaffold's `aventara:prepare` script right after `aventara-prisma7-generate`. It writes `resources.generated.ts`, `computed-fields.generated.ts`, `config-facts.generated.ts` and `contracts.generated.ts`, in that order, beside the discovery artifact.
 
 | Flag | Meaning |
 |---|---|
-| (none) | Write the three files. A configuration a server would refuse at startup (`CONFIG_...`, `COMPILER_...`) fails the build with the same message, writes nothing and exits `1`. |
+| (none) | Write the four files. A configuration a server would refuse at startup (`CONFIG_...`, `COMPILER_...`) fails the build with the same message, writes nothing and exits `1`. |
 | `--client` | Next.js projects only: also write the browser client, `src/aventara/client.ts`, `src/aventara/universal.ts` and the client's modules under `src/aventara/generated/`, from the ClientContract just compiled. No server has to run. Refused in a NestJS project, whose frontends use `avclient generate`. |
 | `--check` | Write nothing. Exit `0` when the files on disk are what a build would write now, `1` when one is missing or stale, naming the file and saying what changed, in the words of the `AVENTARA_PREBUILT_STALE` warning at startup: the `@aventara/core` version that wrote it against the one installed, a file format or protocol version that differs, the Resources that changed, are new or are gone, the configuration or model outside the Resources, or a file that no longer reads as a prebuilt Contracts file. For CI. |
 | `--check --client` | As `--check`, then the browser client's files: a missing or stale one, or one an earlier ClientContract's client left, exits `1` naming it. |

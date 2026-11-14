@@ -50,13 +50,13 @@ A project made by `aventara new` has this in `package.json`. The Aventara versio
 ```json
 {
   "dependencies": {
-    "@aventara/core": "1.0.0-rc.14",
-    "@aventara/nest": "1.0.0-rc.14",
-    "@aventara/prisma7-adapter": "1.0.0-rc.14",
+    "@aventara/core": "1.0.0-rc.15",
+    "@aventara/nest": "1.0.0-rc.15",
+    "@aventara/prisma7-adapter": "1.0.0-rc.15",
     "@prisma/adapter-better-sqlite3": "^7.10.1",
     "@prisma/client": "^7.10.1"
   },
-  "devDependencies": { "@aventara/build": "1.0.0-rc.14", "prisma": "^7.10.1" },
+  "devDependencies": { "@aventara/build": "1.0.0-rc.15", "prisma": "^7.10.1" },
   "scripts": {
     "aventara:prepare": "aventara-prisma7-generate --schema prisma/schema.prisma --client src/generated/prisma --provider sqlite --driver @prisma/adapter-better-sqlite3 --out src/generated/aventara/discovery.artifact.ts --config src/aventara.config.ts && aventara-build",
     "postinstall": "npm run aventara:prepare",
@@ -69,7 +69,7 @@ A project made by `aventara new` has this in `package.json`. The Aventara versio
 }
 ```
 
-With PostgreSQL the driver is `@prisma/adapter-pg`. `aventara:prepare` runs three things in order: `prisma generate`, the adapter's discovery step (`aventara-prisma7-generate`), then `aventara-build`. Between them they write `src/generated/aventara/discovery.artifact.ts`, `resources.generated.ts`, `computed-fields.generated.ts` and `contracts.generated.ts`. The `postinstall` script runs it on a plain `npm install`, and the `prebuild`, `prestart`, `prestart:dev` and `prestart:debug` scripts run it before `npm run build` and the start scripts, so a schema change needs no separate step. npm and pnpm run these `pre` hooks; pnpm with `enable-pre-post-scripts=false` does not, so run `aventara:prepare` yourself there (pnpm projects get `pnpm run aventara:prepare` in these scripts). Run `npm run aventara:prepare` yourself after changing `prisma/schema.prisma`, and after adding or upgrading a package by name (`npm install <package>` did not run `postinstall` with npm 11.19).
+With PostgreSQL the driver is `@prisma/adapter-pg`. `aventara:prepare` runs three things in order: `prisma generate`, the adapter's discovery step (`aventara-prisma7-generate`), then `aventara-build`. Between them they write `src/generated/aventara/discovery.artifact.ts`, `resources.generated.ts`, `computed-fields.generated.ts`, `config-facts.generated.ts` and `contracts.generated.ts`. The `postinstall` script runs it on a plain `npm install`, and the `prebuild`, `prestart`, `prestart:dev` and `prestart:debug` scripts run it before `npm run build` and the start scripts, so a schema change needs no separate step. npm and pnpm run these `pre` hooks; pnpm with `enable-pre-post-scripts=false` does not, so run `aventara:prepare` yourself there (pnpm projects get `pnpm run aventara:prepare` in these scripts). Run `npm run aventara:prepare` yourself after changing `prisma/schema.prisma`, and after adding or upgrading a package by name (`npm install <package>` did not run `postinstall` with npm 11.19).
 
 ### Frontend side
 
@@ -86,7 +86,7 @@ npx @aventara/cli@rc new my-api        # npm
 pnpm dlx @aventara/cli@rc new my-api   # pnpm
 ```
 
-Use the `@rc` tag: it points to the newest release candidate (`1.0.0-rc.14`). The CLI runs a pinned `nest new`, adds Aventara, installs, and commits the result (`Initial Aventara Scaffold`, unless git is missing or unconfigured, the directory is already inside a repository, or you pass `--skip-git`). It picks the package manager from the lockfile, else the one that launched it, else npm, and never touches a database. `aventara --version` prints the CLI's version; `--orm` takes `prisma7`. See [Getting started](/docs/getting-started), or [Add to an existing project](/docs/existing-project).
+Use the `@rc` tag: it points to the newest release candidate (`1.0.0-rc.15`). The CLI runs a pinned `nest new`, adds Aventara, installs, and commits the result (`Initial Aventara Scaffold`, unless git is missing or unconfigured, the directory is already inside a repository, or you pass `--skip-git`). It picks the package manager from the lockfile, else the one that launched it, else npm, and never touches a database. `aventara --version` prints the CLI's version; `--orm` takes `prisma7`. See [Getting started](/docs/getting-started), or [Add to an existing project](/docs/existing-project).
 
 ## Package manager and Node notes
 
