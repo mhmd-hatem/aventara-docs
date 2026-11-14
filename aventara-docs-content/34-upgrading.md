@@ -11,7 +11,7 @@ Aventara `1.0.0-rc.15` is the thirteenth published release candidate (`1.0.0-rc.
 
 ## From 1.0.0-rc.14 to 1.0.0-rc.15
 
-No Contract changes, so a generated frontend client keeps working. What changes is the generated files and the types: stage types now read the root's field definitions, and a compute stage's return is type-checked. Some stage code that compiled under rc.14 no longer does; step 2 lists each case. Change the version numbers, run the generate steps once, and refresh the agent skills.
+No Contract changes, so a generated frontend client keeps working. What changes is the generated files and the types: stage types now read the root's field definitions, and a compute stage's return is type-checked. Some stage code that compiled under rc.14 no longer does; step 2 lists each case. Change the version numbers, fix what no longer compiles, run the generate steps, and refresh the agent skills.
 
 ### 1. Install the new versions
 
@@ -28,9 +28,15 @@ pnpm add --save-exact @aventara/core@1.0.0-rc.15 @aventara/nest@1.0.0-rc.15 @ave
 pnpm add --save-dev --save-exact @aventara/build@1.0.0-rc.15
 ```
 
-In a Next.js app, move `@aventara/next` with `@aventara/core` and the rest. Move each frontend's `@aventara/client` to the same version.
+In a Next.js app, move `@aventara/next` with `@aventara/core` and the rest. In each frontend, move `@aventara/client`, a dev dependency, to the same version:
 
-Then run the generate steps once. On the server, run `npm run aventara:prepare` (`pnpm run aventara:prepare`). The discovery artifact's format is now 5, and the server refuses an artifact of format 4 until it is regenerated. `aventara-build` also writes a new file, `src/generated/aventara/config-facts.generated.ts`, which the discovery artifact imports. Every file `aventara-build` writes (and, in a Next.js app, `src/aventara/client.ts` and `src/aventara/universal.ts`) now opens with `biome-ignore-all` lines, `organizeImports` among them, and ends without a final line break. `aventara-build --check` reports a file an earlier version wrote as stale until you run it. In each frontend, run `npm run avclient:generate` (`pnpm run avclient:generate`) so its client files are written the same way.
+```bash
+npm install --save-dev --save-exact @aventara/client@1.0.0-rc.15
+# pnpm (in a workspace, add --filter <your frontend package> after pnpm)
+pnpm add --save-dev --save-exact @aventara/client@1.0.0-rc.15
+```
+
+Next, fix the compile errors (`npx tsc --noEmit`, `pnpm exec tsc --noEmit`): a compute stage's return is now type-checked, and step 2 lists each case. The install runs `aventara:prepare` already, but while a stage does not type-check, `aventara-build` cannot read which fields the configuration computes: it prints the type errors and keeps `computed-fields.generated.ts` as it was (`kept (configuration does not type-check)`). So once the errors are fixed, run the generate steps. On the server, run `npm run aventara:prepare` (`pnpm run aventara:prepare`). The discovery artifact's format is now 5, and the server refuses an artifact of format 4 until it is regenerated. `aventara-build` also writes a new file, `src/generated/aventara/config-facts.generated.ts`, which the discovery artifact imports. Every file `aventara-build` writes (and, in a Next.js app, `src/aventara/client.ts` and `src/aventara/universal.ts`) now opens with `biome-ignore-all` lines, `organizeImports` among them, and ends without a final line break. `aventara-build --check` reports a file an earlier version wrote as stale until you run it. In each frontend, run `npm run avclient:generate` (`pnpm run avclient:generate`) so its client files are written the same way.
 
 Last, refresh both agent skills: run `npx @aventara/cli@1.0.0-rc.15 skill` (`pnpm dlx @aventara/cli@1.0.0-rc.15 skill`) on the server, and `npx avclient skill` (`pnpm exec avclient skill`) in each frontend.
 
