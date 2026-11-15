@@ -479,6 +479,52 @@ Ordinary limits: set them at the root, override them in `client` or `application
 
 A read with a `cache` stage (`reference/config.md`, "Caching reads") is sent by the generated client as `GET <api>/_resources/<R>/find/<variant>?q=<args>&v=<contract hash>`, alone, never in an Operation Set. Leave `requestId` off a cached cross-origin read (it adds a CORS preflight). A URL over 4096 characters goes as a `POST` and is not cached. The `POST` route stays for any client.
 
+### Read your own write
+
+A cached read answered `private, max-age=N` can come from the browser's HTTP cache for N seconds, so a refetch right after your own write may return the data from before it. Two things fix it:
+
+- The write's answer is already fresh, read from the database. Put it into local state (TanStack Query's `queryClient.setQueryData(key, row)`, SWR's `mutate(key, row, { revalidate: false })`) instead of reading the row back.
+- A list, a count or another aggregate the write changed (a row an after-hook changed too) is read again with `{ fresh: true }`: the call is sent with `cache: "no-store"`, so the browser neither answers it from its cache nor stores the answer.
+
+```ts
+import avClient from "./api/AvClient";
+
+const created = await avClient.Post.create.one({ data: { title: "Hello" }, select: ["id", "title"] });
+// `created` is the new row: set it in local state, no read needed.
+const [posts, total] = await Promise.all([
+  avClient.Post.find.many({ select: ["id", "title"] }, { fresh: true }),
+  avClient.Post.find.count({}, { fresh: true }),
+]);
+```
+
+- `fresh` is `true` or absent, and is typed only on a read the server caches. It sends no header and changes no URL, so the server answers it as any `GET`; nothing on the server keeps an answer (there is no server-side cache beyond the `Cache-Control` and `ETag` headers).
+- Use it after a write, not on every read: a `fresh` read is never served from the browser's cache.
+- Leave `maxAge` low only for data that goes stale on its own; do not shorten it to cover your own writes, and do not refetch twice or add `requestId` to dodge the cache (`requestId` adds a CORS preflight and does not skip the cache).
+- Server code and `@/aventara/server` call in process: nothing there is cached by the browser, so `fresh` changes nothing.
+
+### Read your own write
+
+A cached read answered `private, max-age=N` can come from the browser's HTTP cache for N seconds, so a refetch right after your own write may return the data from before it. Two things fix it:
+
+- The write's answer is already fresh, read from the database. Put it into local state (TanStack Query's `queryClient.setQueryData(key, row)`, SWR's `mutate(key, row, { revalidate: false })`) instead of reading the row back.
+- A list, a count or another aggregate the write changed (a row an after-hook changed too) is read again with `{ fresh: true }`: the call is sent with `cache: "no-store"`, so the browser neither answers it from its cache nor stores the answer.
+
+```ts
+import avClient from "./api/AvClient";
+
+const published = await avClient.Post.update.unique({ where: { id: 1 }, data: { published: true }, select: ["id", "published"] });
+// `published` is the row as the write left it: set it in local state, no read needed.
+const [posts, total] = await Promise.all([
+  avClient.Post.find.many({ select: ["id", "title"] }, { fresh: true }),
+  avClient.Post.find.count({}, { fresh: true }),
+]);
+```
+
+- `fresh` is `true` or absent, and is typed only on a read the server caches. It sends no header and changes no URL, so the server answers it as any `GET`; nothing on the server keeps an answer (there is no server-side cache beyond the `Cache-Control` and `ETag` headers).
+- Use it after a write, not on every read: a `fresh` read is never served from the browser's cache.
+- Leave `maxAge` low only for data that goes stale on its own; do not shorten it to cover your own writes, and do not refetch twice or add `requestId` to dodge the cache (`requestId` adds a CORS preflight and does not skip the cache).
+- Server code and `@/aventara/server` call in process: nothing there is cached by the browser, so `fresh` changes nothing.
+
 ## By hand (curl, a custom client)
 
 `POST <api>/_all` takes the two identity headers and `{ "operations": { "<key>": { "resource": "Post", "family": "find", "variant": "many", "args": { … } } } }` (keys are identifiers; each entry is exactly those four members). It answers `200 A1000` with `data` holding each key's own envelope (`{ data, code, cause }`): read each key's `code`, not the status. With `Accept: application/x-ndjson` it streams one line per entry as it finishes, `{"key":"…","envelope":{…}}`; the generated client does this for you, so write it only in a client of your own. Too many entries: `422 A2009`; none: `422 A2004`.

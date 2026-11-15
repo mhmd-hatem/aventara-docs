@@ -1,6 +1,6 @@
 ---
 title: TanStack Query and SWR with Next.js
-description: Prefetch Aventara data in a Server Component and hydrate it in the browser with TanStack Query or SWR - one shared query module on @/aventara/universal, avDehydrate on the server and avHydrate in the browser.
+description: Prefetch Aventara data in a Server Component and hydrate it in the browser with TanStack Query or SWR - one shared query module on @/aventara/universal, avDehydrate on the server and avHydrate in the browser - and read your own write with the write's answer and fresh reads.
 order: 66
 section: hosting
 ---
@@ -229,6 +229,66 @@ The `fallback` key (`"drafts"`) is the `useSWR` key. Pass `avHydrate(fallback)` 
 
 Read the data you dehydrate through `@/aventara/universal`, as `readDrafts` does. `@/aventara/server` types a decimal as core's `AvDecimal`, while `avHydrate` revives it as the browser client's, so data read through `@/aventara/server` does not match the type the browser gets back.
 
+## Read your own write
+
+A read with a [`cache` stage](/docs/caching-reads) may be answered by the browser's HTTP cache for `maxAge` seconds. A refetch right after your own write can then return the data from before it. Two rules cover it:
+
+- **The write's answer is already fresh.** It comes from the database after the write, so put it into local state (`setQueryData` in TanStack Query, `mutate` in SWR) instead of reading the row back.
+- **Read what the write also changed with `{ fresh: true }`.** That is every list and aggregate the write touched (a list the row belongs to, a count), and a row one of your after hooks changed. A `fresh` call is sent with `cache: "no-store"`: the browser neither answers it from its cache nor stores the answer, so it reads the database now.
+
+With TanStack Query, in the mutation:
+
+```tsx
+// src/app/posts/publish-button.tsx
+"use client";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { avClient } from "@/aventara/universal";
+import { postsQuery } from "./posts.queries";
+
+export function PublishButton({ id }: { readonly id: number }) {
+  const queryClient = useQueryClient();
+  const publish = useMutation({
+    mutationFn: async () => {
+      // The write's answer: fresh from the database.
+      const post = await avClient.Post.update.unique({
+        where: { id },
+        data: { published: true },
+        select: ["id", "title", "publishedAt", "price"],
+      });
+      // What it also changed: the published list and its count.
+      const [posts, total] = await Promise.all([
+        avClient.Post.find.many(
+          { where: { published: true }, select: ["id", "title", "publishedAt", "price"] },
+          { fresh: true },
+        ),
+        avClient.Post.find.count({ where: { published: true } }, { fresh: true }),
+      ]);
+      return { post, posts, total };
+    },
+    onSuccess: ({ post, posts, total }) => {
+      queryClient.setQueryData(["post", post.id], post);
+      queryClient.setQueryData(postsQuery.queryKey, posts);
+      queryClient.setQueryData(["posts", "count"], total);
+    },
+  });
+  return (
+    <button type="button" onClick={() => publish.mutate()}>
+      Publish
+    </button>
+  );
+}
+```
+
+`setQueryData` puts the fresh results where the queries read them, so nothing else is fetched. To refetch instead, use the same `{ fresh: true }` calls inside the query functions you invalidate.
+
+The same with SWR: `mutate(key, post, { revalidate: false })` for the row the write answered with, and `mutate("posts", () => avClient.Post.find.many({ where: { published: true } }, { fresh: true }), { revalidate: false })` for a list, where the function gives SWR the fresh answer to keep.
+
+- `fresh` is `true` or left out, and only a read that has a `cache` stage takes it: on any other call it is a type error. It changes nothing on the wire except the browser's own cache handling; the URL, the headers and the server's work are the same.
+- Use it after a write, not on every read. A `fresh` read is never served from the cache, so reads that always carry it lose what the `cache` stage is for.
+- Don't lower `maxAge` or refetch twice to cover your own writes, and don't change `requestId` to dodge the cache: it only adds a CORS preflight.
+- On the server, `@/aventara/universal` and `@/aventara/server` run in process, where nothing is cached, so `fresh` changes nothing there.
+- Aventara keeps no cache of its own on the server, so nothing else needs bypassing.
+
 ## Mistakes to avoid
 
 | Mistake | What happens |
@@ -239,6 +299,7 @@ Read the data you dehydrate through `@/aventara/universal`, as `readDrafts` does
 | `dehydrate` without `serializeData: avDehydrate` | React refuses to pass a decimal from the Server Component. |
 | No `deserializeData: avHydrate` in the browser | The query's data holds tagged objects (`{ "$av": "datetime", "v": "..." }`) instead of a `Date`. |
 | `SWRConfig value={{ fallback }}` with the dehydrated prop instead of `avHydrate(fallback)` | SWR's data holds tagged objects. SWR's `fallback` is typed `any`, so it compiles. |
+| A refetch right after your own write, on a read with a `cache` stage, without `{ fresh: true }` | The browser's cache can answer it with the data from before the write, for up to `maxAge` seconds. |
 | One `QueryClient` shared by every request on the server | One user's prefetched data can reach another. Make one per request. |
 
 ## See also
