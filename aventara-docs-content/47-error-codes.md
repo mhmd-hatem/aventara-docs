@@ -469,7 +469,7 @@ Example: the second step sends a number as a title.
 
 **Database limit exceeded.**
 
-- Cause: The call needs more query parameters than the database takes in one query (the issue is at `["arguments"]`): a to-many relation read with an orderBy under too many parent rows, 998 on SQLite and 32,766 on PostgreSQL with Prisma 7, at any level of the read, or a filter with thousands of values. Nothing was read or written.
+- Cause: The call needs more query parameters than the database takes in one query (the issue is at `["arguments"]`): a to-many relation read with an orderBy under too many parent rows (from 998 on SQLite and 32,766 on PostgreSQL), at any level of the read, or a filter with thousands of values. Nothing was read or written.
 - Fix: Page the outer read by a stable order, so every level of each page stays under the limit (https://aventara.razor34.dev/framework/docs/limits-and-safety#reading-a-large-set-pages-in-one-_all), or split the filter's list. No Aventara limit raises the database's.
 
 The V-code vocabulary is closed: exactly `V1000` to `V1022`. A field validator adds no code of its own: it reports `V1003` or `V1004` with `check` and `params`.
