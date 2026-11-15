@@ -380,7 +380,7 @@ See [Transactions with $ref](/docs/transactions-with-ref).
 
 ## In tests
 
-`@nestjs/testing` works: `Test.createTestingModule({ imports: [AppModule] }).compile()`, then `moduleRef.get(StatsService)` or the framework itself. Assert on the data a call resolves, and on a failure with `await expect(call).rejects.toBeInstanceOf(AvValidationError)` or `.rejects.toMatchObject({ code: "A2004" })`.
+`@nestjs/testing` works: `Test.createTestingModule({ imports: [AppModule] }).compile()`, then `moduleRef.get(StatsService)` or the framework itself. Assert on the data a call resolves, and on a failure with `await expect(call).rejects.toBeInstanceOf(AvValidationError)` or `.rejects.toMatchObject({ code: "A2004" })`. To test a function that takes a stage `ctx`, or to make one adapter call fail (the operation objects on a framework are frozen, so `vi.spyOn` on them throws), see [Testing and conformance](/docs/testing-and-conformance#code-that-takes-a-stage-ctx).
 
 ## See also
 
