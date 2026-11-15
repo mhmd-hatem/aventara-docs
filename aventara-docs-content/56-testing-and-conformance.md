@@ -42,7 +42,24 @@ model OutboxEvent {
 }
 ```
 
-Declare `Post` and `OutboxEvent` as Resources the usual way ([Resources and operations](/docs/resources-and-operations)); the checks call them on `framework.application` and on a stage `ctx`.
+Every model in the schema is a Resource already, so these examples need no `defineResource` file. After editing `schema.prisma`, run `pnpm run aventara:prepare` (the starter's `postinstall` and `prebuild` script) so the discovery artifact knows `Post` and `OutboxEvent`. The checks call them on `framework.application` and on a stage `ctx`.
+
+With the default configuration nothing else is needed, and both Resources are exposed to remote callers like any other. To keep `OutboxEvent` away from them, hide it on the `client` overlay: `ctx` still reaches it. Under a root `exposed: false` ([Exposure](/docs/exposure)), `ctx` calls need the Resource exposed on the root layer too, and without that `ctx.OutboxEvent` fails with `A2001` and `framework.application.Post` is not there. Expose what the checks use:
+
+```ts
+exposed: false,
+exemptions: {
+  resources: {
+    Post: true,
+    OutboxEvent: {
+      operations: { create: ["one"] },
+      fields: { id: ["select"], topic: ["create"], payload: ["create"] },
+    },
+  },
+},
+```
+
+The `.check.ts` files import `./x.js` for `.ts` files and use top-level `await`, so run them through a test runner: with Vitest, `await import("./post-list.check.js")` inside an `it`.
 
 `createFakeAdapter(options)` returns an adapter that keeps no data of its own. Your test answers each operation, and the adapter records what it was asked. Build the framework from your own configuration and your model, and run the same calls your server makes:
 
