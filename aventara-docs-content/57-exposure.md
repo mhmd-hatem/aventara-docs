@@ -104,7 +104,11 @@ A Resource takes `true`, `false` or an object; there is no list directly on a Re
 | a relation field | the capabilities `select`, `include`, `filter`, `order`, `pagination`, `reducers`, `create`, `update` |
 | a capability that takes tokens | scalar `filter`: operators (`equals`, `in`, `contains`, ...); scalar `create`/`update`: directives (`$increment`, `$push`, ...); relation `filter`: `nested`, `match`, `null`, `some`, `every`, `none`; `pagination`: `limit`, `offset`, `cursor`; `reducers`: `$count`; relation `create`/`update`: `$create`, `$connect`, `$connectOrCreate`, `$disconnect`, `$set`, `$update`, `$delete`, `$upsert` |
 
-`select`, `include`, `order` and `orderNulls` are on or off, so they take `true` or `false`, not a token list. With the Prisma 7 adapter there is no `delete.many`; naming it is a startup error.
+`select`, `include`, `order` and `orderNulls` are on or off, so they take `true` or `false`, not a token list.
+
+### A relation needs `pagination` for a nested `limit`
+
+A relation exposed as `["select", "include", "filter", "order"]` can be read, filtered and ordered, but not paged: `{ discounts: { orderBy: { id: "asc" }, limit: 1 } }` is refused `422 V1006` at `…, "limit"` ("Nested limit pagination is not available on this edge."). Add `pagination` to the list. Its tokens are `limit`, `offset` and `cursor`, each its own argument inside the relation, and only a to-many relation takes them (a to-one takes none). `pagination: true` grants every token the adapter offers and `pagination: ["limit"]` only `limit`, so an `offset` or `cursor` is refused `V1006` the same way. It grants nothing else: `orderBy` is the `order` capability, a nested `where` is `filter: ["nested"]`, and counting (`"$count"`) is `reducers`. The top-level `limit` of a `find.many` is the operation's, not a field's. With the Prisma 7 adapter there is no `delete.many`; naming it is a startup error.
 
 Exemptions only work with what is there. Plain assignment comes with the `create` or `update` capability itself: a token list under `update` narrows the directives (`$increment`, ...), never assignment.
 

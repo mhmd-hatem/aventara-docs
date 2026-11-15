@@ -176,8 +176,8 @@ Inside `create` and `update` data, a relation takes directives:
 | `$connectOrCreate` | Link if found, otherwise create. |
 | `$disconnect` | Unlink without deleting. |
 | `$set` | Make the relation exactly this set. |
-| `$update` / `$delete` | Update / delete every related record matching a `where` (to-many requires `where`). |
-| `$upsert` | Update the match, otherwise create. |
+| `$update` / `$delete` | Update / delete every related record matching a `where` (to-many requires `where`). A to-one `$update` is `{ data }` (never the bare fields), a to-one `$delete` is `true` or `{ where }`. |
+| `$upsert` | Update the match, otherwise create: `{ create, update }` (plus `where` on a to-many). |
 
 ```ts
 // create a Post and link it to an existing User
