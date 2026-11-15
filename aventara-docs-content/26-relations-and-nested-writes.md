@@ -152,6 +152,8 @@ await avClient.Post.create.one({
 
 `$connect` takes an identifier: the primary key or any unique column (`{ email: "..." }`).
 
+Within one nested list use one form. On Prisma, the records of one `$create` list write their references the same way: every record through the relation (`category: { $connect: { id } }`), or every record through the reference field (`categoryId`). A record that writes no reference fits either. A list that mixes them is refused with `A2004` / `V1012` at the first record that breaks the form the list's first record set; write the relation as `{ $connect: { id } }` throughout. `$connectOrCreate`, `$update` and `$upsert` lists take either form record by record.
+
 ### Update, unlink, replace
 
 ```ts
@@ -212,6 +214,7 @@ await avClient.User.upsert.unique({
 | `$update` / `$delete` on a to-many without `where` | `AvValidationError`, `A2004` / `V1012` |
 | A reference field and its own relation in one record (`authorId` with `author: { $connect: … }`) | `AvValidationError`, `A2004` / `V1012`: `Set "authorId" or "author", not both.` |
 | One relation written through its reference field and another written directly, on Prisma (`authorId` with `category: { $connect: … }`) | `AvValidationError`, `A2004` / `V1012`: `Use relation fields only, or reference fields only, in one record: …` |
+| One nested `$create` list whose records write references two ways, on Prisma (`posts: { $create: [{ category: { $connect: … } }, { categoryId: 2 }] }`) | `AvValidationError`, `A2004` / `V1012` at the record that breaks the list's form (`["arguments","data","posts","$create",1,"categoryId"]`): `The data source refused this nested list: …` |
 | A directive the contract does not offer on that relation | `AvValidationError`, `A2004` / `V1006` |
 | A relation write in the `data` of a to-many `$update` | `AvValidationError`, `A2004` / `V1006` (the data is a bulk write) |
 | A relation filter in the `where` of a to-many nested `$update` or `$delete` (at any depth, under `AND`, `OR` or `NOT` too) | `AvValidationError`, `A2004` / `V1006` (below) |
