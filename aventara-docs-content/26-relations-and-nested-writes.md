@@ -50,7 +50,7 @@ await avClient.User.find.many({
 //   { id: 3, name: null, posts: [ { id: 6, title: 'Enigma' } ] } ]
 ```
 
-A to-many relation accepts its own `where`, `orderBy`, `limit`, `offset` and `cursor`, applied per parent row. A to-many with an `orderBy` read under many parent rows (about 1,000 on SQLite) meets the database's parameter limit and answers `422` `A2009` / `V1022`: page the outer read ([Database limits](/docs/limits-and-safety#database-limits)). A to-one relation that is empty reads as `null`:
+A to-many relation accepts its own `where`, `orderBy`, `limit`, `offset` and `cursor`, applied per parent row. `orderBy` needs the relation's `order` capability and `where` its `filter: ["nested"]`; `limit`, `offset` and `cursor` need `pagination` (see [Exposure](/docs/exposure#a-relation-needs-pagination-for-a-nested-limit)), and a to-one relation takes none of them. A to-many with an `orderBy` read under many parent rows (about 1,000 on SQLite) meets the database's parameter limit and answers `422` `A2009` / `V1022`: page the outer read ([Database limits](/docs/limits-and-safety#database-limits)). A to-one relation that is empty reads as `null`:
 
 ```ts
 await avClient.Post.find.unique({ where: { id: 4 }, select: ["title", { category: { select: ["name"] } }] });
@@ -111,9 +111,9 @@ A field a [`compute.create`](/docs/computed-fields) stage fills is not required 
 | `$create` | Create related records and link them. | yes | yes |
 | `$connect` | Link existing records, by identifier. | yes | yes |
 | `$connectOrCreate` | Link if found, otherwise create. | yes | yes |
-| `$update` | Update the related record(s); on a to-many, every record matching a `where` (required); its `data` takes what `update.many`'s does: no relation writes on Prisma. | | yes |
-| `$upsert` | Update the match, otherwise create. | | yes |
-| `$delete` | Delete the related record(s); on a to-many, those matching a `where` (required). | | optional to-one, to-many |
+| `$update` | Update the related record(s); on a to-many, every record matching a `where` (required); its `data` takes what `update.many`'s does: no relation writes on Prisma. Always an object with `data`: `{ data }` on a to-one, `{ where, data }` on a to-many. | | yes |
+| `$upsert` | Update the match, otherwise create: `{ create, update }`, plus a `where` on a to-many. | | yes |
+| `$delete` | Delete the related record(s); on a to-many, those matching a `where` (required): `{ where }`. On a to-one, `true` or `{ where }`. | | optional to-one, to-many |
 | `$disconnect` | Unlink without deleting: `true` on an optional to-one, identifiers on a to-many. | | optional to-one, to-many |
 | `$set` | Make the relation exactly this set. | | to-many |
 
@@ -172,6 +172,14 @@ await avClient.User.update.unique({
   select: ["id", { posts: { select: ["title", "views"], where: { title: "Nested" } } }],
 });
 // { id: 1, posts: [ { title: 'Nested', views: 5 } ] }
+
+// the same on a to-one: `$update` always takes `data`; `where` is optional
+await avClient.Post.update.unique({ where: { id: 1 }, data: { category: { $update: { data: { name: "Renamed" } } } } });
+// a bare `{ $update: { name: "Renamed" } }` is refused: 422 V1012, "$update requires a data object."
+
+// a to-one `$upsert` takes `create` and `update`; a to-one `$delete` takes `true` or `{ where }`
+await avClient.Post.update.unique({ where: { id: 1 }, data: { category: { $upsert: { create: { name: "New" }, update: { name: "New" } } } } });
+await avClient.Post.update.unique({ where: { id: 1 }, data: { category: { $delete: true } } });
 
 // unlink an optional to-one
 await avClient.Post.update.unique({ where: { id: 1 }, data: { category: { $disconnect: true } }, select: ["id", "categoryId"] });

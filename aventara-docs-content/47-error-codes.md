@@ -233,8 +233,8 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 **Transaction error.** HTTP 500, thrown as `AvInternalError`.
 
-- Cause: Transaction infrastructure failed (commit or rollback, or the transaction expired or was closed under a step), or a Resource transaction interceptor called next() twice or resolved without calling it.
-- Fix: Read the diagnostics sink. Call next() exactly once in a transaction interceptor; retry an infrastructure failure.
+- Cause: Transaction infrastructure failed (commit or rollback, or the transaction expired or was closed under a step), a call waited for the database connection past the adapter's configured wait, or past the database driver's default wait (2 seconds) when the adapter sets none (on SQLite, where an open transaction holds the one connection, a plain operation outside it waits for it to end), or a Resource transaction interceptor called next() twice or resolved without calling it.
+- Fix: Read the diagnostics sink, which names the connection wait when that was the cause. Call next() exactly once in a transaction interceptor; retry an infrastructure failure; for a connection wait, shorten the transaction that holds the connection (keep slow work out of its hooks) or raise the adapter's transaction wait.
 
 #### `A3003`
 
