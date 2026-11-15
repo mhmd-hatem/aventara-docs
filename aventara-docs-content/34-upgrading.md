@@ -1,17 +1,48 @@
 ---
 title: Upgrading
-description: Move from 1.0.0-rc.14 to 1.0.0-rc.15 (typed compute returns, stage types from the configuration's definitions, regenerate once), from 1.0.0-rc.13 to 1.0.0-rc.14 (typed avDehydrate and avHydrate), from 1.0.0-rc.12 to 1.0.0-rc.13 (the transaction write limit, validators before compute, 401 and 403 from state), from 1.0.0-rc.11 to 1.0.0-rc.12 (lookup keys need filter, the scaffold's String ids), from 1.0.0-rc.8 to 1.0.0-rc.11 (Node and Prisma floors, stricter policy checks, grouped client calls, regenerate clients), from 1.0.0-rc.4 to 1.0.0-rc.8 (rebuild after a discovery change, policy additions, request type names), from 1.0.0-rc.3 to 1.0.0-rc.4 (build-time Contracts, the policy seam), from 1.0.0-rc.2 to 1.0.0-rc.3, from 1.0.0-rc.1 to 1.0.0-rc.2, from 1.0.0-rc.0 to 1.0.0-rc.1 (the new configuration shape, Av names, the $ ctx members) and from earlier pilots step by step, and the general flow for upgrading Aventara packages.
+description: Move from 1.0.0-rc.15 to 1.0.0-rc.16 (the stage ctx's $args, $write, $written and $plan, removed operations absent from in-process objects, V1022 and A2013 answers), from 1.0.0-rc.14 to 1.0.0-rc.15 (typed compute returns, stage types from the configuration's definitions, regenerate once), from 1.0.0-rc.13 to 1.0.0-rc.14 (typed avDehydrate and avHydrate), from 1.0.0-rc.12 to 1.0.0-rc.13 (the transaction write limit, validators before compute, 401 and 403 from state), from 1.0.0-rc.11 to 1.0.0-rc.12 (lookup keys need filter, the scaffold's String ids), from 1.0.0-rc.8 to 1.0.0-rc.11 (Node and Prisma floors, stricter policy checks, grouped client calls, regenerate clients), from 1.0.0-rc.4 to 1.0.0-rc.8 (rebuild after a discovery change, policy additions, request type names), from 1.0.0-rc.3 to 1.0.0-rc.4 (build-time Contracts, the policy seam), from 1.0.0-rc.2 to 1.0.0-rc.3, from 1.0.0-rc.1 to 1.0.0-rc.2, from 1.0.0-rc.0 to 1.0.0-rc.1 (the new configuration shape, Av names, the $ ctx members) and from earlier pilots step by step, and the general flow for upgrading Aventara packages.
 order: 34
 section: guides
 ---
 
 # Upgrading
 
-Aventara `1.0.0-rc.15` is the thirteenth published release candidate (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were tagged but never published, and rc.9 and rc.10 sit between rc.8 and rc.11), and the next release follows it; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.15` from `1.0.0-rc.14`, the move to `1.0.0-rc.14` from `1.0.0-rc.13`, the move to `1.0.0-rc.13` from `1.0.0-rc.12`, the move to `1.0.0-rc.12` from `1.0.0-rc.11`, the move to `1.0.0-rc.11` from `1.0.0-rc.8`, the move to `1.0.0-rc.8` from `1.0.0-rc.4`, the move to `1.0.0-rc.4` from `1.0.0-rc.3`, the move to `1.0.0-rc.3` from `1.0.0-rc.2`, to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
+Aventara `1.0.0-rc.16` is the fourteenth published release candidate (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were tagged but never published, and rc.9 and rc.10 sit between rc.8 and rc.11), and the next release follows it; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.16` from `1.0.0-rc.15`, the move to `1.0.0-rc.15` from `1.0.0-rc.14`, the move to `1.0.0-rc.14` from `1.0.0-rc.13`, the move to `1.0.0-rc.13` from `1.0.0-rc.12`, the move to `1.0.0-rc.12` from `1.0.0-rc.11`, the move to `1.0.0-rc.11` from `1.0.0-rc.8`, the move to `1.0.0-rc.8` from `1.0.0-rc.4`, the move to `1.0.0-rc.4` from `1.0.0-rc.3`, the move to `1.0.0-rc.3` from `1.0.0-rc.2`, to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
 
-## From 1.0.0-rc.15 to the next release
+## From 1.0.0-rc.15 to 1.0.0-rc.16
 
-A stage's `ctx` now names the pipeline's values apart ([The four values](/docs/pipeline-triggers#the-four-values)). No Contract changes, so a generated frontend client keeps working. Check five things in your server code, the first one first:
+A stage's `ctx` now names the pipeline's values apart ([The four values](/docs/pipeline-triggers#the-four-values)), and an operation a layer removes is gone from that layer's objects. Most of the rest turns a `500` into a precise answer or tightens a type. Change the version numbers, fix what no longer compiles or now behaves differently (step 2, the `ctx` change first), regenerate once, and refresh the agent skills.
+
+### 1. Install the new versions
+
+```bash
+npm install --save-exact @aventara/core@1.0.0-rc.16 @aventara/nest@1.0.0-rc.16 @aventara/prisma7-adapter@1.0.0-rc.16 @aventara/build@1.0.0-rc.16
+# add @aventara/mcp@1.0.0-rc.16 and @aventara/testing@1.0.0-rc.16 to the command if you use them
+```
+
+With pnpm, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
+
+```bash
+# pnpm (in a workspace, add --filter <your server package> after pnpm)
+pnpm add --save-exact @aventara/core@1.0.0-rc.16 @aventara/nest@1.0.0-rc.16 @aventara/prisma7-adapter@1.0.0-rc.16
+pnpm add --save-dev --save-exact @aventara/build@1.0.0-rc.16
+```
+
+In a Next.js app, move `@aventara/next` with `@aventara/core` and the rest. In each frontend, move `@aventara/client`, a dev dependency, to the same version:
+
+```bash
+npm install --save-dev --save-exact @aventara/client@1.0.0-rc.16
+# pnpm (in a workspace, add --filter <your frontend package> after pnpm)
+pnpm add --save-dev --save-exact @aventara/client@1.0.0-rc.16
+```
+
+Next, fix the compile errors (`npx tsc --noEmit`, `pnpm exec tsc --noEmit`) using step 2. Then run the generate steps: on the server `npm run aventara:prepare` (`pnpm run aventara:prepare`), which now converges in one run after you widen or narrow a Json field's shape or add a field (before, a second run was needed), and in each frontend `npm run avclient:generate` (`pnpm run avclient:generate`), so the client knows `V1022`, takes `{ fresh: true }` on a cached read, and refuses a nested relation argument its edge does not offer.
+
+Last, refresh both agent skills: run `npx @aventara/cli@1.0.0-rc.16 skill` (`pnpm dlx @aventara/cli@1.0.0-rc.16 skill`) on the server, and `npx avclient skill` (`pnpm exec avclient skill`) in each frontend.
+
+### 2. Fix first: the stage `ctx`
+
+A stage's `ctx` now names the pipeline's values apart, as a database trigger does. Check six things in your server code, the first one first:
 
 1. **`ctx.$args` is the call.** In interceptors, hooks, filters and `compute.read`, `ctx.$args` no longer holds what write compute filled: the same expression now gives the caller's value, with no error. Read the computed value from `ctx.$write` (on a create, an update or an upsert, from the interceptors on). Find what to check with `grep -rn --include=*.ts 'ctx\.\$args' src/`, and look at every hit inside `hooks`, `interceptors`, `filters` or a `read` compute stage. A field a `compute.create` fills is now `T | undefined` in those stages' `ctx.$args`, so some of these reads stop compiling, which points at them.
 
@@ -26,6 +57,23 @@ A stage's `ctx` now names the pipeline's values apart ([The four values](/docs/p
 4. **A `before` hook may return values.** On `create.one`, `update.first` and `update.unique` it may `return { data: { status: "QUEUED" } }` to set a field of the row, instead of checking the caller's arguments plus defaults. A `before` hook that resolves any other value (an `async` hook that returns a `ctx` call's result, say), or a value on another operation, now answers `A3004`: make it return nothing.
 5. **A `before` hook that returns a value elsewhere answers `A3004`.** Any value other than `undefined` from a `before` hook on an operation other than `create.one`, `update.first` or `update.unique` (a Resource-wide hook included) is now refused.
 6. **With a policy, the write check runs again after the `before` hooks** when one returned values that changed the write: on what is written, against the row as the first check read it, so a hook's values are checked as the caller's are. The first check still runs before any interceptor or hook, so a write the policy refuses runs no hook.
+
+A function that takes a stage's `ctx` and is typed `Parameters<AvGuard>[0]` no longer accepts a hook's `ctx`, which now carries `$write` and `$written`. Type such a helper `AvContext`, the wide stage `ctx`, or give it the narrower type it needs. The compiler points at each call.
+
+### 3. What else changed
+
+| Change | What to do |
+| --- | --- |
+| An operation a layer's exposure removes is absent from that layer's objects at run time, as it already was from their types. `framework.application` and `framework.appTx` are built from the Application Contract, and `framework.client`, `framework.serverClient`, `framework.clientTx` and `framework.serverClientTx` from the Client Contract, so `"update" in framework.application.MediaAsset` is `false` when the root hides `update`. Calling a removed operation in process throws a `TypeError` (`… is not a function`), where it threw `A2002`. A raw request for it, through `framework.execute`, an HTTP route or an MCP tool, is still refused with `A2002`; on `@aventara/next`, the `avClient` and `avApp` proxies reject with a `TypeError`. The keys of these objects follow the Contract's sorted order | Search for code that called an operation a layer hides and caught `A2002` from an in-process call: catch a `TypeError`, or stop calling it. Code that lists an object's keys sees only exposed operations, in sorted order. Raw requests keep answering `A2002`. |
+| A `state` that rejects with an error whose `status` or `statusCode` is the number `409` now answers `409` `A2013` (concurrent modification, retry) instead of `500` `A3000`, on every protocol route, MCP tool call and in-process call, as `401` is `A4000` and `403` is `A4001`. In process the call rejects with an `AvConflictError`. An MCP tool call that throws an `AvError` of its own, such as an access provider's `me` verb, is answered as that error's code instead of `A3000` | If a client treated the `500` as a failure to report, treat `A2013` as retry. Nothing else to change. |
+| A call that needs more query parameters than the database takes in one query answers `422 A2009` with one `V1022` ("Database limit exceeded") issue at `["arguments"]`, where it answered `500 A3001`. One unpaged `find.many` that selects an ordered to-many fails from 998 parent rows on SQLite and 32,766 on PostgreSQL; a filter with thousands of `in` values can meet it too. Nothing is read or written ([Limits](/docs/limits-and-safety)) | Page the outer read: read a large set in pages sent together in one `POST /_all`. Treat `V1022` as a `422`, not a server error, in code that branches on `A3001`. |
+| A nested `$create` list whose records write their references two ways (a relation `group: { $create }` or `{ $connect }` in one record, a reference field `groupId` in another) answers `422 A2004` with one `V1012` issue at the first record that breaks the form, instead of `500 A3001`. Nothing is written | Write the relation in every record, as `{ $connect: { id } }`, or the reference field in every record. |
+| A relation entry inside `select` or `include` refuses in the types each argument its edge does not offer in that layer: a nested `where` without the edge's `nested` filter, an `orderBy` without `order`, and a `limit`, `offset` or `cursor` its pagination does not list (a to-one edge offers none). The server already answered `V1006` | Fix the type errors the compiler shows, or give the edge the capability. Regenerate the client to pick this up. |
+| A guard, pipe or compute stage that throws an `A2004` issue at a field the caller left out keeps the issue's `path`. A large `Bytes` value (about 3 MiB and up) now reaches its validators and answers `422 A2004` or `413 A2010`, where it answered `500 A3000`; the generated client decodes such a response too | Nothing. |
+| A generated client reads fresh after its own write: a read the server caches takes `{ fresh: true }` in its call options and is sent with `cache: "no-store"` ([Caching reads](/docs/caching-reads)) | Nothing. Use the write's own answer for the row it changed and `fresh: true` for the lists and counts it changed. |
+| `@aventara/testing` gains `withStageContext` and `createFaultyAdapter` ([Testing and conformance](/docs/testing-and-conformance)) | Nothing. |
+| `aventara new` and `aventara init` fit a pnpm workspace whose root has a Biome configuration (no oxlint or prettier from `nest new`) or a `turbo.json` with one `typecheck` or `check-types` task | Nothing; outside a workspace nothing changes. |
+| The agent skill and the error catalog say more: the to-one forms of a nested `$update`, `$upsert` and `$delete`, the `pagination` capability a nested `limit` needs, `delete.count` and `update.count` in a plan step, and the database connection wait as a cause of `A3002` | Refresh the skills (step 1). |
 
 ## From 1.0.0-rc.14 to 1.0.0-rc.15
 
