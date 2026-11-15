@@ -90,7 +90,7 @@ A guard can still read `ctx.$state.user`, and verifying the token stays your mid
 | Member | What it is |
 |---|---|
 | `policy` | The engine, as `policy.engine` takes it. |
-| `state({ headers, request })` | Seeds each request's `ctx.$state`. Its `me` is the principal the engine is asked about, `null` for an anonymous caller. It may answer with a promise. A thrown `AvError` answers as its own code. A rejection that carries `status` or `statusCode` 401 or 403 answers `401` `A4000` or `403` `A4001` ([below](#when-state-refuses-a-credential)). Anything else answers `500` `A3000`. |
+| `state({ headers, request })` | Seeds each request's `ctx.$state`. Its `me` is the principal the engine is asked about, `null` for an anonymous caller. It may answer with a promise. A thrown `AvError` answers as its own code. A rejection that carries `status` or `statusCode` 401, 403 or 409 answers `401` `A4000`, `403` `A4001` or `409` `A2013` ([below](#when-state-refuses-a-credential)). Anything else answers `500` `A3000`. |
 
 A third member, `client`, is optional. Aventara Access fills it, and its own documentation covers it. A provider written by hand leaves it out.
 
@@ -154,21 +154,21 @@ Rules:
 
 ### When `state` refuses a credential
 
-An authentication library refuses a bad credential by throwing its own error. Better Auth, for one, throws an `APIError` with `statusCode: 401` for a wrong API key. When `state` passes such an error on, Aventara reads only its shape: an object whose `status` or `statusCode` is the number 401 answers `401` `A4000`, and 403 answers `403` `A4001`.
+An authentication library refuses a bad credential by throwing its own error. Better Auth, for one, throws an `APIError` with `statusCode: 401` for a wrong API key. When `state` passes such an error on, Aventara reads only its shape: an object whose `status` or `statusCode` is the number 401 answers `401` `A4000`, 403 answers `403` `A4001`, and 409 answers `409` `A2013` (concurrent modification: the library asks the caller to try again, as a credential that was just replaced does).
 
-The answer is Aventara's own envelope, `{"data":null,"code":"A4000","cause":{"message":"Unauthenticated."}}` (`"Forbidden."` for `A4001`). Nothing of the library's error reaches the caller, neither its message nor its code. The refusal is not sent to `diagnostics`, the same as a thrown `AvError("A4000", ...)`. To send your own message, throw `new AvError("A4000", "...")` instead.
+The answer is Aventara's own envelope, `{"data":null,"code":"A4000","cause":{"message":"Unauthenticated."}}` (`"Forbidden."` for `A4001`, `"Concurrent modification."` for `A2013`). Nothing of the library's error reaches the caller, neither its message nor its code. The refusal is not sent to `diagnostics`, the same as a thrown `AvError("A4000", ...)`. To send your own message, throw `new AvError("A4000", "...")` instead.
 
-A string status (`"401"`), any other number, or an error whose `status` and `statusCode` are two different numbers (401 beside 403, or 500 beside 401) is not read as a refusal and answers `500` `A3000`. A number beside a string is read by the number, so Better Auth's `{ status: "UNAUTHORIZED", statusCode: 401 }` is a refusal.
+A string status (`"401"`), any other number, or an error whose `status` and `statusCode` are two different numbers (401 beside 403, 409 beside 401, or 500 beside 401) is not read as a refusal and answers `500` `A3000`. A number beside a string is read by the number, so Better Auth's `{ status: "UNAUTHORIZED", statusCode: 401 }` is a refusal.
 
 The same rule applies to the host's own `state` option and to every place that runs `state`:
 
 - every route that seeds state: operations, cached reads, `/_transactions`, `/_all`, `/_access/can` and MCP tool calls;
-- `@/aventara/universal` on the Next.js server, which answers `401` or `403` as a route does;
-- `avClient` in a Next.js Server Component or Server Action, and `framework.serverClient.$access.can` given `headers`. These run in process, so the call rejects with an `AvAuthError` whose `code` is `A4000` or `A4001` and whose message is `"Unauthenticated."` or `"Forbidden."`.
+- `@/aventara/universal` on the Next.js server, which answers `401`, `403` or `409` as a route does;
+- `avClient` in a Next.js Server Component or Server Action, and `framework.serverClient.$access.can` given `headers`. These run in process, so the call rejects with an `AvAuthError` whose `code` is `A4000` or `A4001` and whose message is `"Unauthenticated."` or `"Forbidden."`, or an `AvConflictError` whose `code` is `A2013` and whose message is `"Concurrent modification."`.
 
 In process, a thrown `AvError` and any other error reach your code as they were thrown. So does a refusal when your own code calls the provider's `state`, as in `{ state: await tillAccess.state({ headers }) }` [above](#an-access-provider): Aventara does not run that call, so the library's error reaches your code unchanged.
 
-The rule reads the error, not where it came from. If `state` calls another service and that service's own 401 or 403 error escapes, the request answers `A4000` or `A4001` and nothing is sent to `diagnostics`. Catch the errors of such a call inside `state`, or throw an `AvError` of the code you mean.
+The rule reads the error, not where it came from. If `state` calls another service and that service's own 401, 403 or 409 error escapes, the request answers `A4000`, `A4001` or `A2013` and nothing is sent to `diagnostics`. Catch the errors of such a call inside `state`, or throw an `AvError` of the code you mean.
 
 ## What the engine answers
 
