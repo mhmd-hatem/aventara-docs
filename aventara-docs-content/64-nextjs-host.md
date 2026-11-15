@@ -151,6 +151,7 @@ Keep this file. `ready()` also does two things the app relies on:
 
 - It registers the in-process path `@/aventara/universal` takes on the server. Without it, a universal call on the server is refused ([The three clients](#the-three-clients)).
 - `avClient.tx` and `avApp.appTx` build handles on the built framework. Before it is built they throw `` `await ready()` before building them ``.
+- `avClient` and `avApp` behave like the framework's own objects: an operation the layer removed is not on them, so an untyped call to it throws `TypeError: … is not a function` (the same as an unknown Resource), not `A2002`. A request that names it by hand over HTTP still answers `A2002`.
 
 ### A framework you built
 

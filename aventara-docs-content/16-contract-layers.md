@@ -88,6 +88,8 @@ await avClient.User.find.many({ select: ["passwordHash"] });  // type error; at 
 avClient.User.delete.unique;                                  // type error: the operation is not in the client contract
 ```
 
+A removed operation is absent from the layer's objects too: `framework.client.User.delete.unique` is not there, in the type or at runtime, and neither is it on `framework.application` when the root removed it. A stage's `ctx` follows the model, not exposure, so a root-hidden operation is still a property of `ctx` and answers `A2002` when called.
+
 Calling a removed operation by hand over HTTP answers `404 A2002`: `Operation "delete.unique" is not available on Resource "User".`
 
 Limits follow the same rule. With the configuration above, `limit: 200` is accepted from application code and refused to a remote caller with `A2009` / `V1014` (`limit exceeds maxListLimit (100)`).
