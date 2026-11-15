@@ -98,6 +98,71 @@ return {
 
 Server code is different: `framework.serverClient.all` and Next's `avClient.all` run in process, take any number of calls (`maxAll` guards the HTTP route only), and start at most `maxAllConcurrency` of their `avLazy` calls at once.
 
+## Database limits
+
+The limits above are Aventara's. Your database has its own, and the one a read can meet is how many query parameters one query may carry. Prisma 7 reads a to-many relation that has an `orderBy` with one parameter per parent row, in one query, at every level of the read. Without an `orderBy` it splits the parents into several queries itself, so an unordered relation does not meet the limit.
+
+Measured on Prisma 7.10.1 with `@prisma/adapter-better-sqlite3` and `@prisma/adapter-pg` (PostgreSQL 18), one `find.many` of products with an ordered `optionGroups` relation, and an ordered `choices` relation inside it:
+
+| Database | Parameters in one query | Ordered to-many: parent rows read | Ordered to-many: refused from | Unordered to-many |
+|---|---|---|---|---|
+| SQLite | 999 | 997 | 998 | read at 50,000 products, and at 20,000 option groups |
+| PostgreSQL | 32,767 | 32,765 | 32,766 | read at 70,000 at either level |
+
+The count is per level, over the whole read:
+
+- **First level** (`optionGroups`): its parents are the products the read returns.
+- **Second level** (`choices`): its parents are the option groups of every product the read returns. One product with 998 option groups is refused on SQLite as surely as 998 products with one each.
+
+A filter can meet the same limit: on SQLite, `where: { id: { in: [...] } }` with 998 or more values in a read that has an `orderBy`, a `limit` or an `offset` (any one of them; with none, and with only the `in` condition, Prisma splits the list itself), `notIn` with 5,000 values, a `find.count` with 5,000 `in` values, or a `where` of 1,200 `OR` branches (past the default `maxBooleanNodes` of 50, so only where you raised it).
+
+Prisma refuses the call before it reaches the database, so nothing is read or written. Aventara answers it as a limit, `422` `A2009`, with one `V1022` issue ("Database limit exceeded.") at the arguments:
+
+```json
+{"data":null,"code":"A2009","cause":{"message":"The call needs more query parameters than the database takes in one query.","issues":[{"path":["arguments"],"code":"V1022","message":"The database refused this call: it needs more query parameters than the database takes in one query, as a nested to-many read under too many parent rows, or a filter with too many values, does. Page the outer read, or split the filter."}]}}
+```
+
+No Aventara limit changes the database's. Page the outer read so that every level stays under it, or split the filter's list into several calls.
+
+### Reading a large set: pages in one `/_all`
+
+To read more parent rows than one query can carry, count them first, then read them in pages and send every page together. The pages go out as one [Operation Set](/docs/operation-sets) (`POST /_all`), and you merge them in order:
+
+```ts
+import avClient from "./api/AvClient";
+
+const PAGE = 250; // at most the layer's maxListLimit
+
+const total = await avClient.User.find.count();
+const offsets = Array.from({ length: Math.ceil(total / PAGE) }, (_, page) => page * PAGE);
+
+const pages = await avClient.all(
+  Object.fromEntries(
+    offsets.map((offset, page) => [
+      `p${page}`,
+      avClient.User.find.many({
+        orderBy: { id: "asc" },
+        limit: PAGE,
+        offset,
+        select: ["id", "email", { posts: { select: ["id", "title"], orderBy: { id: "asc" } } }],
+      }),
+    ]),
+  ),
+);
+
+const users = offsets.flatMap((_, page) => pages[`p${page}`] ?? []);
+```
+
+The keys are yours (`p0`, `p1`, …). The generated client makes its own keys for the request, but if you send `POST /_all` by hand, every operation key must be an identifier: a numeric key such as `"0"` or `"250"` is refused with `422` `A2004` / `V1001` ("Every operation key must be an identifier.").
+
+What this gives you, and what it does not:
+
+- **A stable order is required.** Every page orders by the same unique field (`id` here). Without it, two pages can return the same row, or miss one.
+- **Offset paging, not cursor paging.** A cursor page starts at a row of the page before it, so it cannot be sent before that page has answered. Offsets can all be sent at once.
+- **Not one snapshot.** `/_all` is not a transaction: a row created, deleted or moved while the pages run can be missed or read twice. When the pages must agree with each other, read them in a [transaction](/docs/transactions) (bounded by `maxTransactionOperations`), or accept the drift.
+- **Bounded by your limits.** `limit` is at most `maxListLimit` (250 by default). One `/_all` carries at most `maxAll` calls (10 by default); the generated client splits a larger group into several requests by itself, and the server runs at most `maxAllConcurrency` (4 by default) of one request's calls at once.
+- **Every level must fit on its own page.** A page of 250 users stays under the limit at the first level, but the second level counts the posts of all 250 users: on SQLite, 250 users with 4 ordered posts each is 1,000 parents for anything ordered under `posts`. Make the page smaller when a deeper level is large.
+
 ## What is refused by default
 
 The framework validates every operation against the contract of the layer it runs in. Before the ORM runs, these fail with `A2004` (HTTP 422) and a precise issue list in `cause.issues`:

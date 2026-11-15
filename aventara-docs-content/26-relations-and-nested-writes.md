@@ -50,7 +50,7 @@ await avClient.User.find.many({
 //   { id: 3, name: null, posts: [ { id: 6, title: 'Enigma' } ] } ]
 ```
 
-A to-many relation accepts its own `where`, `orderBy`, `limit`, `offset` and `cursor`, applied per parent row. `orderBy` needs the relation's `order` capability and `where` its `filter: ["nested"]`; `limit`, `offset` and `cursor` need `pagination` (see [Exposure](/docs/exposure#a-relation-needs-pagination-for-a-nested-limit)), and a to-one relation takes none of them. A to-one relation that is empty reads as `null`:
+A to-many relation accepts its own `where`, `orderBy`, `limit`, `offset` and `cursor`, applied per parent row. `orderBy` needs the relation's `order` capability and `where` its `filter: ["nested"]`; `limit`, `offset` and `cursor` need `pagination` (see [Exposure](/docs/exposure#a-relation-needs-pagination-for-a-nested-limit)), and a to-one relation takes none of them. A to-many with an `orderBy` read under many parent rows (about 1,000 on SQLite) meets the database's parameter limit and answers `422` `A2009` / `V1022`: page the outer read ([Database limits](/docs/limits-and-safety#database-limits)). A to-one relation that is empty reads as `null`:
 
 ```ts
 await avClient.Post.find.unique({ where: { id: 4 }, select: ["title", { category: { select: ["name"] } }] });
