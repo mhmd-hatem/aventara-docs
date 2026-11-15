@@ -114,7 +114,7 @@ The count is per level, over the whole read:
 - **First level** (`optionGroups`): its parents are the products the read returns.
 - **Second level** (`choices`): its parents are the option groups of every product the read returns. One product with 998 option groups is refused on SQLite as surely as 998 products with one each.
 
-A filter can meet the same limit: on SQLite, `where: { id: { in: [...] } }` with 5,000 values and an `orderBy`, `notIn` with 5,000 values, a `find.count` with 5,000 `in` values, or a `where` of 1,200 `OR` branches (past the default `maxBooleanNodes` of 50, so only where you raised it).
+A filter can meet the same limit: on SQLite, `where: { id: { in: [...] } }` with 998 or more values in a read that has an `orderBy`, a `limit` or an `offset` (any one of them; with none, and with only the `in` condition, Prisma splits the list itself), `notIn` with 5,000 values, a `find.count` with 5,000 `in` values, or a `where` of 1,200 `OR` branches (past the default `maxBooleanNodes` of 50, so only where you raised it).
 
 Prisma refuses the call before it reaches the database, so nothing is read or written. Aventara answers it as a limit, `422` `A2009`, with one `V1022` issue ("Database limit exceeded.") at the arguments:
 
@@ -138,8 +138,8 @@ const offsets = Array.from({ length: Math.ceil(total / PAGE) }, (_, page) => pag
 
 const pages = await avClient.all(
   Object.fromEntries(
-    offsets.map((offset) => [
-      String(offset),
+    offsets.map((offset, page) => [
+      `p${page}`,
       avClient.User.find.many({
         orderBy: { id: "asc" },
         limit: PAGE,
@@ -150,8 +150,10 @@ const pages = await avClient.all(
   ),
 );
 
-const users = offsets.flatMap((offset) => pages[String(offset)] ?? []);
+const users = offsets.flatMap((_, page) => pages[`p${page}`] ?? []);
 ```
+
+The keys are yours (`p0`, `p1`, …). The generated client makes its own keys for the request, but if you send `POST /_all` by hand, every operation key must be an identifier: a numeric key such as `"0"` or `"250"` is refused with `422` `A2004` / `V1001` ("Every operation key must be an identifier.").
 
 What this gives you, and what it does not:
 
