@@ -259,7 +259,7 @@ Two requests changed the device's credential at once, or a request brought the c
 
 ### The kiosk refuses a configuration
 
-Code `KIOSK_OPTIONS_INVALID`, when Better Auth builds its context (the first request, or `await access.api.ok()` before your server listens). Cookie cache, `bearer()`, `multiSession()`, `@better-auth/electron`, `crossSubDomainCookies`, `SameSite=None`, an http: base URL off loopback and off `insecureLan`, and the rest are each a way around the device binding ([What the kiosk refuses](/docs/kiosk#what-the-kiosk-refuses)).
+Code `KIOSK_OPTIONS_INVALID`, when Better Auth builds its context (the first request, or `await access.api.ok()` before your server listens). Cookie cache, `bearer()` without `requireSignature: true` or listed after `kiosk()` (signed and listed before, it is a native till's session transport), `multiSession()`, `@better-auth/electron`, `crossSubDomainCookies`, `SameSite=None`, an http: base URL off loopback and off `insecureLan`, and the rest are each a way around the device binding ([What the kiosk refuses](/docs/kiosk#what-the-kiosk-refuses)).
 
 ### profile kind "kiosk" is refused
 
