@@ -72,8 +72,9 @@ await avClient.User.find.many(
 | `grouping` | `false` sends this call alone, on its own route, instead of in a `POST /_all` with the calls made beside it ([Operation Sets](/docs/operation-sets#turning-grouping-off)). `new AvClient({ grouping: false })` does it for every call of that client. |
 | `headers` | Extra request headers. The framework's own identity headers cannot be set here. |
 | `requestId` | Sent as `Aventara-Request-Id` (1 to 128 visible ASCII characters); wins over that header in `headers`. The server uses it as the correlation id for logs and pipelines. |
+| `fresh` | `true`, on a read that has a [`cache` stage](/docs/caching-reads) only. Sends it with `cache: "no-store"`, so the browser's cache neither answers nor keeps it: a refetch right after a write ([Reading right after a write](/docs/caching-reads#reading-right-after-a-write)). |
 
-`avClient.transaction([...], options)` takes the same options. Per-call `headers` win over a header `onCall` adds.
+`avClient.transaction([...], options)` takes the same options except `fresh`. Per-call `headers` win over a header `onCall` adds.
 
 ## Aborting
 

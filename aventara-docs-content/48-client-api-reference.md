@@ -181,6 +181,7 @@ The last argument of every call. Never sent in the body.
 | `grouping` | `boolean` | `false` sends this call on its own route, never in a `POST /_all`. |
 | `headers` | `Record<string, string>` | Extra request headers. The framework's own identity headers are refused: `The "Aventara-Contract-Hash" header is the framework's own; a request cannot set it` (a `TypeError`). |
 | `requestId` | `string` | Sent as `Aventara-Request-Id`; wins over the same header in `headers`. The empty string means absent. |
+| `fresh` | `true` | Only on a read that has a [`cache` stage](/docs/caching-reads); on any other call it is a type error. Sends the `GET` with `cache: "no-store"`, so the browser neither answers it from its cache nor stores the answer. Use it for a read right after a write: [Reading right after a write](/docs/caching-reads#reading-right-after-a-write). |
 
 ```ts
 await avClient.User.find.count({}, { requestId: "from-client-1", signal });

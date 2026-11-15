@@ -25,7 +25,7 @@ const protocol = AvProtocol.bind(framework);
 
 | Member | What it does |
 |---|---|
-| `protocol.surface()` | The routes to mount: `{ kind: "operation" \| "contract" \| "transactions" \| "all", method, path }` with `path` relative to the `api` mount path (`/_contract`, `/_resources/User/find/many`, `/_transactions`). Only advertised operations appear; `transactions` only when transactions are interactive; `all` (`POST /_all`) whenever at least one operation is advertised. A read with a [`cache` stage](/docs/caching-reads) has a second `operation` entry, `method: "GET"`, at the same path, right after its `POST`. |
+| `protocol.surface()` | The routes to mount: `{ kind: "operation" \| "contract" \| "transactions" \| "all" \| "can", method, path }` with `path` relative to the `api` mount path (`/_contract`, `/_resources/User/find/many`, `/_transactions`). Only advertised operations appear; `transactions` only when transactions are interactive; `all` (`POST /_all`) whenever at least one operation is advertised; `can` (`POST /_access/can`) only when the framework is built with [`access`](/docs/config-reference#access). A read with a [`cache` stage](/docs/caching-reads) has a second `operation` entry, `method: "GET"`, at the same path, right after its `POST`. |
 | `protocol.handleOperation(request)` | Decode, execute and encode one operation, a cached read's `GET` included. Resolves to a response; never rejects. |
 | `protocol.handleTransaction(request)` | The same for `/_transactions`. |
 | `protocol.handleAll(request, { signal })` | The same for `/_all`. Resolves to `{ status, headers, body }`; `body` is a string, or, when the caller sent `Accept: application/x-ndjson`, an async iterable of lines to write as each operation settles. Abort `signal` when the client leaves. |
@@ -108,6 +108,8 @@ for (const route of protocol.surface()) {
     app.get(url, (req, res) => send(res, protocol.encodeContract(toRequest(req, rel(req)))));
   } else if (route.kind === "transactions") {
     app.post(url, raw, async (req, res) => send(res, await protocol.handleTransaction(toRequest(req, rel(req)))));
+  } else if (route.kind === "can") {
+    app.post(url, raw, async (req, res) => send(res, await protocol.handleCan(toRequest(req, rel(req)))));
   } else if (route.kind === "all") {
     // One JSON body; with `Accept: application/x-ndjson`, one line per operation as it settles.
     app.post(url, raw, async (req, res) => {
@@ -220,6 +222,8 @@ createServer(async (req, res) => {
       return send(res, await protocol.handleTransaction(request));
     case "operation":
       return send(res, await protocol.handleOperation(request));
+    case "can":
+      return send(res, await protocol.handleCan(request));
     case "all": {
       // One JSON body; with `Accept: application/x-ndjson`, one line per operation as it settles.
       const gone = new AbortController();          // the client left: operations not yet started never start

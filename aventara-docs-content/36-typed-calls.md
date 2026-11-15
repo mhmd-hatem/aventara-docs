@@ -7,7 +7,7 @@ section: frontend
 
 # Typed calls
 
-The generated client has one property per Resource, one per operation family under it, and one per variant: `avClient.<Resource>.<family>.<variant>(args, options?)`. Argument and result types come from the same derivation the server uses, so a call that type-checks is a call the contract accepts.
+The generated client has one property per Resource, one per operation family under it, and one per variant: `avClient.<Resource>.<family>.<variant>(args, options?)`. Argument and result types come from the same derivation the server uses, so a call that type-checks is a call the contract accepts. A read that has a [`cache` stage](/docs/caching-reads) also takes `{ fresh: true }` as an option, to skip the browser's cache right after a write ([Reading right after a write](/docs/caching-reads#reading-right-after-a-write)).
 
 ```ts
 import avClient from "./api/AvClient";
