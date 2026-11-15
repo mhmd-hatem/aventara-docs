@@ -116,10 +116,10 @@ The count is per level, over the whole read:
 
 A filter can meet the same limit: on SQLite, `where: { id: { in: [...] } }` with 5,000 values and an `orderBy`, `notIn` with 5,000 values, a `find.count` with 5,000 `in` values, or a `where` of 1,200 `OR` branches (past the default `maxBooleanNodes` of 50, so only where you raised it).
 
-Prisma refuses the call before it reaches the database, so nothing is read or written. Aventara answers it as a limit, `422` `A2009`, with one `V1014` issue at the arguments:
+Prisma refuses the call before it reaches the database, so nothing is read or written. Aventara answers it as a limit, `422` `A2009`, with one `V1022` issue ("Database limit exceeded.") at the arguments:
 
 ```json
-{"data":null,"code":"A2009","cause":{"message":"The call needs more query parameters than the database takes in one query.","issues":[{"path":["arguments"],"code":"V1014","message":"The database refused this call: it needs more query parameters than the database takes in one query, as a nested to-many read under too many parent rows, or a filter with too many values, does. Page the outer read, or split the filter."}]}}
+{"data":null,"code":"A2009","cause":{"message":"The call needs more query parameters than the database takes in one query.","issues":[{"path":["arguments"],"code":"V1022","message":"The database refused this call: it needs more query parameters than the database takes in one query, as a nested to-many read under too many parent rows, or a filter with too many values, does. Page the outer read, or split the filter."}]}}
 ```
 
 No Aventara limit changes the database's. Page the outer read so that every level stays under it, or split the filter's list into several calls.
