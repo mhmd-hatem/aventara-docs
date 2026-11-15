@@ -209,7 +209,7 @@ One of your [pipes](/docs/pipelines#what-a-pipe-may-and-may-not-do) returned arg
 
 ## `delete.many` is "not available"
 
-`delete.many` is not offered with the Prisma adapter (Prisma cannot return the deleted rows). Use `delete.count`.
+`delete.many` is not offered with the Prisma adapter (Prisma cannot return the deleted rows). Use `delete.count`, in a transaction plan too: one step deletes any number of rows, where a `delete.unique` per row runs into the default 20-step limit.
 
 ## Fastify: my Nest middleware runs on Aventara routes
 
