@@ -103,6 +103,7 @@ The generated client does this for you, from the contract:
 - A cached read goes out alone, never in an [Operation Set](/docs/operation-sets), so it keeps its own URL and its own cache entry.
 - It sends only your own headers (`headers`, `requestId`) and no other Aventara header. A `requestId` goes out as `Aventara-Request-Id`, which makes a cross-origin read send a CORS preflight; leave it off a cached read to avoid one.
 - A URL longer than 4096 characters is sent as a `POST` to the same route instead, and is not cached.
+- `{ fresh: true }` in a cached read's call options sends it with `cache: "no-store"`, so the browser neither answers it from its cache nor stores the answer. See [Reading right after a write](#reading-right-after-a-write).
 
 The read runs exactly as its `POST` would: validation, exposure, policy, limits and every pipeline stage. A stage can tell the two apart: `ctx.$transport.method` is `"GET"` or `"POST"`.
 
@@ -136,6 +137,16 @@ A CDN keeps what a `public` answer allows and nothing marked `private` or `no-st
 - **Custom sign-in headers need a policy.** A CDN only varies on the headers `Vary` names. If callers sign in with a header of your own, configure a policy so Aventara knows who is anonymous, and keep your CDN from caching requests that carry that header, or don't use `"anonymous"` and `"everyone"`.
 - **No `Set-Cookie` on public answers.** A middleware in your host that adds `Set-Cookie` to every response (a session refresh, an A/B test) would put it on a public answer, and the CDN would keep it with the answer. Skip that middleware on `GET /api/_resources/...`, or let the CDN strip it.
 - **Deploys bust the cache.** The contract hash is in the URL, so you don't need to purge the CDN when you deploy.
+
+## Reading right after a write
+
+A refetch right after your own write can be answered by the browser's cache with the data from before it, for up to `maxAge` seconds. The write's own answer comes from the database, so use it for the row it changed. For a list, a count or a row an after hook changed, read with `{ fresh: true }`:
+
+```text
+avClient.Post.find.many({ where: { published: true } }, { fresh: true })
+```
+
+Only a read that has a `cache` stage takes `fresh`; the call is sent as a `GET` with `cache: "no-store"` and nothing else differs. The recipe, with TanStack Query and SWR, is [Read your own write](/docs/tanstack-query-and-swr#read-your-own-write).
 
 ## Things to know
 
