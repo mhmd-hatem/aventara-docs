@@ -1334,6 +1334,8 @@ assert.deepEqual(
 );
 ```
 
+- A shared function that takes a stage `ctx` (`accountSale(ctx, …)`, normally called from a hook): `await withStageContext(framework, (ctx) => accountSale(ctx, sale), { state })` from `@aventara/testing`. The `ctx` is the framework's real executor, typed as a stage's, in a transaction that rolls back when the callback returns (`outcome: "commit"` keeps the writes). Without a cast, no harness Resource.
+- Making one adapter call fail: `framework.application` objects are frozen on purpose, so `vi.spyOn` on them throws. Wrap the adapter instead: `const faulty = createFaultyAdapter(await createPrismaAdapter(…))`, pass it to `createFramework`, then `faulty.fail({ resource: "PrintJob", family: "update", variant: "unique", error: new Error("lost"), times: 1 })` (`times`: a number, default 1, or `"always"`; `when: (operation) => …` picks by arguments). A raw `Error` answers `A3001`; throw `new AvError("A2013", "…")` to test a translated code. `faulty.calls` records every call and whether it failed.
 - Never import `@aventara/core/internal` in tests: it is not public API and changes in any release.
 
 ## Agents (MCP)

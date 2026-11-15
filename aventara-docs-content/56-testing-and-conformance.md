@@ -1,13 +1,13 @@
 ---
 title: Testing and conformance
-description: "@aventara/testing - a fake adapter, and the protocol corpus for holding a host or a client written by you to Aventara's HTTP answers: run it in-process, serve it, or read it as plain JSON."
+description: "@aventara/testing - a fake adapter, a stage ctx for testing shared code, a wrapper that makes adapter calls fail, and the protocol corpus for holding a host or a client written by you to Aventara's HTTP answers: run it in-process, serve it, or read it as plain JSON."
 order: 63
 section: hosting
 ---
 
 # Testing and conformance
 
-`@aventara/testing` is for people who write something that speaks Aventara's HTTP protocol or runs a framework: a host for another server, a client in another language, an adapter, or application code you want to test without a database. It depends on `@aventara/core` only.
+`@aventara/testing` is for people who write something that speaks Aventara's HTTP protocol or runs a framework: a host for another server, a client in another language, an adapter, or application code you want to test without a database, or through a stage `ctx`, or with a failing adapter. It depends on `@aventara/core` only.
 
 ```bash
 npm install --save-dev @aventara/testing@rc
@@ -18,6 +18,8 @@ Node `^22.23.4 || >=24.22.1`. The package is ES modules, and it also loads from 
 | Export | What it is |
 |---|---|
 | `createFakeAdapter` | An in-memory adapter, with transaction tracing, for code that runs an `AvFramework` without a database. |
+| `withStageContext(framework, work, options?)` | Runs `work` with a real, typed stage `ctx` of your framework, in a transaction, so code that takes a `ctx` can be tested alone. |
+| `createFaultyAdapter(adapter)` | Wraps an adapter so chosen calls fail on demand, and records every call. |
 | `runAvProtocolConformance(driver)` | Drives the protocol corpus through one host and reports, per row, every mismatch. |
 | `AvProtocolCorpus` | The corpus's server side: a corpus `AvFramework` you can serve through your own host or client. |
 | `AvProtocolFixtures` | The corpus rows, as data. |
@@ -59,6 +61,98 @@ The adapter it returns has two read-only records beside the adapter members:
 - `transactions`: one entry per finished transaction, `{ operations, outcome }`, where `operations` is what ran inside it and `outcome` is `"committed"` or `"rolled-back"`. Use it to check that a `forceTransaction` operation and its hook's `ctx` writes ran in one transaction, or that a refusal rolled them back.
 
 The fake runs no SQL: `ctx.$sql` answers `A2002` with it. It checks nothing your database would (unique keys, foreign keys), and it returns what `execute` returns, so a test of database behaviour belongs on a real database. For tests through Nest and HTTP, see [NestJS host](/docs/nestjs-host#testing); for in-process calls checked as a remote caller, see [Server-side usage](/docs/server-side-usage).
+
+## Code that takes a stage `ctx`
+
+A function shared between stages, such as `accountSale(ctx, orderId)` called from an after hook, is written against the `ctx` a stage is told. `withStageContext` makes one outside a stage, so you test the function on its own, with no harness Resource and no second framework:
+
+```ts
+// src/account-sale.check.ts
+import assert from "node:assert/strict";
+import { type AvContext, createFramework } from "@aventara/core";
+import { createFakeAdapter, withStageContext } from "@aventara/testing";
+import { aventaraConfig } from "./aventara.config.js";
+import { discovery } from "./generated/aventara/discovery.artifact.js";
+
+type Model = typeof discovery.model;
+
+// The shared function: the same one a hook calls with its own ctx.
+async function accountSale(ctx: AvContext<Model>, orderId: number) {
+  return ctx.OutboxEvent.create.one({
+    data: { topic: "order.sold", payload: { orderId } },
+    select: ["id"],
+  });
+}
+
+const adapter = createFakeAdapter({
+  model: discovery.model,
+  execute: () => ({ id: 1 }),
+});
+const framework = await createFramework({ ...aventaraConfig, adapter });
+
+const event = await withStageContext(framework, (ctx) => accountSale(ctx, 42));
+assert.deepEqual(event, { id: 1 });
+```
+
+The `ctx` is your framework's own executor, typed exactly as a stage's, so `accountSale(ctx, 42)` needs no cast. Its calls go through the same Framework Validation Layer, field pipes, validators and compute as any `ctx` call, and join the transaction `withStageContext` opens, as a hook's do. The result is what `work` resolved.
+
+| Option | Default | What it does |
+|---|---|---|
+| `outcome` | `"rollback"` | `"rollback"` undoes what `work` wrote when it returns, so tests leave the database as it was. `"commit"` keeps it. A throw from `work` always rolls back, and its error is rethrown. |
+| `state` | `{}` | The request's state, read as `ctx.$state`. It is used as it is, not copied. |
+| `origin` | `"application"` | The layer `ctx.$origin` and `ctx.$contract` state. Calls made through the `ctx` are application-origin whatever this says. |
+| `requestId` | a fresh id | `ctx.$requestId`, which every call of the `ctx` carries. |
+| `operation`, `args` | none, `{}` | `ctx.$operation` and `ctx.$args`, for code that reads what the stage wraps. Without `operation`, `ctx.$operation` is `undefined`. |
+
+The framework's adapter must run transactions (`transactions: "interactive"` or `"server"`). With `createFakeAdapter`, use an `"interactive"` model and a `rollback` hook, so a rolled-back transaction undoes your in-memory rows.
+
+## Making an adapter call fail
+
+The operation objects on a framework (`framework.application.Post.update.unique`, and the ones on a `ctx`) are frozen on purpose: one test cannot change what a stage calls. So `vi.spyOn(framework.application.Post.update, "unique")` throws "Cannot redefine property", and a `Proxy` around the framework is not what your code holds.
+
+Fail the adapter instead. That is where an outage happens, and the framework's real error paths run. `createFaultyAdapter` wraps the adapter you pass to `createFramework`:
+
+```ts
+// src/post-update.check.ts
+import assert from "node:assert/strict";
+import { AvInternalError, createFramework } from "@aventara/core";
+import { createFakeAdapter, createFaultyAdapter } from "@aventara/testing";
+import { aventaraConfig } from "./aventara.config.js";
+import { discovery } from "./generated/aventara/discovery.artifact.js";
+
+const faulty = createFaultyAdapter(
+  createFakeAdapter({ model: discovery.model, execute: () => ({ id: 1, title: "Hello" }) }),
+);
+const framework = await createFramework({ ...aventaraConfig, adapter: faulty });
+
+const rule = faulty.fail({
+  resource: "Post",
+  family: "update",
+  variant: "unique",
+  when: (operation) => JSON.stringify(operation.arguments).includes("Failed"),
+  error: new Error("SQLITE_BUSY: database is locked"),
+  times: "always",
+});
+
+await assert.rejects(
+  framework.application.Post.update.unique({ where: { id: 1 }, data: { title: "Failed" }, select: ["id"] }),
+  AvInternalError,
+);
+await framework.application.Post.update.unique({ where: { id: 1 }, data: { title: "Done" }, select: ["id"] });
+assert.equal(rule.hits, 1);
+assert.deepEqual(faulty.calls.map((call) => call.failed), [true, false]);
+```
+
+| Member of `faulty.fail({ ... })` | What it does |
+|---|---|
+| `resource`, `family`, `variant` | Match a call by its Resource, operation family (`"update"`) and variant (`"unique"`). A member left out matches every call. |
+| `when(operation)` | Narrows the match by the call, usually its `operation.arguments`. |
+| `error` | What the call rejects with, by identity. A raw `Error` is answered `A3001` with the generic message, and none of its text reaches the caller. An `AvError` the adapter would have classified, such as `new AvError("A2013", "write conflict")`, is answered as its own code. |
+| `times` | How many matching calls fail: a number (default `1`) or `"always"`. Faults apply in the order added. |
+
+`fail` returns a rule: `rule.hits` counts the calls it has failed, and `rule.remove()` stops it. `faulty.calls` lists every operation call the wrapper saw, in order, each with `failed` and whether it ran `inTransaction`.
+
+A call inside a transaction (a hook's `ctx` call, or one made in `withStageContext`) fails the same way, and the transaction rolls back. `executeSql` and the transaction boundary itself pass through untouched. The wrapper takes the adapter `createPrismaAdapter` or `createFakeAdapter` returns, not the passive description `describePrismaAdapter` gives, because a description has nothing to call.
 
 ## The protocol corpus
 
@@ -172,7 +266,7 @@ From JavaScript, `require("@aventara/testing/fixtures/protocol-v1.json")`, or im
 ```js
 const t = require("@aventara/testing");
 Object.keys(t).sort().join(", ");
-// AvProtocolCorpus, AvProtocolFixtures, createFakeAdapter, runAvProtocolConformance
+// AvProtocolCorpus, AvProtocolFixtures, createFakeAdapter, createFaultyAdapter, runAvProtocolConformance, withStageContext
 ```
 
 ## See also
