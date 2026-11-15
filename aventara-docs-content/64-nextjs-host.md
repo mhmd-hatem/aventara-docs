@@ -151,7 +151,6 @@ Keep this file. `ready()` also does two things the app relies on:
 
 - It registers the in-process path `@/aventara/universal` takes on the server. Without it, a universal call on the server is refused ([The three clients](#the-three-clients)).
 - `avClient.tx` and `avApp.appTx` build handles on the built framework. Before it is built they throw `` `await ready()` before building them ``.
-- `avClient` and `avApp` behave like the framework's own objects: an operation the layer removed is not on them, so an untyped call to it throws `TypeError: … is not a function` (the same as an unknown Resource), not `A2002`. A request that names it by hand over HTTP still answers `A2002`.
 
 ### A framework you built
 
@@ -292,6 +291,8 @@ export async function publish(id: Post["id"]) {
 ```
 
 Transactions keep their layer. `avClient.tx` builds client-layer handles and `avClient.transaction` runs them with this request's state. `avApp.appTx` builds application handles (and `avApp.appTx.$sql`) and `avApp.transaction` runs them. A list that mixes the two is a type error, and is refused at runtime (`A2004`). See [Transactions with $ref](/docs/transactions-with-ref).
+
+Because `avClient` and `avApp` are built before the framework is, their Resources, families and variants always read as functions, even for an operation the layer removed. A call to a removed operation, or to an unknown Resource, rejects with `TypeError: avApp.notes.create.one is not a function`, where `framework.application` simply has no such member. The types do not offer it, and a request that names it by hand over HTTP still answers `A2002`.
 
 ### Client Components
 
