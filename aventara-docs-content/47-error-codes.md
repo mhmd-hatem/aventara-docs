@@ -175,8 +175,8 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 **Limit exceeded.** HTTP 422, thrown as `AvValidationError`.
 
-- Cause: A contract limit was crossed: nesting depth (V1013), list or plan size (V1014), boolean nodes (V1015) or Json value depth (V1021).
-- Fix: Ask for less (paginate, split the plan), or raise the limit under `limits`.
+- Cause: A contract limit was crossed: nesting depth (V1013), list or plan size (V1014), boolean nodes (V1015) or Json value depth (V1021). Or the database's own limit on query parameters in one query (V1022, at `["arguments"]`): a to-many relation read with an orderBy under too many parent rows, or a filter with too many values.
+- Fix: Ask for less (paginate, split the plan), or raise the limit under `limits`. For the database's parameter limit, page the outer read (https://aventara.razor34.dev/framework/docs/limits-and-safety#reading-a-large-set-pages-in-one-_all) or split the filter: no Aventara limit raises it.
 
 #### `A2010`
 
@@ -309,7 +309,7 @@ Example: the second step sends a number as a title.
 
 `operations`, entry `1`, `args`, `data`, `title`: the path walks the request. For a missing value (`V1000`) the last segment is the key that is absent, so the path ends at a key the request does not contain.
 
-### V1000 to V1021
+### V1000 to V1022
 
 #### `V1000`
 
@@ -465,7 +465,14 @@ Example: the second step sends a number as a title.
 - Cause: A Json field's value nests deeper than maxJsonDepth.
 - Fix: Flatten the value, or raise limits.maxJsonDepth.
 
-The V-code vocabulary is closed: exactly `V1000` to `V1021`. A field validator adds no code of its own: it reports `V1003` or `V1004` with `check` and `params`.
+#### `V1022`
+
+**Database limit exceeded.**
+
+- Cause: The call needs more query parameters than the database takes in one query (the issue is at `["arguments"]`): a to-many relation read with an orderBy under too many parent rows (from 998 on SQLite and 32,766 on PostgreSQL), at any level of the read, or a filter with thousands of values. Nothing was read or written.
+- Fix: Page the outer read by a stable order, so every level of each page stays under the limit (https://aventara.razor34.dev/framework/docs/limits-and-safety#reading-a-large-set-pages-in-one-_all), or split the filter's list. No Aventara limit raises the database's.
+
+The V-code vocabulary is closed: exactly `V1000` to `V1022`. A field validator adds no code of its own: it reports `V1003` or `V1004` with `check` and `params`.
 
 ### Example messages
 
@@ -492,6 +499,7 @@ Real messages, as a running server sends them:
 | `V1017` | `Operation fingerprint does not match its arguments.` |
 | `V1020` | `Transaction mixes application and client steps.` |
 | `V1021` | `Json value depth exceeds maxJsonDepth (64).` |
+| `V1022` | `The database refused this call: it needs more query parameters than the database takes in one query, as a nested to-many read under too many parent rows, or a filter with too many values, does. Page the outer read, or split the filter.` |
 
 ## Which V-codes go with which A-code
 
@@ -501,7 +509,7 @@ Real messages, as a running server sends them:
 | `A2002` | `V1006` |
 | `A2004` | `V1000` to `V1012` (except as listed below), `V1019`, `V1020` |
 | `A2007` | `V1010`, `V1011`, `V1016`, `V1017`, `V1018` |
-| `A2009` | `V1013`, `V1014`, `V1015`, `V1021` |
+| `A2009` | `V1013`, `V1014`, `V1015`, `V1021`, `V1022` |
 
 ## Reading errors in the client
 
