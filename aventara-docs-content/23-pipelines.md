@@ -9,30 +9,28 @@ section: guides
 
 A pipeline is a set of functions you register in the configuration. They run around operations: before one (to refuse it or change its arguments), around it (to time or wrap it), after it (to audit it or write related rows) and when it fails (to reshape the error). They are server-side code only: they never appear in a contract and are never sent to a client.
 
-Not sure which stage a task belongs in? [Which stage do I use?](/docs/which-stage) maps common tasks to stages.
+Not sure which stage a task belongs in? [Which stage do I use?](/docs/which-stage) maps common tasks to stages, and [The pipeline: triggers and functions around every operation](/docs/pipeline-triggers) maps each stage to what a database does around a statement.
 
 ## The stages
 
-An operation has five kinds of stage:
+An operation has five kinds of stage, and a field has four of its own (registered under `resources.<Resource>.fields.<field>.pipelines`). Every row below says what the stage is told: `ctx.$args` is the call, `ctx.$write` what a create, an update or an upsert writes, `ctx.$written` the written row's identifiers ([The four values](/docs/pipeline-triggers#the-four-values)).
 
-| Stage | Registered as | Receives | Returns | Use it to |
-|---|---|---|---|---|
-| Guard | `guards` | `(ctx)` | `true`/`undefined` to allow, `false` to deny (`A4001`) | Authenticate and authorize. See [Authentication and guards](/docs/authentication-and-guards). |
-| Pipe | `pipes` | `(args, ctx)` | new arguments to continue with, or `undefined` to keep them | Normalize input, scope a query. The only stage that changes the arguments. |
-| Hook | `hooks.before`, `hooks.after` | `(ctx)`; after: `(result, ctx)` | nothing | The operation's lifecycle: prepare, audit, write related rows. |
-| Interceptor | `interceptors` | `(ctx, next)` | the result of `next()` | Wrap execution: timing, tracing, caching. |
-| Filter | `filters` | `(error, ctx)` | an `AvError` to answer with, or `undefined` | Rewrite or enrich errors. |
+| Stage | Key | Runs once per | Receives | `ctx.$args` | `ctx.$write` | `ctx.$written` | Returns | Inside the transaction | For a nested write's target |
+|---|---|---|---|---|---|---|---|---|---|
+| Guard | `guards` | operation | `(ctx)` | the call as sent | – | – | `true`/`undefined` to allow, `false` to deny (`A4001`) | no: before `BEGIN` | yes (Resource and family guards) |
+| Pipe | `pipes` | operation | `(args, ctx)` | the call as the pipes so far left it (`args`) | – | – | new arguments, or `undefined` to keep them; the only stage that changes the arguments | no: before `BEGIN` | no |
+| Field write guard | `fields.<f>.pipelines.guards` | sent field | `(value, ctx)` | the call as sent | – | – | `false` to deny when the caller sends the field | no: before `BEGIN` | yes |
+| Field pipe | `fields.<f>.pipelines.pipes` | sent field | `(value)`, no `ctx` | – | – | – | the new value, or `undefined` to keep it | literal values before `BEGIN`, a `$ref` value at its step | yes |
+| Validators | `fields.<f>.pipelines.validators` | value | `AvZ` checks, no function | – | – | – | – (a refusal is `A2004`) | literal values before `BEGIN`, the rest inside | yes |
+| Compute (write) | `fields.<f>.pipelines.compute.create` / `.update` | record | `({ field, value, data, ctx })`; `data` is this record of the write, built so far | the call (a nested record's: its entry in the call) | – | – | the field's value, or `undefined` to keep it | yes | yes |
+| Interceptor | `interceptors` | operation | `(ctx, next)` | the call | as it was when the interceptor entered | – | the result of `next()` | yes | no |
+| `before` hook | `hooks.before` | operation | `(ctx)` | the call | after compute, with the earlier before hooks' values | – | nothing; on `create.one`, `update.first` and `update.unique`, `{ data: { … } }` to set fields of the row | yes | no |
+| Compute (read) | `fields.<f>.pipelines.compute.read` | returned row | `({ field, value, record, ctx })` | the call | – | – | the field's value, or `undefined` to keep it | yes | yes, for an included row |
+| `after` hook | `hooks.after` | operation | `(result, ctx)` | the call | what was written | on a single-row write | nothing | yes | no |
+| Filter | `filters` | failure | `(error, ctx)` | the call | when the failure came after write compute | – | an `AvError` to answer with, or `undefined` | where the failure was | no |
 
-A field has its own stages, registered under `resources.<Resource>.fields.<field>.pipelines`:
+A stage registered at the root runs for every origin; one in an overlay only for its own (`ctx.$origin`). A relation field takes write guards only. Guards authenticate and authorize ([Authentication and guards](/docs/authentication-and-guards)), validators are the [field validators](/docs/field-validators), compute is [Computed fields](/docs/computed-fields). The Resource transaction stages, which see a whole plan, are [below](#resource-transaction-stages).
 
-| Stage | Key | What it does |
-|---|---|---|
-| Validators | `validators` | Declarative `AvZ` checks on the value. See [Field validators](/docs/field-validators). |
-| Field pipes | `pipes` | `(value) => value`: a pure transform of the value the caller sent. |
-| Compute | `compute` | `create`, `update` and `read` stages that derive the field's value. See [Computed fields](/docs/computed-fields). |
-| Field write guards | `guards` | `(value, ctx)`: refuse the operation when the caller sends the field. |
-
-A relation field takes write guards only.
 
 Every stage receives a `ctx` that describes the request, carries the request's state (`ctx.$state`) and can call the framework (`ctx.<Resource>...`, `ctx.$sql`, `ctx.$transaction`). See [The pipeline context](/docs/pipeline-context).
 
@@ -99,7 +97,7 @@ The stage kinds are norms. The framework does not check what a callback does: an
 Every operation runs its stages in one order:
 
 ```text
-framework validation (with required fields) -> policy admission (when a policy is configured) -> guards -> pipes -> validators (the caller's values) -> write compute -> re-check (validators of what compute set or changed) -> policy write check (when a policy is configured) -> interceptors (before) -> hooks.before -> operation -> hooks.after -> interceptors (after) -> filters
+framework validation (with required fields) -> policy admission (when a policy is configured) -> guards -> pipes -> validators (the caller's values) -> write compute -> re-check (validators of what compute set or changed) -> interceptors (before) -> hooks.before -> policy write check (when a policy is configured) -> operation -> hooks.after -> interceptors (after) -> filters
 ```
 
 In full, with every level listed root first, then the operation's overlay:
@@ -122,11 +120,13 @@ validate the arguments against the contract: types, unknown fields, structure, a
                           then the validators on the values compute set or changed (A2004), top
                           level then nested targets'; then the root's validators on a value
                           compute or a pipe set in a field the caller's layer hides (A3000)
--> policy write check     only when a policy is configured: the checks on what a write is about to
-                          write (see Policies)
    (a refusal so far runs no interceptor and no hook)
--> interceptors enter     every level, outer to inner
--> hooks.before           every level, outer to inner
+-> interceptors enter     every level, outer to inner (each told ctx.$write as it then stands)
+-> hooks.before           every level, outer to inner; a { data } one returns is merged into
+                          ctx.$write and judged as compute's output is (A2004, A3000, A3004)
+-> policy write check     only when a policy is configured: the checks on what the write writes,
+                          ctx.$write (see Policies); its refusal is the answer, whatever an
+                          interceptor or a filter makes of it
 -> the adapter call (one call), then compute (read) on the returned rows
 -> hooks.after            every level, inner to outer
 -> interceptors unwind    every level, inner to outer
@@ -202,8 +202,8 @@ Once a stage has nothing left to change, it reads frozen data:
 
 - A guard gets `ctx.$args` as the caller sent it, frozen.
 - A pipe gets frozen arguments and returns new ones. Pipes are the only stage that changes the arguments.
-- The validators check what the pipes and write compute produced, and that is exactly what the adapter writes. No later stage can change it.
-- Interceptors, hooks and filters get the validated arguments, frozen. An `after` hook gets a frozen copy of the result; an interceptor may still return a different result after `next()`, and the framework checks it against the contract like any result. What your code receives from a call is never frozen.
+- The validators check what the pipes and write compute produced, and what a `before` hook returns; that is exactly what the adapter writes.
+- Interceptors, hooks and filters get the call as `ctx.$args`, frozen: the arguments as the caller sent them and the pipes shaped them, without what write compute filled. A create's, an update's or an upsert's interceptors and hooks also get `ctx.$write`, frozen: what will be written, compute's values and the before hooks' included. An `after` hook gets a frozen copy of the result; an interceptor may still return a different result after `next()`, and the framework checks it against the contract like any result. What your code receives from a call is never frozen.
 - Writing to frozen data throws a `TypeError` (ES modules run in strict mode), which answers `A3000` unless you catch it.
 - `Date` and `Uint8Array` values cannot be frozen, so every stage gets its own copy, guards and pipes included; changing one in place changes nothing a later stage sees, what is written or what the caller receives.
 
@@ -216,7 +216,7 @@ const stampOwner: AvPipe = (args, ctx) => {
 };
 ```
 
-`ctx.$args` and an `after` hook's result are typed `unknown`. To read them typed, claim a read-only shape: `ctx.$args as AvDeepReadonly<{ data: { title: string } }>`.
+`ctx.$args`, `ctx.$write` and an `after` hook's result are typed `unknown` in a stage registered above one operation. To read them typed there, claim a read-only shape: `ctx.$args as AvDeepReadonly<{ data: { title: string } }>`. A stage registered on one operation gets them typed ([Typed arguments](/docs/pipeline-context#typed-arguments)).
 
 ## Field pipes and field write guards
 
@@ -308,7 +308,7 @@ validate the whole plan
 -> guards, then pipes, of each touched Resource (they see the whole plan, $refs unresolved)
 -> every touched Resource's interceptors enter, then every touched Resource's hooks.before
      -> the steps, in order, each: resolve $refs -> field pipes and validators of the resolved values -> write compute -> validators of what compute set or changed
-        -> policy write check (with a policy) -> interceptors -> hooks.before -> the adapter call -> hooks.after -> interceptors -> output validation
+        -> interceptors -> hooks.before -> policy write check (with a policy) -> the adapter call -> hooks.after -> interceptors -> output validation
    every touched Resource's hooks.after, the last touched Resource's first (they see every step's result), then the interceptors unwind
 -> COMMIT
 
@@ -317,7 +317,7 @@ interceptors unwind, then their transaction filters run, the last-touched Resour
 and the answer.
 ```
 
-- `ctx.$args` is the plan, frozen: `readonly AvTransactionStep[]`, each an operation step `{ resource, family, variant, args }` or a SQL step `{ sql }`. There is no `ctx.$operation`.
+- `ctx.$plan` is the plan, frozen: `readonly AvTransactionStep[]`, each an operation step `{ resource, family, variant, args }` or a SQL step `{ sql }`. There is no `ctx.$operation`.
 - Touched Resources run in the order their first top-level step appears. A Resource reached only through a nested write is not touched, and a SQL step touches nothing.
 - The `after` hooks run before the commit, so they can write related rows with `ctx`, and a throw rolls everything back.
 - A transaction pipe returns a new plan to change a step's `args`; it must keep the same steps on the same operations. Anything else answers `A3004`. A changed step is checked again, validators included, at its step.
@@ -346,7 +346,7 @@ import type { AvTransactionGuard } from "@aventara/core";
 // A client plan may delete at most one project.
 const oneProjectDeletePerPlan: AvTransactionGuard = (ctx) =>
   ctx.$origin === "application" ||
-  ctx.$args.filter((step) => step.resource === "Project" && step.family === "delete").length <= 1;
+  ctx.$plan.filter((step) => step.resource === "Project" && step.family === "delete").length <= 1;
 
 // resources: { Project: { transactions: { pipelines: { guards: [oneProjectDeletePerPlan] } } } }
 ```
@@ -357,7 +357,7 @@ Outside a transaction, a write is already committed when its `after` hook runs. 
 
 ```text
 validate -> policy admission (with a policy) -> guards -> pipes -> validators (every value the caller sent) -> BEGIN -> the Resource's transaction stages
--> write compute -> re-check (what compute set or changed) -> policy write check (with a policy) -> interceptors -> hooks.before -> the adapter call -> hooks.after -> interceptors
+-> write compute -> re-check (what compute set or changed) -> interceptors -> hooks.before -> policy write check (with a policy) -> the adapter call -> hooks.after -> interceptors
 -> output validation -> COMMIT
 ```
 
@@ -497,13 +497,13 @@ An issue keeps its `path` inside a transaction. In a transaction step you can wr
 
 Outside a transaction, the write is already committed when an `after` hook runs, so an unwrapped operation's after hooks should observe (audit, metrics, notifications), not undo. To make a hook's writes commit with the operation, set [`forceTransaction`](#forcetransaction) on it. Inside a transaction plan, a step's interceptors and hooks run inside the database transaction, so an error thrown in one (a `before` hook refusing step 2, say: `A4002` with `operation: 1`) rolls the whole plan back ([Transactions with $ref](/docs/transactions-with-ref)). A step that a guard or a pipe refuses is refused before the transaction opens.
 
-An `after` hook cannot change the result: it gets a frozen copy. To return something else, use an interceptor.
+An `after` hook cannot change the result: it gets a frozen copy. To return something else, use an interceptor. On a single-row write it gets the written row's identifiers as `ctx.$written` (`ctx.$written.id`), whatever the caller selected.
 
 An interceptor's `next()` runs everything below it once. A second call is refused and the operation answers `A3000`.
 
 ## The context
 
-Every stage gets a `ctx`: `$operation`, `$args`, `$origin`, `$requestId`, `$contract`, `$state`, for remote requests `$transport`, and the executor. `ctx.$state` is the request's one writable object: a guard can put the signed-in user there and every later stage reads it. See [The pipeline context](/docs/pipeline-context#request-state).
+Every stage gets a `ctx`: `$operation`, `$args`, `$origin`, `$requestId`, `$contract`, `$state`, for remote requests `$transport`, and the executor; a write's stages from the interceptors on also `$write`, a single-row write's `after` hooks `$written`, and a Resource transaction stage `$plan` in place of `$operation` and `$args`. `ctx.$state` is the request's one writable object: a guard can put the signed-in user there and every later stage reads it. See [The pipeline context](/docs/pipeline-context#request-state).
 
 ### Typing a stage
 
@@ -532,6 +532,7 @@ An inline arrow in a configuration that is an `as const` object (the scaffold's 
 ## See also
 
 - [Which stage do I use?](/docs/which-stage): common tasks mapped to stages.
+- [The pipeline: triggers and functions around every operation](/docs/pipeline-triggers): the stages as database triggers, the four values, request rules versus row rules.
 - [The pipeline context](/docs/pipeline-context): `ctx`, calling other Resources, `ctx.$sql`, recipes.
 - [Authentication and guards](/docs/authentication-and-guards)
 - [Field validators](/docs/field-validators) and [Computed fields](/docs/computed-fields)

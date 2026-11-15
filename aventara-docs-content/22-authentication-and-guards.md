@@ -123,7 +123,7 @@ A guard receives a `ctx` ([The pipeline context](/docs/pipeline-context)):
 |---|---|
 | `$origin` | `"application"` (your own server code), `"client"` (a remote request) or `"agent"` (an AI agent over [MCP](/docs/mcp)). |
 | `$operation` | Which operation: `{ resource: "User", family: "delete", variant: "unique" }`. For a nested write's target, `nested: true`. |
-| `$args` | The operation's arguments. |
+| `$args` | The call: the operation's arguments as the caller sent them. |
 | `$requestId` | The request's correlation id ([Request IDs](/docs/request-ids-and-diagnostics)). |
 | `$contract` | The active contract, as passive data. |
 | `$transport` | Remote requests only: `{ method: "POST" \| "GET", headers }` (`"GET"` for a [cached read](/docs/caching-reads)). Header names are lower-cased; repeated headers are joined with `", "`. Server-side calls have no `$transport`. |
@@ -133,7 +133,7 @@ A guard receives a `ctx` ([The pipeline context](/docs/pipeline-context)):
 
 - On a field: a field write guard (`resources.<R>.fields.<f>.pipelines.guards`) gets the sent value and `ctx`, and refuses the operation when the caller sends that field: only editors may set `status`. On a relation field it covers `$connect`, `$disconnect` and `$set` too. See [Pipelines](/docs/pipelines#field-pipes-and-field-write-guards).
 - On nested writes: a `Post.create` with a nested `category: { $create: ... }` runs `Category`'s own Resource and `create` guards on the nested data, so a guard that refuses `Category.create` also refuses the nested create (`A4001`). See [Nested writes run the target's stages](/docs/pipelines#nested-writes-run-the-targets-stages).
-- On a whole transaction: `resources.<R>.transactions.pipelines.guards` sees every step of a plan at once (`ctx.$args` is the plan): "a client plan deletes at most one project".
+- On a whole transaction: `resources.<R>.transactions.pipelines.guards` sees every step of a plan at once (`ctx.$plan` is the plan): "a client plan deletes at most one project".
 
 ## An access provider: sign-in and policy from one object
 

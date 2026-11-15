@@ -130,7 +130,7 @@ A call reads the database, so Next.js runs it at request time (Cache Components 
 2. **Configure, never wrap.** Do not write a Nest controller, service or REST route for a model. Every model already has its operations; shape them with `exposed`/`exemptions` and pipelines. Server code calls `framework.application.<Resource>.<family>.<variant>(args)`.
 3. **Expose with exemptions.** `exposed: true` (the root's default; an overlay that lists `exemptions` must say it) exposes everything the adapter offers and `exemptions` lists what to hide; `exposed: false` exposes nothing and `exemptions` lists what to expose. Hide at the root what no caller may reach; hide in `client` what only your server code may reach. An overlay (`application`, `client`, `agent`) only narrows the root's view: to expose something in one overlay only, expose it at the root and hide it in the other.
 4. **Pick the stage from the table below.** Each task has one stage. Do not authorize in an interceptor, transform in a guard, or write other rows from a compute stage.
-5. **Never cast types away.** No `as`, no `!`, no `any`, no `@ts-ignore` / `@ts-expect-error` to silence an Aventara type. The types are the contract: a type error names the exact key that is wrong (a misspelled field, an overlay granting what the root hid, a missing required field). Fix the key. One exception: the `ctx` calls and `ctx.$args` inside a stage are typed from your model with no configuration applied, so a Json field's `AvZ` shape and a virtual input are not in those types (a field the root's or the `application` overlay's `compute.create` fills is optional in a `ctx` create, from `computed-fields.generated.ts`). There, narrow the value with a type guard (`typeof x === "object" && x !== null && "en" in x`); never cast. To get typed arguments in a stage, register it on the operation (`resources.<R>.operations.<family>.<variant>.pipelines`) inside a `defineResource` block; to type `ctx.<Resource>` calls, give the stage type your model (`AvAfterHook<Model>`).
+5. **Never cast types away.** No `as`, no `!`, no `any`, no `@ts-ignore` / `@ts-expect-error` to silence an Aventara type. The types are the contract: a type error names the exact key that is wrong (a misspelled field, an overlay granting what the root hid, a missing required field). Fix the key. A stage's `ctx` calls and `ctx.$args` inside a stage read the root's definitions from the generated `config-facts.generated.ts`: a Json field the root shapes reads as its shape and the root's `VIRTUAL` inputs are in `ctx.$args.data` (a field the root's or the `application` overlay's `compute.create` fills is optional in a `ctx` create, from `computed-fields.generated.ts`). Run `aventara:prepare` after changing a `definition` or a compute stage. One exception: in a transaction plan a step's guards, pipes and filters see a field that can take a reference as `string | AvTransactionReference<string>`, so narrow it with a type guard (`typeof title === "string"`); never cast. To get typed arguments in a stage, register it on the operation (`resources.<R>.operations.<family>.<variant>.pipelines`) inside a `defineResource` block; to type `ctx.<Resource>` calls, give the stage type your model (`AvAfterHook<Model>`).
 6. **Annotate stages in the `as const` config.** An inline arrow in `aventaraConfig` has no contextual type (TS7006). Declare it with its stage type (`const requireUser: AvGuard = (ctx) => …`) or move it into a `defineResource` block, where stages are typed from where they sit. A compute stage's type names the field's value type too (`const slug: AvComputeCreate<Model, string> = ({ data }) => …`); without it the stage returns `unknown` and is refused.
 7. **Fill server-side values with `compute.create`.** A required field the caller must not send (an owner id, a slug, a hash) gets `pipelines.compute.create`; that also makes it optional on create. A pipe cannot fill a missing required field: the framework refuses the create (`A2004`, `V1000`) before any pipe runs. Hiding a required field from a layer that still creates the Resource needs a `compute.create`, or startup fails with `COMPILER_HIDDEN_REQUIRED_FIELD`.
 8. **Validate values with `AvZ`.** Length, range, pattern, format and closed-set rules are field validators (`AvZ.maxLength(80)`, `AvZ.email()`, `AvZ.oneOf(["draft", "live"])`); a closed set the types should name is a Prisma `enum` instead, and an enum field takes no validator, an enum list only a length (`AvZ.minItems`, `AvZ.maxItems`); the type error says so. They are part of the contract, so the generated client checks them before sending. A rule across the call's fields is a guard or a pipe. A rule that reads the database (an order must still be open) can change between a guard's check and the write, because guards run before the transaction opens: re-check it in `hooks.before` with `forceTransaction: true` (or in the Resource's transaction stages), where a throw rolls back. A guard may check it first for a quick refusal, never as the only check. When two requests can race on one row, make the write the check: `update.first` with the expected state in its `where` (`reference/recipes.md`, Compare-and-set).
@@ -152,7 +152,9 @@ A call reads the database, so Next.js runs it at request time (Cache Components 
 | Normalize input (trim, lower-case, default, scope a query) | a pipe, or a field pipe for one value | `pipelines.pipes`, or `resources.<R>.fields.<f>.pipelines.pipes` |
 | Enforce a rule on a value (length, range, pattern, format) | a validator | `resources.<R>.fields.<f>.pipelines.validators` |
 | Fill in or derive a field's value | compute | `resources.<R>.fields.<f>.pipelines.compute` (`create`, `update`, `read`) |
-| React after a write (event, audit row, counter) | an `after` hook writing through `ctx`, with `forceTransaction` when it must commit with the write | `pipelines.hooks.after` |
+| Check a rule that depends on stored rows (a status transition, stock not negative) | a `before` hook reading through `ctx`, with `forceTransaction` when it must hold at commit | `pipelines.hooks.before` |
+| Set a value from such a rule (`NEW.x = …`) | a `before` hook returning `{ data: { … } }` (create.one, update.first, update.unique) | `pipelines.hooks.before` at the variant |
+| React after a write (event, audit row, counter) | an `after` hook writing through `ctx` (the row's id is `ctx.$written`), with `forceTransaction` when it must commit with the write | `pipelines.hooks.after` |
 | Wrap execution (timing, a server-side cache, retries, `AsyncLocalStorage`) | an interceptor | `pipelines.interceptors` |
 | Let the browser or a CDN keep a read's answer | `cache({ for, maxAge })` | `pipelines.cache` on a `find`: layer, Resource, family or variant |
 | Turn an error into an answer | a filter | `pipelines.filters` |
@@ -160,7 +162,7 @@ A call reads the database, so Next.js runs it at request time (Cache Components 
 | Share request information (the signed-in user) | `ctx.$state` | `AventaraModule`'s `state` option, or a call's `{ state }` |
 | Call another operation from a stage | `ctx.<Resource>.<family>.<variant>(args)` | the `ctx` every stage gets (compute can only read) |
 
-Order: framework validation → policy admission (with a policy) → guards (then a nested write's targets') → pipes (operation, then field; then a nested write's targets') → field validators and Json shapes on every value the caller sent, a field with a compute stage included (`A2004`) → write compute (create/update) → re-check (Aventara's checks on pipe and compute output: `A3004`, `A3000`; then validators and Json shapes on what compute set or changed: `A2004`; then the root's validators on what compute or a pipe set in a field the caller's layer hides: `A3000`) → policy write check (with a policy) → interceptors → `hooks.before` → the operation (then compute read) → `hooks.after` → interceptors unwind → output validation; filters handle a failure. With `forceTransaction` or in a plan, framework validation, policy admission, guards, pipes and the validators of the caller's values run before `BEGIN` (`reference/stages.md`). `ctx` calls are raw: they run validation, field pipes, compute and validators, and none of your guards, pipes, hooks, interceptors or filters.
+Order: framework validation → policy admission (with a policy) → guards (then a nested write's targets') → pipes (operation, then field; then a nested write's targets') → field validators and Json shapes on every value the caller sent, a field with a compute stage included (`A2004`) → write compute (create/update) → re-check (Aventara's checks on pipe and compute output: `A3004`, `A3000`; then validators and Json shapes on what compute set or changed: `A2004`; then the root's validators on what compute or a pipe set in a field the caller's layer hides: `A3000`) → interceptors → `hooks.before` (their returned values merged and re-checked) → policy write check (with a policy, on what is written) → the operation (then compute read) → `hooks.after` → interceptors unwind → output validation; filters handle a failure. With `forceTransaction` or in a plan, framework validation, policy admission, guards, pipes and the validators of the caller's values run before `BEGIN` (`reference/stages.md`). `ctx` calls are raw: they run validation, field pipes, compute and validators, and none of your guards, pipes, hooks, interceptors or filters. `ctx.$args` is always the call as sent and piped; what the write writes, compute's values included, is `ctx.$write` (`reference/stages.md`).
 
 ## The shape of a configuration
 
@@ -250,6 +252,7 @@ The types catch each of these; knowing them saves a round per guess.
 | `take`, `skip` | `limit`, `offset`; `cursor: { id }` needs an explicit `orderBy` (`V1009` without one) |
 | `_count` | `"$count"` in a `select` list, or `find.count({ where })` |
 | `connect`, `create`, `set` (relations) | `$connect`, `$create`, `$connectOrCreate`, `$disconnect`, `$set`, `$update`, `$delete`, `$upsert` |
+| nested `update` / `delete` / `upsert` on a relation | to-many: `{ $update: { where, data } }` (`where` required), `{ $delete: { where } }`, `{ $upsert: { where, create, update } }`, each an object or an array of them. To-one: `{ $update: { data } }` (`where` optional; a bare `{ $update: { active: false } }` is refused `V1012`, "$update requires a data object"), `{ $delete: true }` or `{ $delete: { where } }`, `{ $upsert: { create, update } }` (`where` optional) |
 | `increment`, `push` | `{ $increment: 1 }`, `$decrement`, `$multiply`, `$divide`, `$push` |
 | `undefined` in a `where` (ignored) | refused (`V1001`): leave the key out |
 | `findMany`, `update` | `find.many`, `update.unique`; `update.first` writes one row a `where` matches |
@@ -666,6 +669,7 @@ An override wins when present, not when truthy (`false` overrides). An explicit 
 | a family | `find`: `first`, `unique`, `many`, `count`; `create`: `one`, `many`, `count`; `update`: `first`, `unique`, `many`, `count`; `delete`: `first`, `unique`, `count`; `upsert`: `unique` |
 | a scalar field | `select`, `filter`, `order`, `orderNulls`, `create`, `update` |
 | a relation field | `select`, `include`, `filter`, `order`, `pagination`, `reducers`, `create`, `update` |
+| `pagination` tokens | `limit`, `offset`, `cursor`: `pagination: true` grants every token the adapter offers, a list only those it names. They page a to-many relation read in a `select` or `include` (`{ discounts: { orderBy, limit: 1 } }`); without the token the call is refused `V1006` ("Nested limit pagination is not available on this edge."), and a to-one relation takes none. `order` (`orderBy`) and `filter: ["nested"]` (`where`) are separate capabilities; `reducers` grants `$count` |
 | `"read"` names | a scalar's `select`, `filter`, `order`, `orderNulls`; a relation's `select`, `include`, `filter`, `order`, `pagination`, `reducers` |
 | a capability's tokens | `filter`: operators (`equals`, `in`, `contains`, …); `create`/`update`: directives (`$increment`, `$push`, …); relation `create`/`update`: `$create`, `$connect`, `$connectOrCreate`, `$disconnect`, `$set`, `$update`, `$delete`, `$upsert` |
 
@@ -823,17 +827,17 @@ A wrong configuration throws one `AvConstructionError` before the server listens
 
 ## The stages
 
-| Stage | Key | Receives | Returns |
-|---|---|---|---|
-| Guard | `guards` | `(ctx)` | `true`/`undefined` to allow, `false` to deny (`A4001`); or throw an `AvError` |
-| Pipe | `pipes` | `(args, ctx)` | new arguments, or `undefined` to keep them; the only stage that changes arguments |
-| Hook | `hooks.before`, `hooks.after` | before `(ctx)`; after `(result, ctx)` | nothing |
-| Interceptor | `interceptors` | `(ctx, next)` | the result of `next()`, called exactly once |
-| Filter | `filters` | `(error, ctx)` | an `AvError` to answer with, or `undefined` to pass it on |
-| Validators (field) | `fields.<f>.pipelines.validators` | `AvZ` checks | data, part of the contract |
-| Field pipe | `fields.<f>.pipelines.pipes` | `(value)` | the new value, or `undefined` to keep it; no `ctx` |
-| Compute (field) | `fields.<f>.pipelines.compute` | `create`/`update`: `({ field, value, data, ctx })`; `read`: `({ field, value, record, ctx })`, or `{ dependsOn, compute }` around it to name the stored fields it reads | the field's value, typed by the field, or `undefined` to keep the current one |
-| Field write guard | `fields.<f>.pipelines.guards` | `(value, ctx)` | `false` refuses when the caller sends the field |
+| Stage | Key | Receives | Sees | Returns |
+|---|---|---|---|---|
+| Guard | `guards` | `(ctx)` | `$args`: the call as sent | `true`/`undefined` to allow, `false` to deny (`A4001`); or throw an `AvError` |
+| Pipe | `pipes` | `(args, ctx)` | `args` = `$args`: the call as the pipes so far left it | new arguments, or `undefined` to keep them; the only stage that changes arguments |
+| Hook | `hooks.before`, `hooks.after` | before `(ctx)`; after `(result, ctx)` | `$args`: the call; `$write` (create, update, upsert): what is written; after hooks of a single-row write also `$written`, the row's identifiers | before: nothing, or on `create.one`, `update.first`, `update.unique` `{ data: { … } }` to set fields of the row; after: nothing |
+| Interceptor | `interceptors` | `(ctx, next)` | `$args`; `$write` as it was when it entered | the result of `next()`, called exactly once |
+| Filter | `filters` | `(error, ctx)` | `$args`; `$write` when the failure came after write compute | an `AvError` to answer with, or `undefined` to pass it on |
+| Validators (field) | `fields.<f>.pipelines.validators` | `AvZ` checks | the value | data, part of the contract |
+| Field pipe | `fields.<f>.pipelines.pipes` | `(value)` | the sent value; no `ctx` | the new value, or `undefined` to keep it |
+| Compute (field) | `fields.<f>.pipelines.compute` | `create`/`update`: `({ field, value, data, ctx })`; `read`: `({ field, value, record, ctx })`, or `{ dependsOn, compute }` around it to name the stored fields it reads | `data`: this record of the write, built so far (earlier compute stages' values in it); `ctx.$args`: the call, the caller's own values; `record`: the row as read | the field's value, typed by the field, or `undefined` to keep the current one |
+| Field write guard | `fields.<f>.pipelines.guards` | `(value, ctx)` | the sent value; `$args` as for guards | `false` refuses when the caller sends the field |
 
 A relation field takes write guards only. Stage types to annotate with: `AvGuard`, `AvPipe`, `AvBeforeHook`, `AvAfterHook`, `AvInterceptor`, `AvFilter`, `AvFieldPipe`, `AvFieldGuard`, `AvComputeCreate`, `AvComputeUpdate`, `AvComputeRead`, and `AvTransactionGuard`, `AvTransactionPipe`, `AvTransactionBeforeHook`, `AvTransactionAfterHook`, `AvTransactionInterceptor`, `AvTransactionFilter`. Pass your model (`AvAfterHook<Model>`, `type Model = typeof discovery.model`) when the stage calls `ctx.<Resource>`. A compute stage's type also takes the field's value type: `AvComputeCreate<Model, string>` for a string field, `AvComputeUpdate<Model, number>` for an int one. `AvComputeCreate` or `AvComputeCreate<Model>` alone returns `unknown`, which no field takes.
 
@@ -844,7 +848,7 @@ A relation field takes write guards only. Stage types to annotate with: `AvGuard
 | Layer | `pipelines` | every operation of the layer |
 | Resource | `resources.<R>.pipelines` | every operation of R |
 | Family | `resources.<R>.operations.<family>.pipelines` | every variant of the family |
-| Variant | `resources.<R>.operations.<family>.<variant>.pipelines` | that operation; `ctx.$args` is typed |
+| Variant | `resources.<R>.operations.<family>.<variant>.pipelines` | that operation; `ctx.$args`, `ctx.$write` and `ctx.$written` are typed |
 | Field | `resources.<R>.fields.<f>.pipelines` | field f's value |
 | Resource transactions | `resources.<R>.transactions.pipelines` | once per transaction with a top-level step on R |
 
@@ -860,27 +864,125 @@ framework validation (required create fields included, top level and nested; a f
 -> pipes        the same levels, then field pipes, then nested targets' field pipes
 -> validators   field validators and Json shapes on every value the caller sent, a field with a compute stage included (A2004),
                 top level then nested targets'
--> compute      create or update (write compute), then nested targets'
+-> compute      create or update (write compute), then nested targets'                 ctx.$write exists from here
 -> re-check     Aventara's own checks on the pipe and compute output, top level and nested targets' in one pass (A3004, A3000),
                 then validators and Json shapes on the values compute set or changed, top level then nested targets' (A2004),
                 then the root's validators on a value compute or a pipe set in a field the caller's layer hides (A3000)
--> policy write check   only with a policy: the checks on what the write is about to write; never filtered
--> interceptors enter, outer to inner
--> hooks.before
+-> interceptors enter, outer to inner                                                   each told ctx.$write as it stands
+-> hooks.before  outer to inner; a returned { data } is merged into ctx.$write.data and re-checked as compute's output is
+-> policy write check   only with a policy: the checks on what the write is about to write (ctx.$write); never filtered
 -> operation    one adapter call, then compute read on the returned rows
--> hooks.after
+-> hooks.after                                                                          ctx.$written on a single-row write
 -> interceptors unwind
 -> output validation, then the response
 on a failure after validation: filters, inner to outer; the first that handles it wins
 ```
 
-A call refused by the policy, a guard, the re-check or a validator runs no interceptor and no hook. A `unique` operation that matches no row fails at the operation (`AvNotFoundError`, `A2003`); no `after` hook runs.
+A call refused by policy admission, a guard, the re-check or a validator runs no interceptor and no hook. A refusal of the policy write check, or of a before hook's values, is the call's answer whatever an interceptor or a filter makes of it. A `unique` operation that matches no row fails at the operation (`AvNotFoundError`, `A2003`); no `after` hook runs.
 
-With `forceTransaction` (or as a step of a transaction plan), framework validation, policy admission, guards, pipes and the validators of every literal value the caller sent run before the transaction; a refusal there opens nothing. Then: `BEGIN -> the Resource's transaction stages -> validators of $ref values (and of what a transaction pipe changed) -> write compute -> re-check (values compute set or changed) -> policy write check -> interceptors -> hooks.before -> adapter call -> hooks.after -> interceptors -> output validation -> COMMIT`. A refusal inside, an output that fails output validation (`A3000`) included, rolls the transaction back. The hooks' `ctx` calls and `ctx.$sql` join it; the guards' and pipes' calls do not. So a guard's database check can be stale by the time the write commits (check-then-act): re-check a rule that must hold at commit in `hooks.before` or a transaction stage. `forceTransaction` needs transactions: under an effective `transactionsStyle: "none"` it is a startup error (`CONFIG_INVALID_VALUE`).
+With `forceTransaction` (or as a step of a transaction plan), framework validation, policy admission, guards, pipes and the validators of every literal value the caller sent run before the transaction; a refusal there opens nothing. Then: `BEGIN -> the Resource's transaction stages -> validators of $ref values (and of what a transaction pipe changed) -> write compute -> re-check (values compute set or changed) -> interceptors -> hooks.before -> policy write check -> adapter call -> hooks.after -> interceptors -> output validation -> COMMIT`. A refusal inside, an output that fails output validation (`A3000`) included, rolls the transaction back. The hooks' `ctx` calls and `ctx.$sql` join it; the guards' and pipes' calls do not. So a guard's database check can be stale by the time the write commits (check-then-act): re-check a rule that must hold at commit in `hooks.before` or a transaction stage. `forceTransaction` needs transactions: under an effective `transactionsStyle: "none"` it is a startup error (`CONFIG_INVALID_VALUE`).
+
+## The pipeline's values
+
+| Name | What it is | Where |
+|---|---|---|
+| `ctx.$args` | the call: the arguments as the caller sent them and the pipes shaped them. Never compute output, never a before hook's values | every operation stage, compute included |
+| `ctx.$write` | what the write writes: `$args` after write compute and the values `before` hooks returned, exactly what the adapter is handed, shaped as `$args` | create, update, upsert: interceptors (as they entered), `hooks.before` (with earlier hooks' values), `hooks.after`, filters after compute |
+| compute's `data` | this record of `$write`, built so far | write compute |
+| `ctx.$written` | the written row's identifiers (`{ id }`), whatever the caller selected; `undefined` when a `first` write matched nothing | `hooks.after` of `create.one`, `update.first`/`unique`, `upsert.unique`, `delete.first`/`unique` |
+| `result` | the answer: the caller's `select`, read compute applied | `hooks.after`'s first parameter, what `next()` resolves |
+| `ctx.$plan` | the transaction plan | Resource transaction stages |
+
+```ts
+// src/resources/post.resource.ts
+import { AvError, defineResource } from "@aventara/core";
+import { discovery } from "../generated/aventara/discovery.artifact.js";
+
+type Model = typeof discovery.model;
+
+export const post = defineResource<Model>()("Post", {
+  fields: {
+    // `data` is this record as built so far; the caller's own values are `ctx.$args`.
+    slug: { pipelines: { compute: { create: ({ data }) => String(data.title).toLowerCase() } } },
+  },
+  operations: {
+    create: {
+      one: {
+        pipelines: {
+          hooks: {
+            // A BEFORE ROW trigger: set a field of the row being written.
+            before: [(ctx) => ({ data: { status: ctx.$write.data.published === true ? "LIVE" : "DRAFT" } })],
+            after: [
+              async (_result, ctx) => {
+                // The created row's id, even when the caller did not select it.
+                await ctx.Post.update.unique({ where: { id: ctx.$written.id }, data: { views: 0 }, select: ["id"] });
+              },
+            ],
+          },
+        },
+      },
+    },
+    update: {
+      unique: {
+        pipelines: {
+          hooks: {
+            before: [
+              (ctx) => {
+                // What the caller asked for (`$args`), and what will be written (`$write`).
+                if (ctx.$args.data.published === false && ctx.$write.data.title === undefined) {
+                  throw new AvError("A2004", "Send a title when you unpublish.");
+                }
+              },
+            ],
+          },
+        },
+      },
+    },
+  },
+});
+```
+
+- A before hook's `{ data }` holds the row's own scalar fields only, no relation or nested write. Hooks run in stage order (layer, Resource, family, variant; root, then overlay at each): a later hook's value replaces an earlier one's, and every hook's replaces write compute's. The values are judged as compute's are: the field validators (`A2004`), the root's on a hidden field (`A3000`), Aventara's own checks (`A3004`), then the policy write check. Any other return, or a value on another operation, answers `A3004`.
+
+## Request rules versus row rules
+
+- **A guard checks the request:** may this caller do this operation (role, origin, tenant), and is the call well formed. It runs before the transaction, sees a plan step's `$ref`s unresolved in `ctx.$args`, and is cheap and early.
+- **`hooks.before` checks the row:** any rule that depends on stored state (a status transition, "the base unit cannot be edited", stock not negative). It runs inside the transaction under `forceTransaction` or in a plan, just before the write, with `ctx.$args`' references resolved and no step of the request between the check and the write. It is the BEFORE ROW trigger. Two concurrent transactions can still both pass it under the database's default isolation: for a value two requests race on, use compare-and-set (`reference/recipes.md`).
+- A guard may refuse early on stored state as an optimization, but it is never the authority: the same rule must hold in `hooks.before`.
+- An update guard cannot pass `ctx.$args.where` to a `ctx` find: in a plan, `where.id` may be a `$ref` (`TS2322` is correct). Do the lookup in `hooks.before`, where `ctx.$args.where` is resolved:
+
+```ts
+// src/resources/ticket.resource.ts
+import { AvError, defineResource } from "@aventara/core";
+import { discovery } from "../generated/aventara/discovery.artifact.js";
+
+type Model = typeof discovery.model;
+
+export const ticket = defineResource<Model>()("Ticket", {
+  operations: {
+    update: {
+      unique: {
+        forceTransaction: true,
+        pipelines: {
+          hooks: {
+            before: [
+              async (ctx) => {
+                // Inside the transaction, references resolved: a value, never a `$ref`.
+                const stored = await ctx.Ticket.find.unique({ where: ctx.$args.where, select: ["status"] });
+                if (stored.status === "CLOSED") throw new AvError("A4002", "A closed ticket stays closed.");
+              },
+            ],
+          },
+        },
+      },
+    },
+  },
+});
+```
 
 ## Resource transaction stages
 
-`resources.<R>.transactions.pipelines` takes every stage kind and runs once per transaction (a plan, or a `forceTransaction` call) that has a top-level step on R, after `BEGIN`. `ctx.$args` is the plan, frozen: each step `{ resource, family, variant, args }` or `{ sql }`; there is no `ctx.$operation`. A transaction pipe may change a step's `args`, never the steps (`A3004`). There is no layer-wide transaction stage: put it on each Resource it guards. A nested write's target is not touched.
+`resources.<R>.transactions.pipelines` takes every stage kind and runs once per transaction (a plan, or a `forceTransaction` call) that has a top-level step on R, after `BEGIN`. `ctx.$plan` is the plan, frozen: each step `{ resource, family, variant, args }` or `{ sql }`; there is no `ctx.$operation`. A transaction pipe may change a step's `args`, never the steps (`A3004`). There is no layer-wide transaction stage: put it on each Resource it guards. A nested write's target is not touched.
 
 ```ts
 import type { AvTransactionGuard } from "@aventara/core";
@@ -888,7 +990,7 @@ import type { AvTransactionGuard } from "@aventara/core";
 // A client plan may delete at most one post.
 export const onePostDeletePerPlan: AvTransactionGuard = (ctx) =>
   ctx.$origin === "application" ||
-  ctx.$args.filter((step) => step.resource === "Post" && step.family === "delete").length <= 1;
+  ctx.$plan.filter((step) => step.resource === "Post" && step.family === "delete").length <= 1;
 
 // resources: { Post: { transactions: { pipelines: { guards: [onePostDeletePerPlan] } } } }
 ```
@@ -897,7 +999,9 @@ export const onePostDeletePerPlan: AvTransactionGuard = (ctx) =>
 
 - `ctx` calls (`ctx.<Resource>.<family>.<variant>(args)`) are raw: validation, field pipes, compute and validators run; guards, pipes, hooks, interceptors, filters and transaction stages do not. They are application-origin: the `application` overlay's exposure applies, the `client` overlay's does not. They resolve data directly and throw the `AvError` subclass of a failure. A `ctx` create need not write a field the root's or the `application` overlay's `compute.create` fills: the generated types state those fields (run `aventara:prepare` after changing compute); a field only the `client` or `agent` overlay computes is still required.
 - A stage's `ctx` reads and its typed `ctx.$args` know the root's definitions through the same generated file (`config-facts.generated.ts`): a Json field the root shapes reads as its shape (a write takes it read-only, so a frozen value fits), and the `VIRTUAL` inputs the root adds are in a variant's `ctx.$args.data` (`ctx.$args.data.tenderedMinor`). A `ctx` create must write a non-null added input the `ctx` call can create, as any caller must.
-- In a transaction plan, a step's guards, pipes and filters run before its `$ref` values are resolved: in their `ctx.$args` a field that can take a reference is the value or an `AvTransactionReference` (`string | AvTransactionReference<string>`), so narrow it (`typeof title === "string"`) first. Hooks and interceptors run after the references are resolved, in a plan and in a plain call alike: their `ctx.$args` holds values (`ctx.$args.data.tenderedMinor` is a `bigint` there).
+- In a transaction plan, a step's guards, pipes and filters run before its `$ref` values are resolved: in their `ctx.$args` a field that can take a reference is the value or an `AvTransactionReference` (`string | AvTransactionReference<string>`), so narrow it (`typeof title === "string"`) first. Hooks and interceptors run after the references are resolved, in a plan and in a plain call alike: their `ctx.$args` and `ctx.$write` hold values (`ctx.$args.data.tenderedMinor` is a `bigint` there).
+- `ctx.$args` is the call, never compute output: a field `compute.create` fills is `T | undefined` in it, at every stage. Read what is written, compute's values and the before hooks' included, from `ctx.$write` (`ctx.$write.data.slug`). In compute, `data` is the record as built so far; read the caller's own value from `ctx.$args`.
+- `ctx.$written` is in `after` hooks of single-row writes only. Its fields are read with the write and left out of the answer, so the caller's `select` is answered as sent.
 - `ctx.$args` is frozen. A pipe returns new arguments; an `after` hook gets a frozen result. To answer with a different result, use an interceptor. A `Date` or bytes value cannot be frozen, so each stage gets its own copy: changing one in place changes nothing another stage sees, what is written or what the caller receives.
 - ``await ctx.$sql<Row>`select id from "Post" where "authorId" = ${userId}` `` is a tagged template: each `${…}` is bound as a parameter, never spliced into the text. It resolves the rows as `Row[]` and runs in the current transaction (outside one, as a plain statement).
 - `await ctx.$transaction(async (tx) => { … })` runs the work in a transaction, `tx` being this `ctx` bound to it, and resolves what the work resolves; a throw rolls it back. Inside an open transaction it joins it.
@@ -913,7 +1017,7 @@ export const onePostDeletePerPlan: AvTransactionGuard = (ctx) =>
 - Calls grouped into one `POST /_all` each run their own full pipeline, exactly as alone (`reference/client.md`).
 - A Resource reached only through a nested write runs that Resource's guards and field stages, not its transaction stages, hooks or interceptors.
 - Without a transaction, a write has committed when its `after` hook runs.
-- A guard or pipe that throws a non-`AvError` answers `A3000` and the real error goes to `diagnostics`; throw `new AvError(code, message)` to answer a code. A thrown `A2004` may carry `issues: [{ path: ["arguments", …], code: "V1001", message }]`.
+- A guard or pipe that throws a non-`AvError` answers `A3000` and the real error goes to `diagnostics`; throw `new AvError(code, message)` to answer a code. A thrown `A2004` may carry `issues: [{ path: ["arguments", …], code: "V1001", message }]`. The `path` is kept when it names a member the caller sent or a field the operation takes (a `data` or `where` field, an entry of a bulk create by index), even one the caller left out, so a guard can point at the field it wants filled; a path that names neither is dropped and the issue stays.
 - A pipe's output is re-checked against the server's own contract before compute and validators see it: returning a field the Resource does not have, or a wrong type, answers `A3004`. Name pipes (`function scopeToTenant(…)`) so the server log names them.
 ````
 
@@ -1111,13 +1215,11 @@ export const order = defineResource<Model>()("Order", {
         pipelines: {
           hooks: {
             after: [
-              async (result, ctx) => {
-                // The result holds what the caller selected: narrow it, never cast it.
-                const id = typeof result === "object" && result !== null && "id" in result ? result.id : undefined;
+              async (_result, ctx) => {
+                // `ctx.$written` is the created row's identifiers, whatever the caller selected.
                 // Runs inside the order's transaction: a throw rolls the order back.
-                if (typeof id !== "number" && typeof id !== "string") throw new Error('create orders with select: ["id"]');
                 await ctx.OutboxEvent.create.one({
-                  data: { topic: "order.created", payload: { orderId: id } },
+                  data: { topic: "order.created", payload: { orderId: ctx.$written.id } },
                   select: ["id"],
                 });
               },
@@ -1130,7 +1232,7 @@ export const order = defineResource<Model>()("Order", {
 });
 ```
 
-Orders are created by server code, which selects `id`: `framework.application.Order.create.one({ data, select: ["id"] })`. Hide both from remote callers: `client.exemptions.resources: { OutboxEvent: true, Order: { operations: { create: true } } }`. A consumer reads new `OutboxEvent` rows (or, on PostgreSQL with a queue, the hook sends the event's id with ``ctx.$sql`…` ``).
+Orders are created by server code: `framework.application.Order.create.one({ data })`. Hide both from remote callers: `client.exemptions.resources: { OutboxEvent: true, Order: { operations: { create: true } } }`. A consumer reads new `OutboxEvent` rows (or, on PostgreSQL with a queue, the hook sends the event's id with ``ctx.$sql`…` ``).
 
 ## Server code
 

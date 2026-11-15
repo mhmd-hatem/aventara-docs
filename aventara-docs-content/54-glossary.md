@@ -85,6 +85,12 @@ section: about
 
 **Overlay.** The `application` or `client` block of the configuration. It holds the same six layer keys as the root.
 
+**`$args`.** A stage's `ctx.$args`: the call, the operation's arguments as the caller sent them and the pipes shaped them. Never what write compute or a `before` hook adds. See [The four values](/docs/pipeline-triggers#the-four-values).
+
+**`$write`.** A create's, an update's or an upsert's `ctx.$write`, from the interceptors on: what the write writes, `$args` after write compute and the values `before` hooks returned, exactly what the adapter is handed.
+
+**`$written`.** In the `after` hooks of a single-row write, the written row's identifiers, whatever the caller selected.
+
 **Pipeline.** Server-side stages (guards, pipes, hooks, interceptors, filters) that run around operations, registered at the layer, a Resource, a family, a variant or a field. Never part of a contract. A stage's `ctx` can also call the framework ([The pipeline context](/docs/pipeline-context)).
 
 **Protocol version.** The number `1`, sent as `Aventara-Protocol-Version`.

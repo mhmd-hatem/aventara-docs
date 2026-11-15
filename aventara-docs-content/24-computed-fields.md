@@ -192,10 +192,10 @@ A stage receives one object:
 | Member | `create` / `update` | `read` |
 |---|---|---|
 | `field` | the field's name | the same |
-| `value` | the value after pipes, or `undefined` when the caller did not send it (in a chain, the previous stage's result) | the stored value, or `undefined` for a virtual field |
-| `data` | the operation's data after pipes, frozen (for an upsert, one branch) | |
+| `value` | `data[field]`: the value after pipes, or `undefined` when the caller did not send it (an earlier stage's value when one set it; in a chain, the previous stage's result) | the stored value, or `undefined` for a virtual field |
+| `data` | this record of what the write writes, built so far, frozen: the caller's values after pipes plus what earlier compute stages set (for an upsert, one branch; for a nested write, the nested record) | |
 | `record` | | the row as read, as the stage's own frozen copy (writing into it throws: `A3000`) |
-| `ctx` | a read-only ctx ([below](#compute-reads-but-never-writes)) | the same |
+| `ctx` | a read-only ctx ([below](#compute-reads-but-never-writes)); `ctx.$args` is the call, the caller's own values, never compute's output (a nested record's compute: its entry in the call) | the same; `ctx.$args` is the call |
 
 A stage may return a promise. An upsert has no compute phase of its own: its `create` branch is filled by `compute.create` and its `update` branch by `compute.update`, both before the one database call.
 
