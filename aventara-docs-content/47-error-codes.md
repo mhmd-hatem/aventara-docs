@@ -252,7 +252,7 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 ### Authentication and authorization (A4xxx)
 
-Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework itself never authenticates. `A4002` is also what a configured policy answers when it refuses a request: see [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) (the `@aventara/core` README). `A4000` and `A4001` are also what a request answers when its `state` rejects with an authentication library's refusal, an error whose `status` or `statusCode` is 401 or 403: see [`A4000`](/docs/error-codes#a4000) and [`A4001`](/docs/error-codes#a4001) below (409 answers [`A2013`](/docs/error-codes#a2013) by the same rule), for every host and the `access` provider alike.
+Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework itself never authenticates. `A4002` is also what a configured policy answers when it refuses a request: see [A policy engine](https://www.npmjs.com/package/@aventara/core#a-policy-engine) (the `@aventara/core` README). `A4000` and `A4001` are also what a request answers when its `state` rejects with an authentication library's refusal, an error whose `status` or `statusCode` is 401 or 403: see [`A4000`](/docs/error-codes#a4000) and [`A4001`](/docs/error-codes#a4001) below, for every host and the `access` provider alike.
 
 #### `A4000`
 
