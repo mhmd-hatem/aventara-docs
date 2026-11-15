@@ -163,12 +163,15 @@ A string status (`"401"`), any other number, or an error whose `status` and `sta
 The same rule applies to the host's own `state` option and to every place that runs `state`:
 
 - every route that seeds state: operations, cached reads, `/_transactions`, `/_all`, `/_access/can` and MCP tool calls;
+- the provider's `me` verb, which resolves the principal as `state` does: `framework.serverClient.$access.me()` rejects with the same errors, and the MCP `me` tool answers the same tool errors;
 - `@/aventara/universal` on the Next.js server, which answers `401`, `403` or `409` as a route does;
 - `avClient` in a Next.js Server Component or Server Action, and `framework.serverClient.$access.can` given `headers`. These run in process, so the call rejects with an `AvAuthError` whose `code` is `A4000` or `A4001` and whose message is `"Unauthenticated."` or `"Forbidden."`, or an `AvConflictError` whose `code` is `A2013` and whose message is `"Concurrent modification."`.
 
 In process, a thrown `AvError` and any other error reach your code as they were thrown. So does a refusal when your own code calls the provider's `state`, as in `{ state: await tillAccess.state({ headers }) }` [above](#an-access-provider): Aventara does not run that call, so the library's error reaches your code unchanged.
 
 The rule reads the error, not where it came from. If `state` calls another service and that service's own 401, 403 or 409 error escapes, the request answers `A4000`, `A4001` or `A2013` and nothing is sent to `diagnostics`. Catch the errors of such a call inside `state`, or throw an `AvError` of the code you mean.
+
+The same holds for `me`: a 401, 403 or 409 error that escapes from the `me` verb, an upstream service's included, is read as a refusal, so catch such errors inside `me`. Over MCP, an `AvError` thrown while a tool call is answered (from `me`, say) now answers as its own code instead of `A3000`; any other throw is still `A3000`. A 409 answers `A2013`, "retry", so `state` must be safe to run again (or catch its own 409s): the caller is told to send the request again.
 
 ## What the engine answers
 
