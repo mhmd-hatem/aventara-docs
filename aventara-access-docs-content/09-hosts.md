@@ -508,7 +508,9 @@ the refusal. What a request needs instead depends on who sends it:
   other cookies are ignored. It is not read under `audience` or the `service` profile, and the policy refuses its
   principal on the MCP endpoint (origin `agent`, rule `mcp-audience`). A kiosk till that is a native app works this
   way ([A till that is a native app](/docs/kiosk#a-till-that-is-a-native-app-headers)); its server answers CORS with
-  `authorization` and `kiosk-device` allowed and `set-auth-token` and `set-kiosk-device` exposed. Signing in is the
+  every header the till sends allowed (`authorization`, `kiosk-device`, `content-type` and the generated client's
+  `aventara-protocol-version`, `aventara-contract-hash` and `aventara-request-id`) and `set-auth-token` and
+  `set-kiosk-device` exposed. Signing in is the
   exception: sign-in, sign-up, magic-link and email-OTP requests from a browser are checked
   even with no cookie (their `Origin`, and Fetch Metadata's `Sec-Fetch-*` headers), so a browser client served from
   another origin must have that origin in `trustedOrigins` to sign in.
