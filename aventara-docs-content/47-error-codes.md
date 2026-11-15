@@ -175,8 +175,8 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 **Limit exceeded.** HTTP 422, thrown as `AvValidationError`.
 
-- Cause: A contract limit was crossed: nesting depth (V1013), list or plan size (V1014), boolean nodes (V1015) or Json value depth (V1021).
-- Fix: Ask for less (paginate, split the plan), or raise the limit under `limits`.
+- Cause: A contract limit was crossed: nesting depth (V1013), list or plan size (V1014), boolean nodes (V1015) or Json value depth (V1021). Or the database's own limit on query parameters in one query (V1014 at `["arguments"]`, its message saying so): a to-many relation read with an orderBy under too many parent rows (about 1,000 on SQLite), or a filter with too many values.
+- Fix: Ask for less (paginate, split the plan), or raise the limit under `limits`. For the database's parameter limit, page the outer read (https://aventara.razor34.dev/framework/docs/limits-and-safety#reading-a-large-set-pages-in-one-_all) or split the filter: no Aventara limit raises it.
 
 #### `A2010`
 
@@ -413,8 +413,8 @@ Example: the second step sends a number as a title.
 
 **Configured limit exceeded.**
 
-- Cause: A limit above maxListLimit, more steps than maxTransactionOperations, or more write steps than maxTransactionWrites.
-- Fix: Paginate or split the plan, or raise the limit.
+- Cause: A limit above maxListLimit, more steps than maxTransactionOperations, or more write steps than maxTransactionWrites. At `["arguments"]`, with a message that says so, the database's own limit on query parameters in one query: a to-many relation read with an orderBy under too many parent rows (about 1,000 on SQLite), or a filter with too many values.
+- Fix: Paginate or split the plan, or raise the limit. The database's parameter limit is not one of Aventara's: page the outer read (https://aventara.razor34.dev/framework/docs/limits-and-safety#reading-a-large-set-pages-in-one-_all) or split the filter.
 
 #### `V1015`
 
