@@ -62,6 +62,7 @@ type AvProtocolBinding = {
   surface():                 readonly SurfaceRoute[];
   handleOperation(request):  Promise<AvProtocolResponse>;
   handleTransaction(request): Promise<AvProtocolResponse>;
+  handleCan(request, options?: { state? }): Promise<AvProtocolResponse>;
   handleAll(request, options?: { state?; signal?: AbortSignal }):
     Promise<AvProtocolResponse | { status: 200; headers: Record<string, string>; body: AsyncIterable<string> }>;
   encodeContract(request):   AvProtocolResponse;
@@ -76,9 +77,10 @@ type AvProtocolBinding = {
 
 | Member | Use it to | Notes |
 |---|---|---|
-| `surface()` | List the routes to mount. | Each entry is `{ kind: "operation", method: "POST", path: "/_resources/<Resource>/<family>/<variant>", resource, family, variant }` (a read with a `cache` stage has a second one with `method: "GET"`, right after it), then `{ kind: "contract", method: "GET", path: "/_contract" }`, then `{ kind: "transactions", method: "POST", path: "/_transactions" }` only when the client contract is `interactive` (not under `server` or `none`), and `{ kind: "all", method: "POST", path: "/_all" }` whenever an operation is advertised. Only advertised operations appear, so a hidden Resource has no route. Paths are relative to the `api` mount path. Frozen. |
+| `surface()` | List the routes to mount. | Each entry is `{ kind: "operation", method: "POST", path: "/_resources/<Resource>/<family>/<variant>", resource, family, variant }` (a read with a `cache` stage has a second one with `method: "GET"`, right after it), then `{ kind: "contract", method: "GET", path: "/_contract" }`, then `{ kind: "transactions", method: "POST", path: "/_transactions" }` only when the client contract is `interactive` (not under `server` or `none`), then `{ kind: "all", method: "POST", path: "/_all" }` whenever an operation is advertised, and last `{ kind: "can", method: "POST", path: "/_access/can" }` only when the framework is built with [`access`](/docs/config-reference#access). Only advertised operations appear, so a hidden Resource has no route. Paths are relative to the `api` mount path. Frozen. |
 | `handleOperation(request)` | Decode, execute and encode one operation request, a cached read's `GET` included. | Resolves to a response; never rejects. |
 | `handleTransaction(request)` | The same for `/_transactions`. | |
+| `handleCan(request, { state })` | Answer `POST /_access/can`: a page's `{ questions }` put to the policy engine, as the principal in `ctx.$state.me`. | `200 A1000` with one boolean per question, in order. It shapes a UI, so it refuses malformed input only and never answers `403`. `state` seeds the request's `ctx.$state`, as for `handleOperation`. Without `access` configured the route is not on `surface()` and the answer is `404 A2002`. |
 | `handleAll(request, { signal })` | The same for `/_all` ([Operation Sets](/docs/http-protocol#operation-sets)). | `body` is a string, or, when the request sent `Accept: application/x-ndjson`, an async iterable of lines: write each as it comes. Abort `signal` when the client disconnects: operations not yet started never start. |
 | `encodeContract(request)` | Answer `GET /_contract`. | Synchronous. Handles `If-None-Match`: a matching ETag answers `304` with no body. |
 | `answerAbsent(request)` | Answer any other path under the protocol's `_` namespace (`400 A2000` for an unknown `/_*` path, `405` with `Allow` for a wrong method on a protocol route). | Returns `undefined` for a path outside the namespace; that one is yours to answer. |
@@ -90,7 +92,7 @@ Verified, in process:
 
 ```ts
 const protocol = AvProtocol.bind(framework);
-protocol.surface().length;          // 48 = 45 operations + _contract + _transactions + _all
+protocol.surface().length;          // 48 = 45 operations + _contract + _transactions + _all (a framework with `access` has `_access/can` too)
 await protocol.handleOperation({
   method: "POST",
   path: "/_resources/User/find/count",

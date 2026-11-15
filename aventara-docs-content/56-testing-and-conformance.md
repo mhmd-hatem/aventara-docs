@@ -27,6 +27,23 @@ Node `^22.23.4 || >=24.22.1`. The package is ES modules, and it also loads from 
 
 ## A framework without a database
 
+The examples below use two models next to the starter's, and a `Post` and an `OutboxEvent` Resource over them. Ids are strings, as the scaffold's `cuid()` ids are:
+
+```prisma
+model Post {
+  id    String @id @default(cuid())
+  title String
+}
+
+model OutboxEvent {
+  id      String @id @default(cuid())
+  topic   String
+  payload Json
+}
+```
+
+Declare `Post` and `OutboxEvent` as Resources the usual way ([Resources and operations](/docs/resources-and-operations)); the checks call them on `framework.application` and on a stage `ctx`.
+
 `createFakeAdapter(options)` returns an adapter that keeps no data of its own. Your test answers each operation, and the adapter records what it was asked. Build the framework from your own configuration and your model, and run the same calls your server makes:
 
 ```ts
@@ -40,12 +57,12 @@ import { discovery } from "./generated/aventara/discovery.artifact.js";
 const adapter = createFakeAdapter({
   model: discovery.model,
   execute: (operation) =>
-    operation.family === "find" && operation.variant === "many" ? [{ id: 1, title: "Hello" }] : null,
+    operation.family === "find" && operation.variant === "many" ? [{ id: "p1", title: "Hello" }] : null,
 });
 const framework = await createFramework({ ...aventaraConfig, adapter });
 
 const posts = await framework.application.Post.find.many({ select: ["id", "title"] });
-assert.deepEqual(posts, [{ id: 1, title: "Hello" }]);
+assert.deepEqual(posts, [{ id: "p1", title: "Hello" }]);
 assert.equal(adapter.operations[0]?.resource, "Post");
 ```
 
@@ -64,7 +81,7 @@ The fake runs no SQL: `ctx.$sql` answers `A2002` with it. It checks nothing your
 
 ## Code that takes a stage `ctx`
 
-A function shared between stages, such as `accountSale(ctx, orderId)` called from an after hook, is written against the `ctx` a stage is told. `withStageContext` makes one outside a stage, so you test the function on its own, with no harness Resource and no second framework:
+A function shared between stages, such as `accountSale(ctx, postId)` called from an after hook, is written against the `ctx` a stage is told. `withStageContext` makes one outside a stage, so you test the function on its own, with no harness Resource and no second framework:
 
 ```ts
 // src/account-sale.check.ts
@@ -77,27 +94,27 @@ import { discovery } from "./generated/aventara/discovery.artifact.js";
 type Model = typeof discovery.model;
 
 // The shared function: the same one a hook calls with its own ctx.
-async function accountSale(ctx: AvContext<Model>, orderId: number) {
+async function accountSale(ctx: AvContext<Model>, postId: string) {
   return ctx.OutboxEvent.create.one({
-    data: { topic: "order.sold", payload: { orderId } },
+    data: { topic: "post.sold", payload: { postId } },
     select: ["id"],
   });
 }
 
 const adapter = createFakeAdapter({
   model: discovery.model,
-  execute: () => ({ id: 1 }),
+  execute: () => ({ id: "e1" }),
 });
 const framework = await createFramework({ ...aventaraConfig, adapter });
 
 // Pass the operation of the stage that calls accountSale in production.
-const event = await withStageContext(framework, (ctx) => accountSale(ctx, 42), {
-  operation: { resource: "Order", family: "create", variant: "one" },
+const event = await withStageContext(framework, (ctx) => accountSale(ctx, "p1"), {
+  operation: { resource: "Post", family: "create", variant: "one" },
 });
-assert.deepEqual(event, { id: 1 });
+assert.deepEqual(event, { id: "e1" });
 ```
 
-The `ctx` is your framework's own executor, typed exactly as a stage's, so `accountSale(ctx, 42)` needs no cast. Its calls go through the same Framework Validation Layer, field pipes, validators and compute as any `ctx` call, and join the transaction `withStageContext` opens, as a hook's do. The result is what `work` resolved.
+The `ctx` is your framework's own executor, typed exactly as a stage's, so `accountSale(ctx, "p1")` needs no cast. Its calls go through the same Framework Validation Layer, field pipes, validators and compute as any `ctx` call, and join the transaction `withStageContext` opens, as a hook's do. The result is what `work` resolved.
 
 | Option | Default | What it does |
 |---|---|---|
@@ -124,7 +141,7 @@ import { aventaraConfig } from "./aventara.config.js";
 import { discovery } from "./generated/aventara/discovery.artifact.js";
 
 const faulty = createFaultyAdapter(
-  createFakeAdapter({ model: discovery.model, execute: () => ({ id: 1, title: "Hello" }) }),
+  createFakeAdapter({ model: discovery.model, execute: () => ({ id: "p1", title: "Hello" }) }),
 );
 const framework = await createFramework({ ...aventaraConfig, adapter: faulty });
 
@@ -138,10 +155,10 @@ const rule = faulty.fail({
 });
 
 await assert.rejects(
-  framework.application.Post.update.unique({ where: { id: 1 }, data: { title: "Failed" }, select: ["id"] }),
+  framework.application.Post.update.unique({ where: { id: "p1" }, data: { title: "Failed" }, select: ["id"] }),
   AvInternalError,
 );
-await framework.application.Post.update.unique({ where: { id: 1 }, data: { title: "Done" }, select: ["id"] });
+await framework.application.Post.update.unique({ where: { id: "p1" }, data: { title: "Done" }, select: ["id"] });
 assert.equal(rule.hits, 1);
 assert.deepEqual(faulty.calls.map((call) => call.failed), [true, false]);
 ```
@@ -171,11 +188,19 @@ A row whose `client.outcome` is `"transport-error"` describes something no host 
 
 `runAvProtocolConformance` builds the corpus `AvFramework` itself and drives every row a host answers through a driver you supply. A driver is a function that receives an `AvFramework` and returns a session: `send` takes one protocol request and returns the answer, and `close` ends the session. Each row runs against a fresh framework through a fresh session.
 
-This driver goes straight to the protocol binding, the way a host's route handlers do. Written for your own host, `send` would call it over a socket instead:
+This driver goes straight to the protocol binding, the way a host's route handlers do. It has a case for every `kind` that `surface()` returns (`operation`, `contract`, `transactions`, `all` and `can`): a route the driver does not handle reaches `answerAbsent`, and the corpus rows for it fail with `500 A3000`. Written for your own host, `send` would call it over a socket instead:
 
 ```js
 const { runAvProtocolConformance } = require("@aventara/testing");
 const { AvProtocol } = require("@aventara/core/protocol");
+
+// `/_all` may answer its lines as an async iterable; a real host writes them out as they come.
+const drained = async (answer) => {
+  if (typeof answer.body === "string") return answer;
+  let body = "";
+  for await (const line of answer.body) body += line;
+  return { status: answer.status, headers: answer.headers, body };
+};
 
 const myHost = async (framework) => {
   const protocol = AvProtocol.bind(framework);
@@ -186,6 +211,8 @@ const myHost = async (framework) => {
         case "contract": return protocol.encodeContract(request);
         case "transactions": return protocol.handleTransaction(request);
         case "operation": return protocol.handleOperation(request);
+        case "can": return protocol.handleCan(request);
+        case "all": return drained(await protocol.handleAll(request));
         default: return protocol.answerAbsent(request) ?? { status: 404, headers: {}, body: "" };
       }
     },

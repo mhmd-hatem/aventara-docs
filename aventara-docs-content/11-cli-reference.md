@@ -69,7 +69,7 @@ npx @aventara/cli@rc new my-app --host next
 npx @aventara/cli@rc new my-app --host next --yes -- --tailwind
 ```
 
-Runs `create-next-app@latest <name> --ts --app --src-dir --import-alias "@/*" --use-<npm|pnpm> --skip-install`, then `aventara init`'s steps over the new app, then the install and the commit. create-next-app asks its own questions on your terminal. With `--yes` it takes its defaults (it is given `--yes` too), which is also what a run without a terminal needs. Its own flags go after `--`, passed as they are. `--skip-git` becomes its `--disable-git`. `--host` defaults to `nest`. What it writes is on [Next.js host](/docs/nextjs-host#what-it-writes).
+Runs `create-next-app@16 <name> --ts --app --src-dir --import-alias "@/*" --use-<npm|pnpm> --skip-install`, then `aventara init`'s steps over the new app, then the install and the commit. create-next-app asks its own questions on your terminal. With `--yes` it takes its defaults (it is given `--yes` too), which is also what a run without a terminal needs. Its own flags go after `--`, passed as they are. `--skip-git` becomes its `--disable-git`. `--host` defaults to `nest`. What it writes is on [Next.js host](/docs/nextjs-host#what-it-writes).
 
 ### aventara init
 
