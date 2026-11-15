@@ -97,7 +97,7 @@ The stage kinds are norms. The framework does not check what a callback does: an
 Every operation runs its stages in one order:
 
 ```text
-framework validation (with required fields) -> policy admission (when a policy is configured) -> guards -> pipes -> validators (the caller's values) -> write compute -> re-check (validators of what compute set or changed) -> interceptors (before) -> hooks.before -> policy write check (when a policy is configured) -> operation -> hooks.after -> interceptors (after) -> filters
+framework validation (with required fields) -> policy admission (when a policy is configured) -> guards -> pipes -> validators (the caller's values) -> write compute -> re-check (validators of what compute set or changed) -> policy write check (when a policy is configured) -> interceptors (before) -> hooks.before -> the policy write check again (only when a before hook's values changed the write) -> operation -> hooks.after -> interceptors (after) -> filters
 ```
 
 In full, with every level listed root first, then the operation's overlay:
@@ -120,13 +120,15 @@ validate the arguments against the contract: types, unknown fields, structure, a
                           then the validators on the values compute set or changed (A2004), top
                           level then nested targets'; then the root's validators on a value
                           compute or a pipe set in a field the caller's layer hides (A3000)
+-> policy write check     only when a policy is configured: the checks on what compute left
+   (pass 1)               (see Policies), reading the row as it is before any hook
    (a refusal so far runs no interceptor and no hook)
 -> interceptors enter     every level, outer to inner (each told ctx.$write as it then stands)
 -> hooks.before           every level, outer to inner; a { data } one returns is merged into
                           ctx.$write and judged as compute's output is (A2004, A3000, A3004)
--> policy write check     only when a policy is configured: the checks on what the write writes,
-                          ctx.$write (see Policies); its refusal is the answer, whatever an
-                          interceptor or a filter makes of it
+-> policy write check     only when a before hook's { data } changed ctx.$write: the same checks
+   (pass 2)               on it, against the row pass 1 read; its refusal is pass 1's, the
+                          answer whatever an interceptor or a filter makes of it
 -> the adapter call (one call), then compute (read) on the returned rows
 -> hooks.after            every level, inner to outer
 -> interceptors unwind    every level, inner to outer
@@ -308,7 +310,7 @@ validate the whole plan
 -> guards, then pipes, of each touched Resource (they see the whole plan, $refs unresolved)
 -> every touched Resource's interceptors enter, then every touched Resource's hooks.before
      -> the steps, in order, each: resolve $refs -> field pipes and validators of the resolved values -> write compute -> validators of what compute set or changed
-        -> interceptors -> hooks.before -> policy write check (with a policy) -> the adapter call -> hooks.after -> interceptors -> output validation
+        -> policy write check (with a policy) -> interceptors -> hooks.before -> its pass 2 (a hook's values) -> the adapter call -> hooks.after -> interceptors -> output validation
    every touched Resource's hooks.after, the last touched Resource's first (they see every step's result), then the interceptors unwind
 -> COMMIT
 
@@ -357,7 +359,7 @@ Outside a transaction, a write is already committed when its `after` hook runs. 
 
 ```text
 validate -> policy admission (with a policy) -> guards -> pipes -> validators (every value the caller sent) -> BEGIN -> the Resource's transaction stages
--> write compute -> re-check (what compute set or changed) -> interceptors -> hooks.before -> policy write check (with a policy) -> the adapter call -> hooks.after -> interceptors
+-> write compute -> re-check (what compute set or changed) -> policy write check (with a policy) -> interceptors -> hooks.before -> its pass 2 (a hook's values) -> the adapter call -> hooks.after -> interceptors
 -> output validation -> COMMIT
 ```
 

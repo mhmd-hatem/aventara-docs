@@ -24,7 +24,8 @@ A stage's `ctx` now names the pipeline's values apart ([The four values](/docs/p
 2. **Resource transaction stages read `ctx.$plan`.** `ctx.$args.filter(...)` there becomes `ctx.$plan.filter(...)`. The compiler points at each use.
 3. **An `after` hook gets the row's id.** A hook that re-read the row by `where.id`, or needed the caller to `select` the id, can read `ctx.$written.id` on `create.one`, `update.first`, `update.unique`, `upsert.unique`, `delete.first` and `delete.unique`.
 4. **A `before` hook may return values.** On `create.one`, `update.first` and `update.unique` it may `return { data: { status: "QUEUED" } }` to set a field of the row, instead of checking the caller's arguments plus defaults. A `before` hook that resolves any other value (an `async` hook that returns a `ctx` call's result, say), or a value on another operation, now answers `A3004`: make it return nothing.
-5. **With a policy, the write check runs after the `before` hooks**, on what is written, so the values a hook returns are checked as the caller's are.
+5. **A `before` hook that returns a value elsewhere answers `A3004`.** Any value other than `undefined` from a `before` hook on an operation other than `create.one`, `update.first` or `update.unique` (a Resource-wide hook included) is now refused.
+6. **With a policy, the write check runs again after the `before` hooks** when one returned values that changed the write: on what is written, against the row as the first check read it, so a hook's values are checked as the caller's are. The first check still runs before any interceptor or hook, so a write the policy refuses runs no hook.
 
 ## From 1.0.0-rc.14 to 1.0.0-rc.15
 

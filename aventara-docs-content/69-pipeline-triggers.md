@@ -27,9 +27,10 @@ guards, pipes                                     (before BEGIN)
 validators (the caller's values)                  (before BEGIN, for literal values)
                                                   BEGIN
 write compute, re-check            ctx.$write exists from here
+policy write check                 on compute's output; a refusal runs no hook
 interceptors enter
 hooks.before                       may return { data } for the row
-policy write check                 on ctx.$write
+policy write check, again          only when a hook's { data } changed ctx.$write
 the adapter call (one statement), compute.read on the returned rows
 hooks.after                        ctx.$written
 interceptors unwind
@@ -132,9 +133,9 @@ export const post = defineResource<Model>()("Post", {
 });
 ```
 
-The caller sends `status: "LIVE"`. Write compute sets `DRAFT`, so the before hook reads `"LIVE"` from `ctx.$args` and `"DRAFT"` from `ctx.$write`. When the author has fewer than three live posts, it returns `{ data: { status: "LIVE" } }`, and that value is merged into the row. What a before hook returns is judged as compute's output is: by the field validators (`A2004`), by the root's validators on a field the caller's layer hides (`A3000`), and by Aventara's own checks (`A3004`). With a policy, the write check then runs on the row as it now stands. The `after` hook reads the id from `ctx.$written`, so the caller does not have to `select` it.
+The caller sends `status: "LIVE"`. Write compute sets `DRAFT`, so the before hook reads `"LIVE"` from `ctx.$args` and `"DRAFT"` from `ctx.$write`. When the author has fewer than three live posts, it returns `{ data: { status: "LIVE" } }`, and that value is merged into the row. What a before hook returns is judged as compute's output is: by the field validators (`A2004`), by the root's validators on a field the caller's layer hides (`A3000`), and by Aventara's own checks (`A3004`). With a policy, the write check runs twice here: once before any interceptor or hook, on what compute left, so a write the policy refuses runs no hook; and again just before the adapter, because the hook changed the write, on the row as it now stands, against the stored row as the first check read it. A hook's values are held to the policy and the server's rules, not to the caller's field write grants, as compute's are. The `after` hook reads the id from `ctx.$written`, so the caller does not have to `select` it.
 
-Several before hooks run in stage order (layer, Resource, family, variant; at each, the root's, then the overlay's). A later hook's value replaces an earlier one's, and every hook's value replaces write compute's. A before hook returns values only on `create.one`, `update.first` and `update.unique`, and only for the row's own fields: no relation and no nested write. Returning a value anywhere else answers `A3004`.
+Several before hooks run in stage order (layer, Resource, family, variant; at each, the root's, then the overlay's). A later hook's value replaces an earlier one's, and every hook's value replaces write compute's. A before hook returns values only on `create.one`, `update.first` and `update.unique`, and only for the row's own fields: no relation and no nested write. It may set any writable scalar, the identifier fields included, as pipes and compute may; setting the primary key moves the row. Returning a value anywhere else answers `A3004`.
 
 ## Row-level and statement-level
 
@@ -179,7 +180,7 @@ A check inside the transaction still reads under your database's isolation level
 
 ## Inside a transaction
 
-With `forceTransaction`, or as a step of a [transaction plan](/docs/transactions), framework validation, policy admission, guards, pipes and the validators of the caller's literal values run before `BEGIN`; a refusal there opens nothing. Everything from write compute on runs inside the transaction: the validators of `$ref` values, write compute and its re-check, the interceptors and hooks, the policy write check, the adapter call and output validation. A throw there rolls the transaction back, and the hooks' `ctx` calls and `ctx.$sql` join it. Without a transaction, nothing is opened around the call, and an `after` hook runs after the write has committed.
+With `forceTransaction`, or as a step of a [transaction plan](/docs/transactions), framework validation, policy admission, guards, pipes and the validators of the caller's literal values run before `BEGIN`; a refusal there opens nothing. Everything from write compute on runs inside the transaction: the validators of `$ref` values, write compute and its re-check, the policy write check, the interceptors and hooks, the check's second pass when a hook's values changed the write, the adapter call and output validation. A throw there rolls the transaction back, and the hooks' `ctx` calls and `ctx.$sql` join it. Without a transaction, nothing is opened around the call, and an `after` hook runs after the write has committed.
 
 ## `ctx` calls skip the triggers, not the constraints
 
