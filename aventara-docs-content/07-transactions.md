@@ -93,15 +93,15 @@ A step is any operation the active contract lists for its Resource. A step whose
 | Operation | The step returns | A later step can `$ref` it | With the Prisma adapter |
 |---|---|---|---|
 | `find.first` | one row, or `null` | yes (a `null` that a step references fails the plan, `A2007` / `V1018`) | offered |
-| `find.unique` | one row, or `null` | yes, same rule | offered when the model has an identifier |
+| `find.unique` | one row; a miss fails the plan with `A2003` | yes | offered when the model has an identifier |
 | `find.many` | a list of rows | no (`A2007` / `V1010`) | offered |
 | `find.count` | a number | no | offered |
 | `create.one` | the created row | yes | offered |
-| `create.many` | the created rows | no | offered |
+| `create.many` | the created rows | no | offered when the provider can return rows (the Prisma 7 adapter on SQLite and PostgreSQL) |
 | `create.count` | how many were created | no | offered |
 | `update.first` | the updated row, or `null` | yes | offered with an identifier and a transaction-capable driver |
 | `update.unique` | the updated row | yes | offered when the model has an identifier |
-| `update.many` | the updated rows | no | offered |
+| `update.many` | the updated rows | no | offered when the provider can return rows (the Prisma 7 adapter on SQLite and PostgreSQL) |
 | `update.count` | how many were updated | no | offered |
 | `delete.first` | the deleted row, or `null` | yes | offered with an identifier and a transaction-capable driver |
 | `delete.unique` | the deleted row | yes | offered when the model has an identifier |
