@@ -9,6 +9,24 @@ section: guides
 
 Aventara `1.0.0-rc.15` is the thirteenth published release candidate (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were tagged but never published, and rc.9 and rc.10 sit between rc.8 and rc.11), and the next release follows it; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.15` from `1.0.0-rc.14`, the move to `1.0.0-rc.14` from `1.0.0-rc.13`, the move to `1.0.0-rc.13` from `1.0.0-rc.12`, the move to `1.0.0-rc.12` from `1.0.0-rc.11`, the move to `1.0.0-rc.11` from `1.0.0-rc.8`, the move to `1.0.0-rc.8` from `1.0.0-rc.4`, the move to `1.0.0-rc.4` from `1.0.0-rc.3`, the move to `1.0.0-rc.3` from `1.0.0-rc.2`, to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
 
+## From 1.0.0-rc.15 to the next release
+
+A stage's `ctx` now names the pipeline's values apart ([The four values](/docs/pipeline-triggers#the-four-values)). No Contract changes, so a generated frontend client keeps working. Check five things in your server code, the first one first:
+
+1. **`ctx.$args` is the call.** In interceptors, hooks, filters and `compute.read`, `ctx.$args` no longer holds what write compute filled: the same expression now gives the caller's value, with no error. Read the computed value from `ctx.$write` (on a create, an update or an upsert, from the interceptors on). Find what to check with `grep -rn --include=*.ts 'ctx\.\$args' src/`, and look at every hit inside `hooks`, `interceptors`, `filters` or a `read` compute stage. A field a `compute.create` fills is now `T | undefined` in those stages' `ctx.$args`, so some of these reads stop compiling, which points at them.
+
+   ```text
+   before: a hook read ctx.$args.data.status    -> QUEUED (compute's value; the caller's FAILED was lost)
+   after:  ctx.$args.data.status                -> FAILED (what the caller sent)
+           ctx.$write.data.status               -> QUEUED (what will be written)
+   ```
+
+2. **Resource transaction stages read `ctx.$plan`.** `ctx.$args.filter(...)` there becomes `ctx.$plan.filter(...)`. The compiler points at each use.
+3. **An `after` hook gets the row's id.** A hook that re-read the row by `where.id`, or needed the caller to `select` the id, can read `ctx.$written.id` on `create.one`, `update.first`, `update.unique`, `upsert.unique`, `delete.first` and `delete.unique`.
+4. **A `before` hook may return values.** On `create.one`, `update.first` and `update.unique` it may `return { data: { status: "QUEUED" } }` to set a field of the row, instead of checking the caller's arguments plus defaults. A `before` hook that resolves any other value (an `async` hook that returns a `ctx` call's result, say), or a value on another operation, now answers `A3004`: make it return nothing.
+5. **A `before` hook that returns a value elsewhere answers `A3004`.** Any value other than `undefined` from a `before` hook on an operation other than `create.one`, `update.first` or `update.unique` (a Resource-wide hook included) is now refused.
+6. **With a policy, the write check runs again after the `before` hooks** when one returned values that changed the write: on what is written, against the row as the first check read it, so a hook's values are checked as the caller's are. The first check still runs before any interceptor or hook, so a write the policy refuses runs no hook.
+
 ## From 1.0.0-rc.14 to 1.0.0-rc.15
 
 No Contract changes, so a generated frontend client keeps working. What changes is the generated files and the types: stage types now read the root's field definitions, and a compute stage's return is type-checked. Some stage code that compiled under rc.14 no longer does; step 2 lists each case. Change the version numbers, fix what no longer compiles, run the generate steps, and refresh the agent skills.

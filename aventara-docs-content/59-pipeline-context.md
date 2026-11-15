@@ -19,7 +19,10 @@ A Resource name can never start with `$` (a model named that way is refused at s
 | Member | What it holds |
 |---|---|
 | `ctx.$operation` | `{ resource, family, variant, nested? }`: the operation the stage wraps, such as `Post`, `create`, `one`. For a nested write's target, `resource` is the target, `variant` is `"one"` and `nested` is `true`. A Resource transaction stage has no `$operation`. |
-| `ctx.$args` | The operation's arguments, frozen: as the caller sent them in a guard, as the pipes returned them in a pipe, and as the validators checked them in an interceptor, a hook or a filter. A stage registered on one operation (`operations.<family>.<variant>.pipelines`) sees them typed ([below](#typed-arguments)); elsewhere they are `unknown`. In a Resource transaction stage: the plan, `readonly AvTransactionStep[]`. Only a pipe changes the arguments, by returning new ones ([Read-only data](/docs/pipelines#read-only-data)). |
+| `ctx.$args` | The call, frozen: the arguments as the caller sent them in a guard, as the pipes so far returned them in a pipe, and as the last pipe left them in every later stage, compute and filters included. Never what write compute or a `before` hook adds: that is `ctx.$write`. A stage registered on one operation (`operations.<family>.<variant>.pipelines`) sees it typed ([below](#typed-arguments)); elsewhere it is `unknown`. Only a pipe changes the arguments, by returning new ones ([Read-only data](/docs/pipelines#read-only-data)). |
+| `ctx.$write` | A create's, an update's or an upsert's, from the interceptors on: what the write writes, frozen and shaped as `ctx.$args`. It is `ctx.$args` after write compute and the values `before` hooks returned, exactly what the adapter is handed. An interceptor is told it as it was when it entered, a `before` hook with the earlier hooks' values, a filter only when the failure came after write compute. Absent on a read and a delete, and in guards, pipes and compute. |
+| `ctx.$written` | In the `after` hooks of `create.one`, `update.first`, `update.unique`, `upsert.unique`, `delete.first` and `delete.unique`: the written row's identifiers (`{ id }`, every field of the model's first identifier), whatever the caller selected. `undefined` when a `first` write matched no row. They are read with the write and left out of the answer. |
+| `ctx.$plan` | In a Resource transaction stage, in place of `$operation` and `$args`: the plan, frozen, `readonly AvTransactionStep[]` (the transaction pipe's `plan`). |
 | `ctx.$origin` | `"application"` (your server code, and ctx calls), `"client"` (a remote caller) or `"agent"` (an AI agent over MCP, see [the agent layer](/docs/configuration#the-agent-layer-and-mcp)). |
 | `ctx.$requestId` | The request's correlation id ([Request IDs](/docs/request-ids-and-diagnostics)). |
 | `ctx.$transport` | Remote requests only: `{ method: "POST" \| "GET", headers }` (`"GET"` for a [cached read](/docs/caching-reads)). Header names are lower-cased; repeated headers are joined with `", "`. |
@@ -62,9 +65,10 @@ resources: {
 - A pipe that returns another shape is a type error; returning `undefined` keeps the arguments.
 - A field whose value is `undefined` in the data a pipe returns counts as not sent, the same as leaving the key out: an optional field is omitted, an update leaves the field untouched, and a required create field is missing (`A3004`). The same holds for data you pass to `framework.application`, `framework.client`, `ctx` calls and transaction steps (a required field set to `undefined` answers `A2004` with `V1000`). Filters are different: `where: { id: undefined }` is refused, never read as "no filter".
 - The types come from your model and the root's field definitions, in the application forms (`Date`, `bigint`, `AvDecimal`): arguments reach every stage validated, whatever the origin. A `VIRTUAL` input the root adds is in the data of the operations it can be written by (`ctx.$args.data.tenderedMinor`), and a Json field the root shapes has its shape's type (see [The configuration's definitions](#the-configurations-definitions), below). No layer's exposure applies: a field you hid from one layer still appears in the type, and the server refuses it at runtime.
-- In a transaction plan, a step's guards, pipes and filters run before its `$ref` values are resolved, so there a field that can take a reference is typed as the value or a `$ref` (`string | AvTransactionReference<string>` for `title`), and a field the caller may leave out also as `undefined`. Narrow it before you use it as a value, as the pipe above does. Hooks and interceptors run after the references are resolved, in a plan and in a plain call alike, so their `ctx.$args` holds the values: `ctx.$args.data.title` is a `string` there.
+- In a transaction plan, a step's guards, pipes and filters run before its `$ref` values are resolved, so there a field that can take a reference is typed as the value or a `$ref` (`string | AvTransactionReference<string>` for `title`), and a field the caller may leave out also as `undefined`. Narrow it before you use it as a value, as the pipe above does. Hooks and interceptors run after the references are resolved, in a plan and in a plain call alike, so their `ctx.$args` and `ctx.$write` hold the values: `ctx.$args.data.title` is a `string` there.
 - These stages are typed from where they are written: inline in `createFramework({ ... })` or in a [`defineResource`](/docs/configuration#one-resource-per-file-defineresource) block. In a configuration that is an `as const` object (the shape `aventara init` writes), an inline arrow has no contextual type and TypeScript reports `Parameter 'ctx' implicitly has an 'any' type` (TS7006). Move the stage into a `defineResource` block, or declare it with its stage type first ([Typing a stage](/docs/pipelines#typing-a-stage)).
-- Guards, pipes and filters run before write compute, so a create in their arguments may lack the fields a `compute.create` stage fills: those are optional there (`args.data.slug` is `string | undefined` when `slug` is computed), and a pipe may return a create without them. Every other required field stays required. Hooks and interceptors run after compute and see every required field. This covers a create's `data`, an upsert's `create` and a nested create.
+- `ctx.$args` is the call, so in every stage a create in it may lack the fields a `compute.create` stage fills: those are optional there (`ctx.$args.data.slug` is `string | undefined` when `slug` is computed), and a pipe may return a create without them. Every other required field stays required. `ctx.$write`, what the write writes, is typed after compute: it holds every required field (`ctx.$write.data.slug` is a `string`). This covers a create's `data`, an upsert's `create` and a nested create.
+- `ctx.$written` is typed from your model's first identifier: `{ readonly id: number }` for an `Int @id`, and `| undefined` on `update.first` and `delete.first`. A before hook's `{ data }` on `create.one`, `update.first` and `update.unique` is typed by the row's own scalar fields: a relation, an unknown field or a value of the wrong type is a type error.
 - Which fields are computed is read from your configuration's type by `aventara-build`, which `aventara:prepare` runs after the adapter's generate step (the scaffold passes the generate step `--config src/aventara.config.ts`, and the discovery artifact imports the result), and counts the layers whose compute runs for the stage's requests. A root stage counts the root's, `application`'s, `client`'s and `agent`'s compute; a `client` stage the root's and its own (and the agent's when the agent extends `client`); an `application` stage the same with `application`; an `agent` stage the root's, its parent's and its own. Without `--config`, these stages may leave any create field out. When you change a compute stage, run `aventara:prepare` again; the server warns at startup until you do (`generated types are stale: run aventara:prepare`).
 - A stage on a layer, a Resource or a family runs for several operations (a family's also for a nested write's target), so its `ctx.$args` stays `unknown`. A pipe typed for any operation (`AvPipe`) still fits on one; the server holds its output to the arguments' rules (`A3004`).
 
@@ -228,7 +232,7 @@ type Model = typeof discovery.model;
 // Runs once per transaction that has a top-level step on Order, after the steps, before COMMIT.
 const publishOrderEvents: AvTransactionAfterHook<Model> = async (results, ctx) => {
   const rows = results as readonly unknown[];
-  for (const [index, step] of ctx.$args.entries()) {
+  for (const [index, step] of ctx.$plan.entries()) {
     if (step.resource !== "Order" || step.family !== "create" || step.variant !== "one") continue;
     const order = rows[index] as { readonly id: number };
     // 1. Store the event's content through Aventara, in this transaction.
@@ -379,18 +383,16 @@ export const post = defineResource<Model>()("Post", {
             before: [
               async (ctx) => {
                 if (ctx.$args.data.status !== "published") return;
-                // Hooks run after a plan's $refs are resolved: the type allows one, the value is never one.
-                const { id } = ctx.$args.where;
-                if (typeof id === "object") throw new Error("unresolved $ref");
-                const current = await ctx.Post.find.unique({ where: { id }, select: ["status"] });
+                // Hooks run after a plan's $refs are resolved: `ctx.$args.where` holds values.
+                const current = await ctx.Post.find.unique({ where: ctx.$args.where, select: ["status"] });
                 if (current.status !== "draft") throw new AvError("A4001", "Only a draft can be published.");
               },
             ],
             after: [
               async (_result, ctx) => {
                 if (ctx.$args.data.status !== "published") return;
-                const { id } = ctx.$args.where;
-                if (typeof id === "object") throw new Error("unresolved $ref");
+                // The updated row's id, whatever the caller's `where` named it by.
+                const { id } = ctx.$written;
                 await ctx.Post.update.unique({ where: { id }, data: { publishedAt: new Date() } });
                 await ctx.OutboxEvent.create.one({ data: { topic: "post.published", payload: { postId: id } } });
               },
@@ -401,10 +403,8 @@ export const post = defineResource<Model>()("Post", {
               const result = await next();
               // Only when the caller's projection holds the field.
               if (typeof result !== "object" || result === null || !("publishedAt" in result)) return result;
-              const { id } = ctx.$args.where;
-              if (typeof id === "object") throw new Error("unresolved $ref");
               // Inside the same transaction: this read sees what the after hook wrote.
-              const { publishedAt } = await ctx.Post.find.unique({ where: { id }, select: ["publishedAt"] });
+              const { publishedAt } = await ctx.Post.find.unique({ where: ctx.$args.where, select: ["publishedAt"] });
               return { ...result, publishedAt };
             },
           ],

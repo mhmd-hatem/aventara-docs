@@ -23,7 +23,10 @@ Aventara has several places to run your own code around an operation, and most t
 | Wrap the execution (timing, caching, retries, `try`/`catch`, `AsyncLocalStorage`) | an interceptor | `pipelines.interceptors` |
 | Turn an error into an answer for the caller | a filter | `pipelines.filters` |
 | Check a whole transaction (at most one delete per plan, for example) | the Resource's transaction stages | `resources.<R>.transactions.pipelines` |
-| Enforce a rule that reads the database and must still hold at commit (a ticket must still be open) | a `hooks.before` stage with `forceTransaction: true` on the operation, or the Resource's transaction stages; a guard may check it first for a quick refusal | `resources.<R>.operations.<family>.<variant>.pipelines.hooks.before` |
+| Enforce a rule that reads the database and must still hold at commit (a ticket must still be open) | a `hooks.before` stage with `forceTransaction: true` on the operation, or the Resource's transaction stages; a guard may check it first for a quick refusal ([Request rules versus row rules](/docs/pipeline-triggers#request-rules-versus-row-rules)) | `resources.<R>.operations.<family>.<variant>.pipelines.hooks.before` |
+| Fill in a value from a rule that needs the database at commit (`NEW.x := …`) | a `hooks.before` stage that returns `{ data: { … } }`, with `forceTransaction: true`; on `create.one`, `update.first` and `update.unique` | `resources.<R>.operations.<family>.<variant>.pipelines.hooks.before` |
+| Get the created or updated row's id after the write | `ctx.$written` in an `after` hook, whatever the caller selected | `pipelines.hooks.after` |
+| Read what a write will write, compute's values included | `ctx.$write` (`ctx.$args` is what the caller sent) | an interceptor or a hook of a create, an update or an upsert |
 | Share request information between stages (the signed-in user) | `ctx.$state` | seeded by `AventaraModule`'s `state` option, or by a call's `{ state }` option |
 | Call another operation from a stage | `ctx.<Resource>.<family>.<variant>(args)` | the `ctx` every stage gets (compute can only read) |
 
@@ -57,7 +60,7 @@ validate the arguments against the contract, required create fields included
 -> compute        create or update: fill the values to write
 -> re-check       Aventara's own checks on the output, then the validators on what compute set or changed
 -> interceptors   enter, outer to inner
--> hooks.before   outer to inner
+-> hooks.before   outer to inner; values one returns are merged into the row and re-checked
 -> operation      one adapter call, then compute (read) on the returned rows
 -> hooks.after    inner to outer
 -> interceptors   unwind, inner to outer
@@ -94,6 +97,7 @@ A step that is refused before `BEGIN` opens nothing. A step's guards and pipes r
 - A Resource reached only through a nested write runs no transaction stages. Those run once per transaction that has a top-level step on the Resource. `Post.create({ data: { category: { $create: { ... } } } })` runs `Category`'s guards and field stages on the nested data, but not `Category`'s transaction stages, hooks or interceptors. A plain call without `forceTransaction` runs no transaction stages at all. See [Relations and nested writes](/docs/relations-and-nested-writes).
 - Validators do not judge a directive's operand, because the operand is not the field's value. `{ $increment: 500 }` is not checked against the field's `AvZ.lte(100)`. `$push` entries are judged. If the stored result must stay in range, check it in a guard or with a database constraint.
 - Calls through `ctx` are raw. A `ctx.<Resource>` call runs the framework's own validation, field pipes, field validators and compute, and none of your stages: no guards, pipes, hooks, interceptors or filters at any level, no field write guards, no transaction stages and no `forceTransaction`. So a hook's call never re-enters the hook that made it. The calls are application-origin: the `application` overlay's exposure applies to them and the `client` overlay's does not. See [Calling the framework from a stage](/docs/pipeline-context#calling-the-framework-from-a-stage).
+- `ctx.$args` is the call in every stage: what the caller sent, as the pipes shaped it. A value write compute filled, or a `before` hook returned, is in `ctx.$write`, never in `ctx.$args`. In compute, `data` is the record being written and `ctx.$args` the caller's call. See [The four values](/docs/pipeline-triggers#the-four-values).
 - `ctx.$state` is the only thing a stage can change in place. It is one object per request, shared by every stage and inherited by `ctx` calls. Compute can read it but not write it. See [Request state](/docs/pipeline-context#request-state).
 - The arguments are read-only. A pipe changes them by returning new ones, and once the validators have run (every value the caller sent before write compute, what compute set or changed after it), nothing can change them, so what the validators checked is what the adapter writes. An `after` hook gets a frozen copy of the result; to answer with a different result, use an interceptor. See [Read-only data](/docs/pipelines#read-only-data).
 - A required create field the caller left out is refused before the guards, so no pipe can fill it. Give the field a `compute.create` stage or a database default instead. See [Computed fields](/docs/computed-fields).
