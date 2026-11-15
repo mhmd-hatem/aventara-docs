@@ -77,7 +77,7 @@ import { discovery } from "./generated/aventara/discovery.artifact.js";
 type Model = typeof discovery.model;
 
 // The shared function: the same one a hook calls with its own ctx.
-async function accountSale(ctx: Omit<AvContext<Model>, "$operation">, orderId: number) {
+async function accountSale(ctx: AvContext<Model>, orderId: number) {
   return ctx.OutboxEvent.create.one({
     data: { topic: "order.sold", payload: { orderId } },
     select: ["id"],
@@ -90,7 +90,10 @@ const adapter = createFakeAdapter({
 });
 const framework = await createFramework({ ...aventaraConfig, adapter });
 
-const event = await withStageContext(framework, (ctx) => accountSale(ctx, 42));
+// Pass the operation of the stage that calls accountSale in production.
+const event = await withStageContext(framework, (ctx) => accountSale(ctx, 42), {
+  operation: { resource: "Order", family: "create", variant: "one" },
+});
 assert.deepEqual(event, { id: 1 });
 ```
 
@@ -102,7 +105,7 @@ The `ctx` is your framework's own executor, typed exactly as a stage's, so `acco
 | `state` | `{}` | The request's state, read as `ctx.$state`. It is used as it is, not copied. |
 | `origin` | `"application"` | The layer `ctx.$origin` and `ctx.$contract` state. Calls made through the `ctx` are application-origin whatever this says. |
 | `requestId` | a fresh id | `ctx.$requestId`, which every call of the `ctx` carries. |
-| `operation`, `args` | none, `{}` | `ctx.$operation` and `ctx.$args`, for code that reads what the stage wraps. Without `operation`, `ctx.$operation` is `undefined`, and typed so: annotate a shared function that never reads it as `ctx: Omit<AvContext<Model>, "$operation">`, or pass `operation`. |
+| `operation`, `args` | none, `{}` | `ctx.$operation` and `ctx.$args`. Pass the `operation` of the stage that calls your function in production, so its `ctx` is a stage's `ctx` and `accountSale(ctx: AvContext<Model>)` stays as written. Without `operation`, `ctx.$operation` is `undefined`, typed so, and `work` gets `Omit<AvContext<Model>, "$operation"> & { $operation: undefined }`: enough for a helper that never reads `$operation` (annotate it `Omit<AvContext<Model>, "$operation">` if it should work both ways). |
 
 The framework's adapter must run transactions (`transactions: "interactive"` or `"server"`). With `createFakeAdapter`, use an `"interactive"` model and a `rollback` hook, so a rolled-back transaction undoes your in-memory rows.
 
