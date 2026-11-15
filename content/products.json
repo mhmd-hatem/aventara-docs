@@ -81,6 +81,7 @@
           ["authentication-and-guards", "Authentication & guards", "shield"],
           ["pipelines", "Pipelines", "workflow"],
           ["pipeline-context", "Pipeline context", "code"],
+          ["pipeline-triggers", "Pipeline: triggers and functions", "database"],
           ["which-stage", "Which stage do I use?", "workflow"],
           ["limits-and-safety", "Limits & safety", "shield"],
           ["request-ids-and-diagnostics", "Request IDs & diagnostics", "life"],
