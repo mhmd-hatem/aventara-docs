@@ -140,8 +140,8 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 **Validation failed.** HTTP 422, thrown as `AvValidationError`.
 
-- Cause: The arguments break a contract rule or a field validator. cause.issues lists each problem by V-code and path; a validator's issue also has check and params. The validators judge every value the caller sent after its pipes and before write compute, a field with a compute stage included, so a bad value is refused even when compute would replace it; then a value write compute set or changed, so a computed value they refuse is here too, at its field. A required create field left out is here (V1000). So is a value the database itself refused: too long for its column or its index, or out of its range (V1004), or holding a character it cannot store or a pattern it cannot read (V1001), with the issue at `["arguments"]`, or at the value where the adapter can place it (a bigint its driver cannot bind), and its message saying what the database refused. So is a record written through a relation that writes that relation, or a field holding its reference, back (V1012, at that field), where the adapter admits no such write.
-- Fix: Fix the argument each issue's path points at, as its V-code says. A field the server must fill takes a compute.create stage. For a value the database refused, send one its column holds. For a nested write that writes its relation back, leave that field out: the parent supplies it.
+- Cause: The arguments break a contract rule or a field validator. cause.issues lists each problem by V-code and path; a validator's issue also has check and params. The validators judge every value the caller sent after its pipes and before write compute, a field with a compute stage included, so a bad value is refused even when compute would replace it; then a value write compute set or changed, so a computed value they refuse is here too, at its field. A required create field left out is here (V1000). So is a value the database itself refused: too long for its column or its index, or out of its range (V1004), or holding a character it cannot store or a pattern it cannot read (V1001), with the issue at `["arguments"]`, or at the value where the adapter can place it (a bigint its driver cannot bind), and its message saying what the database refused. So is a record written through a relation that writes that relation, or a field holding its reference, back (V1012, at that field), where the adapter admits no such write, and a nested $create list whose records mix a relation write and a reference field (V1012, at the first record that breaks the list's form).
+- Fix: Fix the argument each issue's path points at, as its V-code says. A field the server must fill takes a compute.create stage. For a value the database refused, send one its column holds. For a nested write that writes its relation back, leave that field out: the parent supplies it. Within one nested list use one form: the relation in every record (`{ $connect: { id } }`), or the reference field in every record.
 
 #### `A2005`
 
@@ -175,8 +175,8 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 **Limit exceeded.** HTTP 422, thrown as `AvValidationError`.
 
-- Cause: A contract limit was crossed: nesting depth (V1013), list or plan size (V1014), boolean nodes (V1015) or Json value depth (V1021).
-- Fix: Ask for less (paginate, split the plan), or raise the limit under `limits`.
+- Cause: A contract limit was crossed: nesting depth (V1013), list or plan size (V1014), boolean nodes (V1015) or Json value depth (V1021). Or the database's own limit on query parameters in one query (V1022, at `["arguments"]`): a to-many relation read with an orderBy under too many parent rows, or a filter with too many values.
+- Fix: Ask for less (paginate, split the plan), or raise the limit under `limits`. For the database's parameter limit, page the outer read (https://aventara.razor34.dev/framework/docs/limits-and-safety#reading-a-large-set-pages-in-one-_all) or split the filter: no Aventara limit raises it.
 
 #### `A2010`
 
@@ -203,7 +203,7 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 **Concurrent modification.** HTTP 409, thrown as `AvConflictError`.
 
-- Cause: A competing writer reached the state first; nothing was written.
+- Cause: A competing writer reached the state first; nothing was written. It is also what a request answers when the host's or access provider's state rejects with an object whose status or statusCode is the number 409 (an authentication library's "try again", such as a credential that was just replaced): read by the same rule as A4000's 401, answered with this message only, not sent to diagnostics.
 - Fix: Retry. No retry is automatic.
 
 #### `A2014`
@@ -233,8 +233,8 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 **Transaction error.** HTTP 500, thrown as `AvInternalError`.
 
-- Cause: Transaction infrastructure failed (commit or rollback, or the transaction expired or was closed under a step), or a Resource transaction interceptor called next() twice or resolved without calling it.
-- Fix: Read the diagnostics sink. Call next() exactly once in a transaction interceptor; retry an infrastructure failure.
+- Cause: Transaction infrastructure failed (commit or rollback, or the transaction expired or was closed under a step), a call waited for the database connection past the adapter's configured wait, or past the database driver's default wait (2 seconds) when the adapter sets none (on SQLite, where an open transaction holds the one connection, a plain operation outside it waits for it to end), or a Resource transaction interceptor called next() twice or resolved without calling it.
+- Fix: Read the diagnostics sink, which names the connection wait when that was the cause. Call next() exactly once in a transaction interceptor; retry an infrastructure failure; for a connection wait, shorten the transaction that holds the connection (keep slow work out of its hooks) or raise the adapter's transaction wait.
 
 #### `A3003`
 
@@ -258,7 +258,7 @@ Produced by [pipeline](/docs/config-reference#pipelines) guards; the framework i
 
 **Unauthenticated.** HTTP 401, thrown as `AvAuthError`.
 
-- Cause: A guard threw new AvError("A4000", ...), or the host's or access provider's state rejected with an object whose status or statusCode is the number 401 (an authentication library's refusal, such as Better Auth's statusCode 401): authentication is required or failed. Such a refusal answers {"data":null,"code":"A4000","cause":{"message":"Unauthenticated."}}, nothing of the library's error, and is not sent to diagnostics. A string status ("401"), another number, or a status and statusCode that are two different numbers is no refusal and answers 500 A3000; a number beside a string is read by the number. The rule holds on every protocol route (operations, cached reads, /_transactions, /_all, /_access/can), on MCP tool calls and in Next.js; in process (avClient in a Server Component or Server Action, serverClient.$access.can given headers) the call rejects with an AvAuthError. The framework never authenticates by itself.
+- Cause: A guard threw new AvError("A4000", ...), or the host's or access provider's state rejected with an object whose status or statusCode is the number 401 (an authentication library's refusal, such as Better Auth's statusCode 401): authentication is required or failed. Such a refusal answers {"data":null,"code":"A4000","cause":{"message":"Unauthenticated."}}, nothing of the library's error, and is not sent to diagnostics. A string status ("401"), another number (409 answers A2013), or a status and statusCode that are two different numbers is no refusal and answers 500 A3000; a number beside a string is read by the number. The rule holds on every protocol route (operations, cached reads, /_transactions, /_all, /_access/can), on MCP tool calls and in Next.js; in process (avClient in a Server Component or Server Action, serverClient.$access.can given headers) the call rejects with an AvAuthError. The same rule reads a throw of the access provider's me verb, in serverClient.$access.me() and the MCP me tool, whatever raised it: an upstream service's own 401 escaping from me is read as a refusal too, so catch such errors inside me. The framework never authenticates by itself.
 - Fix: Send the credentials your guards expect, such as the Authorization header.
 
 #### `A4001`
@@ -309,7 +309,7 @@ Example: the second step sends a number as a title.
 
 `operations`, entry `1`, `args`, `data`, `title`: the path walks the request. For a missing value (`V1000`) the last segment is the key that is absent, so the path ends at a key the request does not contain.
 
-### V1000 to V1021
+### V1000 to V1022
 
 #### `V1000`
 
@@ -399,8 +399,8 @@ Example: the second step sends a number as a title.
 
 **Invalid relation action/cardinality.**
 
-- Cause: A nested write that does not fit the relation (a list where one record is expected), a reference field set together with its own relation, one record mixing reference fields and relation writes where the adapter cannot run both, or a record written through a relation that writes that relation (or a field holding its reference) back, where the adapter admits no such write. Also a to-one $update or $upsert beside $connect, $connectOrCreate, $create, $set or $disconnect on the same relation: the row it would update is the newly linked one.
-- Fix: Write either the relation or its reference field, in the relation's cardinality. Relink a to-one relation in one write and update the linked row in another.
+- Cause: A nested write that does not fit the relation (a list where one record is expected), a reference field set together with its own relation, one record mixing reference fields and relation writes where the adapter cannot run both, or a record written through a relation that writes that relation (or a field holding its reference) back, where the adapter admits no such write. Also a nested $create list whose records write their references two ways, one through a relation and another through a reference field, where the adapter takes one form per list (the issue is at the first record that breaks the form). Also a to-one $update or $upsert beside $connect, $connectOrCreate, $create, $set or $disconnect on the same relation: the row it would update is the newly linked one.
+- Fix: Write either the relation or its reference field, in the relation's cardinality, and one form in every record of a nested list (`{ $connect: { id } }` throughout). Relink a to-one relation in one write and update the linked row in another.
 
 #### `V1013`
 
@@ -465,7 +465,14 @@ Example: the second step sends a number as a title.
 - Cause: A Json field's value nests deeper than maxJsonDepth.
 - Fix: Flatten the value, or raise limits.maxJsonDepth.
 
-The V-code vocabulary is closed: exactly `V1000` to `V1021`. A field validator adds no code of its own: it reports `V1003` or `V1004` with `check` and `params`.
+#### `V1022`
+
+**Database limit exceeded.**
+
+- Cause: The call needs more query parameters than the database takes in one query (the issue is at `["arguments"]`): a to-many relation read with an orderBy under too many parent rows (from 998 on SQLite and 32,766 on PostgreSQL), at any level of the read, or a filter with thousands of values. Nothing was read or written.
+- Fix: Page the outer read by a stable order, so every level of each page stays under the limit (https://aventara.razor34.dev/framework/docs/limits-and-safety#reading-a-large-set-pages-in-one-_all), or split the filter's list. No Aventara limit raises the database's.
+
+The V-code vocabulary is closed: exactly `V1000` to `V1022`. A field validator adds no code of its own: it reports `V1003` or `V1004` with `check` and `params`.
 
 ### Example messages
 
@@ -492,6 +499,7 @@ Real messages, as a running server sends them:
 | `V1017` | `Operation fingerprint does not match its arguments.` |
 | `V1020` | `Transaction mixes application and client steps.` |
 | `V1021` | `Json value depth exceeds maxJsonDepth (64).` |
+| `V1022` | `The database refused this call: it needs more query parameters than the database takes in one query, as a nested to-many read under too many parent rows, or a filter with too many values, does. Page the outer read, or split the filter.` |
 
 ## Which V-codes go with which A-code
 
@@ -501,7 +509,7 @@ Real messages, as a running server sends them:
 | `A2002` | `V1006` |
 | `A2004` | `V1000` to `V1012` (except as listed below), `V1019`, `V1020` |
 | `A2007` | `V1010`, `V1011`, `V1016`, `V1017`, `V1018` |
-| `A2009` | `V1013`, `V1014`, `V1015`, `V1021` |
+| `A2009` | `V1013`, `V1014`, `V1015`, `V1021`, `V1022` |
 
 ## Reading errors in the client
 

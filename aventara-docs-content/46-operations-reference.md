@@ -279,7 +279,7 @@ Returns the deleted record with `A1006`. Deleting it again: `404 A2003`.
 
 ### delete.many
 
-Not offered with the Prisma adapter, because Prisma cannot return the deleted rows. Calling it answers `404 A2002` with `V1006` at `["variant"]`: `Operation "delete.many" is not available on Resource "User".` Use `delete.count`.
+Not offered with the Prisma adapter, because Prisma cannot return the deleted rows. Calling it answers `404 A2002` with `V1006` at `["variant"]`: `Operation "delete.many" is not available on Resource "User".` Use `delete.count`. In a transaction plan the same refusal answers `A2002` with `V1006` at the step's `variant`; to delete or update many rows there, use `delete.count` / `update.count`, one step and one write each ([which operations a plan step can use](/docs/transactions#which-operations-a-plan-step-can-use)).
 
 ### delete.count
 

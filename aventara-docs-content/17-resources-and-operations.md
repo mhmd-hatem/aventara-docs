@@ -153,7 +153,7 @@ await avClient.User.upsert.unique({
 
 | Not offered | Why, and what to use |
 |---|---|
-| `delete.many` | The Prisma 7 adapter cannot return the deleted rows, and Aventara does not emulate it. Use `delete.count` to delete a filtered set. |
+| `delete.many` | The database driver can't return deleted rows (Prisma 7 has no `deleteManyAndReturn`), and Aventara does not emulate it. To delete or update many rows, use `delete.count` / `update.count`: they answer a number, and in a [transaction plan](/docs/transactions#which-operations-a-plan-step-can-use) each is one step and one write. |
 | A to-many relation or `$count` at the top level of the projection of `update.many` or `create.many` | At the top level these variants project scalars and to-one relations only; a to-many nested inside an included to-one relation is allowed ([Bulk variants differ](/docs/operations-reference#bulk-variants-differ)). The request fails with `A2004` (`V1008`: `Relation "posts" is not available for select.`; `include` is refused the same way, while a to-one relation such as `author` works in either). Read to-many relations with a separate `find`. |
 
 Two behaviors to keep in mind:

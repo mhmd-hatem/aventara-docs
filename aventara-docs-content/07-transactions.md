@@ -86,9 +86,47 @@ await avClient.transaction([del, upd]);
 
 This is the case when your Prisma relation has `onDelete: Cascade`. Reorder the steps, or drop the dependent step.
 
+### Which operations a plan step can use
+
+A step is any operation the active contract lists for its Resource. A step whose variant the contract does not list is refused before anything runs: `A2002`, with a `V1006` issue at that step's `variant`, and `cause.operation` its index. Reads count as steps too.
+
+| Operation | The step returns | A later step can `$ref` it | With the Prisma adapter |
+|---|---|---|---|
+| `find.first` | one row, or `null` | yes (a `null` that a step references fails the plan, `A2007` / `V1018`) | offered |
+| `find.unique` | one row, or `null` | yes, same rule | offered when the model has an identifier |
+| `find.many` | a list of rows | no (`A2007` / `V1010`) | offered |
+| `find.count` | a number | no | offered |
+| `create.one` | the created row | yes | offered |
+| `create.many` | the created rows | no | offered |
+| `create.count` | how many were created | no | offered |
+| `update.first` | the updated row, or `null` | yes | offered with an identifier and a transaction-capable driver |
+| `update.unique` | the updated row | yes | offered when the model has an identifier |
+| `update.many` | the updated rows | no | offered |
+| `update.count` | how many were updated | no | offered |
+| `delete.first` | the deleted row, or `null` | yes | offered with an identifier and a transaction-capable driver |
+| `delete.unique` | the deleted row | yes | offered when the model has an identifier |
+| `delete.many` | the deleted rows | no | **not offered** |
+| `delete.count` | how many were deleted | no | offered |
+| `upsert.unique` | the created or updated row | yes | offered when the model has an identifier |
+
+To delete or update many rows in a plan, use `delete.count` / `update.count`. `delete.many` isn't offered because the database driver can't return deleted rows: Prisma 7 has no `deleteManyAndReturn`, and Aventara doesn't emulate it. `delete.count` is one step however many rows match, and it counts as one write.
+
+Replace a small table's rows (here an author's posts) in one plan:
+
+```ts
+const clear = framework.appTx.Post.delete.count({ where: { authorId: 7 } });
+const first = framework.appTx.Post.create.one({ data: { title: "One", authorId: 7 } });
+const second = framework.appTx.Post.create.one({ data: { title: "Two", authorId: 7 } });
+
+const [removed, a, b] = await framework.transaction([clear, first, second]);
+// removed: 3 (the number of rows deleted)
+```
+
+That plan is three steps and three writes, whether `clear` removes 3 rows or 3,000. Deleting each row with its own `delete.unique` step costs one step and one write per row, so a plan runs into `limits.maxTransactionOperations` and `limits.maxTransactionWrites` (20 each by default, `A2009`) after twenty rows.
+
 ### Limits
 
-A plan may hold at most `limits.maxTransactionOperations` steps (20 by default; `A2009`), reads and `$sql` steps included, and at most `limits.maxTransactionWrites` write steps (20 by default; `A2009`): each `create`, `update`, `upsert` and `delete` step, and each `$sql` step, which counts as a write because a statement cannot be classed as a read. Both are checked before anything runs.
+A plan may hold at most `limits.maxTransactionOperations` steps (20 by default; `A2009`), reads and `$sql` steps included, and at most `limits.maxTransactionWrites` write steps (20 by default; `A2009`): each `create`, `update`, `upsert` and `delete` step, and each `$sql` step, which counts as a write because a statement cannot be classed as a read. Both are checked before anything runs. A `delete.count` or `update.count` step is one step and one write, whatever number of rows it touches.
 
 ## From the server
 
