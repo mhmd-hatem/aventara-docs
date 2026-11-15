@@ -292,6 +292,8 @@ export async function publish(id: Post["id"]) {
 
 Transactions keep their layer. `avClient.tx` builds client-layer handles and `avClient.transaction` runs them with this request's state. `avApp.appTx` builds application handles (and `avApp.appTx.$sql`) and `avApp.transaction` runs them. A list that mixes the two is a type error, and is refused at runtime (`A2004`). See [Transactions with $ref](/docs/transactions-with-ref).
 
+Because `avClient` and `avApp` are built before the framework is, their Resources, families and variants always read as functions, even for an operation the layer removed. A call to a removed operation, or to an unknown Resource, rejects with `TypeError: avApp.notes.create.one is not a function`, where `framework.application` simply has no such member. The types do not offer it, and a request that names it by hand over HTTP still answers `A2002`.
+
 ### Client Components
 
 ```tsx
