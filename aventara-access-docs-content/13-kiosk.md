@@ -606,11 +606,13 @@ The headers to allow are `content-type`; the kiosk's `authorization` and `kiosk-
 framework client adds: `aventara-protocol-version` and `aventara-contract-hash` (sent on every operation,
 transaction and Operation Set call) and `aventara-request-id` (sent when a call passes `requestId`). A header that is not
 in `allowedHeaders` fails the preflight, and with it every call that sends it, so a list without the two `aventara-`
-identity headers refuses every framework call from the till. The client's `$access` calls send only `content-type`
-and your own headers, and a cached read (`GET`) only your own (`authorization`, `kiosk-device`, the request id), so
-those are the same list. The client sets no `If-None-Match`: a cache adds it itself, which no preflight covers. It
+identity headers refuses every framework call from the till. The client's `$access` calls other than `can` send only
+`content-type` and your own headers (`can` sends the identity headers and the request id, like an operation), and a
+cached read (`GET`) only your own (`authorization`, `kiosk-device`, the request id), so those are the same list. The client sets no `If-None-Match`: a cache adds it itself, which no preflight covers. It
 reads no answer header but `content-type`, which needs no exposing; add `aventara-request-id` to `exposedHeaders` only
-if till code reads the correlation id an answer echoes, and `etag` or `cache-control` only if it reads those. Answer both from one `enableCors`, in place of the scaffold's in `src/main.ts`
+if till code reads the correlation id an answer echoes, `etag` only if it reads that (`cache-control` is
+safelisted), and `x-retry-after` (the PIN rate limit's wait, `KIOSK_PIN_LOCKED` and Access's verb limit) if it shows the
+wait. Answer both from one `enableCors`, in place of the scaffold's in `src/main.ts`
 ([Hosts](/docs/hosts)): a second `enableCors` adds a second CORS middleware, which answers every preflight before the
 other is reached. The native origins are the ones `trustedOrigins` lists.
 
@@ -802,8 +804,10 @@ export const signOutTill = async () => {
   sends `Origin: null`, which is a cookie call. Pass `credentials: "omit"` on every `net.fetch` call: `net.fetch`
   stores the session's `Set-Cookie` and sends it back, and Better Auth refuses a state-changing call that carries a
   cookie and no `Origin` or `Referer` with `403 MISSING_OR_NULL_ORIGIN` (`approve`, `change-pin` and `lock` after a
-  switch). Sending the app's origin (`app://till`) on every call also passes that check, but a jar still sends its
-  cookies: one that is not the `Authorization` bearer's own copy is `400 KIOSK_DEVICE_CREDENTIAL_CONFLICT`.
+  switch). Sending the app's origin (`app://till`) also passes that check (a native client sets its own headers; the
+  check guards browsers), but `credentials: "include"` with it sends the jar's cookies, and one that is not the
+  bearer's own copy answers `400 KIOSK_DEVICE_CREDENTIAL_CONFLICT`. Prefer `omit`. A password sign-in or a redeem from
+  `net.fetch` carries Fetch Metadata, so it needs `Origin: app://till` whatever the credentials mode (above).
 - **Proxies and logs.** Keep `authorization` and `kiosk-device` out of request logs.
 - **Your server's own reads.** `kioskOf(auth).consumeApproval({ headers: request.headers, ... })` reads the till's
   headers as they came, so a route that copies only the `cookie` header must forward `authorization` and
