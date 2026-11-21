@@ -7,11 +7,41 @@ section: about
 
 # Changelog
 
-`1.0.0-rc.0` was the first release candidate, `1.0.0-rc.1` the second, `1.0.0-rc.2` the third, `1.0.0-rc.3` the fourth, `1.0.0-rc.4` the fifth, `1.0.0-rc.8` the sixth, `1.0.0-rc.9` the seventh, `1.0.0-rc.10` the eighth, `1.0.0-rc.11` the ninth, `1.0.0-rc.12` the tenth, `1.0.0-rc.13` the eleventh, `1.0.0-rc.14` the twelfth and `1.0.0-rc.15` is the thirteenth (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published); the releases before them are pilots, and a pilot's API could change. A release candidate changes the API only to fix what testing finds. Pin exact versions. All `@aventara/*` packages are released together at one version. Each package also ships this history for itself as a `CHANGELOG.md` beside its README.
+`1.0.0-rc.0` was the first release candidate, `1.0.0-rc.1` the second, `1.0.0-rc.2` the third, `1.0.0-rc.3` the fourth, `1.0.0-rc.4` the fifth, `1.0.0-rc.8` the sixth, `1.0.0-rc.9` the seventh, `1.0.0-rc.10` the eighth, `1.0.0-rc.11` the ninth, `1.0.0-rc.12` the tenth, `1.0.0-rc.13` the eleventh, `1.0.0-rc.14` the twelfth, `1.0.0-rc.15` the thirteenth and `1.0.0-rc.16` is the fourteenth (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published); the releases before them are pilots, and a pilot's API could change. A release candidate changes the API only to fix what testing finds. Pin exact versions. All `@aventara/*` packages are released together at one version. Each package also ships this history for itself as a `CHANGELOG.md` beside its README.
+
+## 1.0.0-rc.16
+
+The current release, published under the `rc` dist-tag (install with `@rc`). A stage's `ctx` names the pipeline's values apart, an operation a layer removes is absent from its objects, and several calls that answered `500` now answer a precise code. Upgrading from rc.15: see [Upgrading](/docs/upgrading#from-100-rc15-to-100-rc16).
+
+**Pipeline**
+
+- A stage's `ctx` has `ctx.$args` (the call as the caller sent it and the pipes shaped it, in every stage), `ctx.$write` (what a create, an update or an upsert writes), `ctx.$written` (the written row's identifiers, in the `after` hooks of the single-row writes) and, in a Resource transaction stage, `ctx.$plan`. In interceptors, hooks, filters and `compute.read`, `ctx.$args` no longer holds what write compute filled.
+- A `before` hook on `create.one`, `update.first` or `update.unique` may return `{ data: { ... } }`: values for the row's own fields, merged into what is written. A `before` hook that returns another value, or any value on another operation, answers `A3004`. With a policy, the write check runs again after the hooks when they changed the write.
+- A function typed `Parameters<AvGuard>[0]` no longer accepts a hook's `ctx`; type it `AvContext`.
+
+**Calls and errors**
+
+- An operation a layer's exposure removes is absent from that layer's objects at run time: `framework.application`, `appTx`, `client`, `serverClient`, `clientTx` and `serverClientTx` follow their Contract. A call in process throws a `TypeError`; a raw request through `framework.execute`, HTTP or MCP still answers `A2002`.
+- `V1022` ("Database limit exceeded"): a call that needs more query parameters than the database takes in one query answers `422 A2009`, not `500 A3001`.
+- A nested `$create` list that writes references through a relation in one record and a reference field in another answers `422 A2004` with a `V1012` issue, not `500 A3001`.
+- A `state` that rejects with a `409` status answers `409 A2013`, not `500 A3000`, on every route, MCP tool call and in-process call; in process it rejects with an `AvConflictError`.
+- An `A2004` issue thrown at a field the caller left out keeps its `path`. A `Bytes` value of about 3 MiB and more reaches its validators instead of answering `500 A3000`, in the server and in the generated client.
+
+**Types, client and testing**
+
+- A relation entry in `select` or `include` refuses in the types each argument its edge does not offer in that layer.
+- A cached read in the generated client takes `{ fresh: true }`: the `GET` is sent with `cache: "no-store"`, so a read right after your own write is not answered from the browser's cache.
+- `@aventara/testing` adds `withStageContext` and `createFaultyAdapter`.
+
+**Tooling and agent skills**
+
+- `aventara:prepare` converges in one run after a Json field's shape changes or a field is added.
+- `aventara new` and `aventara init` fit a pnpm workspace with a Biome root configuration or a `turbo.json` `typecheck` or `check-types` task.
+- The agent skill and the error catalog cover the to-one forms of a nested `$update`, `$upsert` and `$delete`, a nested `limit`'s `pagination` capability, `delete.count` and `update.count` in a plan step, and `A3002`'s connection wait.
 
 ## 1.0.0-rc.15
 
-The current release, published under the `rc` dist-tag (install with `@rc`). A compute stage's return is type-checked, stage types read the root's field definitions, and every generated file passes a default `biome check`. No Contract changes. Run the generate steps once after upgrading. Upgrading from rc.14: see [Upgrading](/docs/upgrading#from-100-rc14-to-100-rc15).
+Published under the `rc` dist-tag before rc.16. A compute stage's return is type-checked, stage types read the root's field definitions, and every generated file passes a default `biome check`. No Contract changes. Run the generate steps once after upgrading. Upgrading from rc.14: see [Upgrading](/docs/upgrading#from-100-rc14-to-100-rc15).
 
 **Stage types**
 
