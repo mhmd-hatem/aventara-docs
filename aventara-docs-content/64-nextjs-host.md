@@ -19,7 +19,7 @@ The App Router only: the Pages Router is not supported.
 npx @aventara/cli@rc new my-app --host next
 ```
 
-It runs `create-next-app@latest` (TypeScript, the App Router under `src/`, the `@/*` alias), adds Aventara, installs everything and commits. create-next-app asks its own questions on your terminal. `--yes` takes its defaults, and a run without a terminal needs `--yes`. Pass create-next-app's own flags after `--`:
+It runs `create-next-app@16` (Next.js 16, the major the host supports; TypeScript, the App Router under `src/`, the `@/*` alias), adds Aventara, installs everything and commits. create-next-app asks its own questions on your terminal. `--yes` takes its defaults, and a run without a terminal needs `--yes`. Pass create-next-app's own flags after `--`:
 
 ```bash
 npx @aventara/cli@rc new my-app --host next --yes -- --tailwind

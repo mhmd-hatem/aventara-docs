@@ -413,9 +413,10 @@ const protocol = AvProtocol.bind(framework);   // bind once, at startup
 
 | Member | What it does |
 |---|---|
-| `protocol.surface()` | The list of routes to mount: each `{ kind: "operation" \| "contract" \| "transactions" \| "all", method, path }`, with `path` relative to the `api` mount path. Only advertised operations appear; `transactions` only when transactions are interactive; `all` (`POST /_all`) whenever at least one operation is advertised; a cached read has a second `operation` entry with `method: "GET"`. |
+| `protocol.surface()` | The list of routes to mount: each `{ kind: "operation" \| "contract" \| "transactions" \| "all" \| "can", method, path }`, with `path` relative to the `api` mount path. Only advertised operations appear; `transactions` only when transactions are interactive; `all` (`POST /_all`) whenever at least one operation is advertised; `can` (`POST /_access/can`) only when `access` is configured; a cached read has a second `operation` entry with `method: "GET"`. |
 | `protocol.handleOperation(request)` | Decode, execute and encode one operation request, a cached read's `GET` included. Resolves to `{ status, headers, body }`. Never rejects. |
 | `protocol.handleTransaction(request)` | The same for `/_transactions`. |
+| `protocol.handleCan(request)` | The same for `/_access/can`: `200 A1000` with one boolean per question, in order; malformed input is refused, never `403`. |
 | `protocol.handleAll(request, { signal })` | The same for `/_all`. Resolves to `{ status, headers, body }`; `body` is a string, or, when the caller sent `Accept: application/x-ndjson`, an async iterable of lines to write as each operation settles. Abort `signal` when the client leaves. |
 | `protocol.encodeContract(request)` | The `GET /_contract` answer: ETag, `no-cache`, `nosniff`, and `304` handling. |
 | `protocol.answerAbsent(request)` | The answer for any other path under the protocol's `_` namespace (404, 405, 400 ...), or `undefined` for a path outside it, which is yours to answer. |
