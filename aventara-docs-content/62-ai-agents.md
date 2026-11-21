@@ -42,7 +42,7 @@ AGENTS.md
 To refresh them after upgrading, run `aventara skill` in the project, with the CLI at your `@aventara/core` version:
 
 ```bash
-npx @aventara/cli@1.0.0-rc.15 skill
+npx @aventara/cli@1.0.0-rc.16 skill
 ```
 
 It reads the installed `@aventara/core`'s version and `ERRORS.md` (it runs none of your packages), then:
@@ -75,7 +75,7 @@ description: Build and change this project's Aventara API (NestJS or Next.js, Pr
 
 # Aventara
 
-Aventara turns the Prisma schema into a typed API: every model is a Resource with standard operations (`find`, `create`, `update`, `delete`, `upsert`), served at `api` (`/api`) and called from the generated frontend client. You configure the models' operations; you do not wrap them in controllers. Logic that is not one of those operations (a health check, a report, a webhook) goes in your own Nest controller or service, which calls `framework.application` and sits behind Nest guards. Written for `@aventara/core` 1.0.0-rc.15.
+Aventara turns the Prisma schema into a typed API: every model is a Resource with standard operations (`find`, `create`, `update`, `delete`, `upsert`), served at `api` (`/api`) and called from the generated frontend client. You configure the models' operations; you do not wrap them in controllers. Logic that is not one of those operations (a health check, a report, a webhook) goes in your own Nest controller or service, which calls `framework.application` and sits behind Nest guards. Written for `@aventara/core` 1.0.0-rc.16.
 
 There is one way to do each task. Follow these rules; the reference files hold the detail:
 
@@ -134,7 +134,7 @@ A call reads the database, so Next.js runs it at request time (Cache Components 
 6. **Annotate stages in the `as const` config.** An inline arrow in `aventaraConfig` has no contextual type (TS7006). Declare it with its stage type (`const requireUser: AvGuard = (ctx) => …`) or move it into a `defineResource` block, where stages are typed from where they sit. A compute stage's type names the field's value type too (`const slug: AvComputeCreate<Model, string> = ({ data }) => …`); without it the stage returns `unknown` and is refused.
 7. **Fill server-side values with `compute.create`.** A required field the caller must not send (an owner id, a slug, a hash) gets `pipelines.compute.create`; that also makes it optional on create. A pipe cannot fill a missing required field: the framework refuses the create (`A2004`, `V1000`) before any pipe runs. Hiding a required field from a layer that still creates the Resource needs a `compute.create`, or startup fails with `COMPILER_HIDDEN_REQUIRED_FIELD`.
 8. **Validate values with `AvZ`.** Length, range, pattern, format and closed-set rules are field validators (`AvZ.maxLength(80)`, `AvZ.email()`, `AvZ.oneOf(["draft", "live"])`); a closed set the types should name is a Prisma `enum` instead, and an enum field takes no validator, an enum list only a length (`AvZ.minItems`, `AvZ.maxItems`); the type error says so. They are part of the contract, so the generated client checks them before sending. A rule across the call's fields is a guard or a pipe. A rule that reads the database (an order must still be open) can change between a guard's check and the write, because guards run before the transaction opens: re-check it in `hooks.before` with `forceTransaction: true` (or in the Resource's transaction stages), where a throw rolls back. A guard may check it first for a quick refusal, never as the only check. When two requests can race on one row, make the write the check: `update.first` with the expected state in its `where` (`reference/recipes.md`, Compare-and-set).
-9. **Read the user from `ctx.$state`.** Declare it once (`declare module "@aventara/core" { interface AvState { user?: … } }`), set it from `AventaraModule`'s `state` option (Next.js: `Aventara`'s `state`) for remote requests or a call's `{ state }` option (server code), and read `ctx.$state.user` in every stage. Never parse headers again in each stage. Nest guards, interceptors and pipes (`APP_GUARD`, Passport's `AuthGuard`, `@nestjs/throttler`) never run on Aventara's routes (`<api>/_*`), and on Express neither does `MiddlewareConsumer` middleware: only `app.use(...)` does. Find the user in `app.use` middleware and hand it over with `state`; authorize in Aventara guards. A `state` function may throw `new AvError("A4001", "…")` to refuse with `403`; one that rejects with an object whose `status` or `statusCode` is the number `401`, `403` or `409` (Better Auth's `APIError` for a bad API key, or for "try again") answers `401 A4000`, `403 A4001` or `409 A2013` too, on HTTP and in-process calls, with nothing of the rejection sent. A thrown `AvError` answers its own code; on HTTP any other rejection is `500 A3000`, and in process it rejects the call unchanged. There is no built-in rate limit: add one with `app.use(rateLimit(…))`. CORS is not access control.
+9. **Read the user from `ctx.$state`.** Declare it once (`declare module "@aventara/core" { interface AvState { user?: … } }`), set it from `AventaraModule`'s `state` option (Next.js: `Aventara`'s `state`) for remote requests or a call's `{ state }` option (server code), and read `ctx.$state.user` in every stage. Never parse headers again in each stage. Nest guards, interceptors and pipes (`APP_GUARD`, Passport's `AuthGuard`, `@nestjs/throttler`) never run on Aventara's routes (`<api>/_*`), and on Express neither does `MiddlewareConsumer` middleware: only `app.use(...)` does. Find the user in `app.use` middleware and hand it over with `state`; authorize in Aventara guards. A `state` function may throw `new AvError("A4001", "…")` to refuse with `403`; one that rejects with an object whose `status` or `statusCode` is the number `401` or `403` (Better Auth's `APIError` for a bad API key) answers `401 A4000` or `403 A4001` too, on HTTP and in-process calls, with nothing of the rejection sent. A thrown `AvError` answers its own code; on HTTP any other rejection is `500 A3000`, and in process it rejects the call unchanged. There is no built-in rate limit: add one with `app.use(rateLimit(…))`. CORS is not access control.
 10. **Side effects that must commit with the write: `forceTransaction` + an `after` hook.** Set `forceTransaction: true` on the operation and write the related rows (an outbox event, a counter) through `ctx.<Resource>` or `ctx.$sql` in its `after` hook. Without it the write has already committed when the hook runs.
 11. **Errors are codes.** Branch on `code` or the error class (`AvNotFoundError`, `AvValidationError`, …), never on a message. Throw `new AvError("A4000", "Sign in first.")` from a stage to answer a code. Which class each code throws: `reference/client.md`, Errors. Look up any code in `reference/errors.md` (or `AvErrorCatalog[code]` from `@aventara/core`); a startup diagnostic carries its `docs` URL.
 12. **Do not edit generated files.** Prisma's client, the files beside the discovery artifact (`src/generated/aventara/`, or `src/aventara/` when Prisma's client output is `src/generated`) and the frontend's generated client are rebuilt by `aventara:prepare` and `avclient generate`.
@@ -482,29 +482,6 @@ Ordinary limits: set them at the root, override them in `client` or `application
 ## Cached reads from the client
 
 A read with a `cache` stage (`reference/config.md`, "Caching reads") is sent by the generated client as `GET <api>/_resources/<R>/find/<variant>?q=<args>&v=<contract hash>`, alone, never in an Operation Set. Leave `requestId` off a cached cross-origin read (it adds a CORS preflight). A URL over 4096 characters goes as a `POST` and is not cached. The `POST` route stays for any client.
-
-### Read your own write
-
-A cached read answered `private, max-age=N` can come from the browser's HTTP cache for N seconds, so a refetch right after your own write may return the data from before it. Two things fix it:
-
-- The write's answer is already fresh, read from the database. Put it into local state (TanStack Query's `queryClient.setQueryData(key, row)`, SWR's `mutate(key, row, { revalidate: false })`) instead of reading the row back.
-- A list, a count or another aggregate the write changed (a row an after-hook changed too) is read again with `{ fresh: true }`: the call is sent with `cache: "no-store"`, so the browser neither answers it from its cache nor stores the answer.
-
-```ts
-import avClient from "./api/AvClient";
-
-const created = await avClient.Post.create.one({ data: { title: "Hello" }, select: ["id", "title"] });
-// `created` is the new row: set it in local state, no read needed.
-const [posts, total] = await Promise.all([
-  avClient.Post.find.many({ select: ["id", "title"] }, { fresh: true }),
-  avClient.Post.find.count({}, { fresh: true }),
-]);
-```
-
-- `fresh` is `true` or absent, and is typed only on a read the server caches. It sends no header and changes no URL, so the server answers it as any `GET`; nothing on the server keeps an answer (there is no server-side cache beyond the `Cache-Control` and `ETag` headers).
-- Use it after a write, not on every read: a `fresh` read is never served from the browser's cache.
-- Leave `maxAge` low only for data that goes stale on its own; do not shorten it to cover your own writes, and do not refetch twice or add `requestId` to dodge the cache (`requestId` adds a CORS preflight and does not skip the cache).
-- Server code and `@/aventara/server` call in process: nothing there is cached by the browser, so `fresh` changes nothing.
 
 ### Read your own write
 
