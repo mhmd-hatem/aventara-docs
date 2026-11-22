@@ -121,8 +121,10 @@ validate the arguments against the contract: types, unknown fields, structure, a
                           level then nested targets'; then the root's validators on a value
                           compute or a pipe set in a field the caller's layer hides (A3000)
 -> policy write check     only when a policy is configured: the checks on what compute left
-   (pass 1)               (see Policies), reading the row as it is before any hook
-   (a refusal so far runs no interceptor and no hook)
+   (pass 1)               (see Policies), reading the row as it is before any hook; a
+                          single-row update or delete aimed at a row outside the caller's
+                          scopes answers its miss here
+   (a refusal or a miss so far runs no interceptor and no hook)
 -> interceptors enter     every level, outer to inner (each told ctx.$write as it then stands)
 -> hooks.before           every level, outer to inner; a { data } one returns is merged into
                           ctx.$write and judged as compute's output is (A2004, A3000, A3004)

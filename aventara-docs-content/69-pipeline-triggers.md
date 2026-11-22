@@ -27,7 +27,7 @@ guards, pipes                                     (before BEGIN)
 validators (the caller's values)                  (before BEGIN, for literal values)
                                                   BEGIN
 write compute, re-check            ctx.$write exists from here
-policy write check                 on compute's output; a refusal runs no hook
+policy write check                 on compute's output; a refusal, or a row out of scope, runs no hook
 interceptors enter
 hooks.before                       may return { data } for the row
 policy write check, again          only when a hook's { data } changed ctx.$write
