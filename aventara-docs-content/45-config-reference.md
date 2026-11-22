@@ -689,7 +689,7 @@ A stale `prebuilt` file is not an error. It prints one warning, `AVENTARA_PREBUI
 | A capability or token the adapter does not offer | `COMPILER_UNAVAILABLE_CAPABILITY` |
 | A `json` shape on a field that is not `Json` (here `Post.title`, a string) | `COMPILER_INVALID_JSON_SHAPE`: `field "Post.title" is a string field; only a Json field may declare a "json" shape` |
 | A `json` that is not an `AvZ` shape (a Zod schema, say) | `COMPILER_INVALID_JSON_SHAPE`: `field "Post.meta": "json" must be a shape built with AvZ from "@aventara/core/avz"; a Zod schema or any other value is not accepted` |
-| A shape that admits `null` or absence at its top level | `COMPILER_INVALID_JSON_SHAPE`: `field "Post.meta": a field's shape cannot admit null or absence at its top level; whether the field may be null comes from the adapter model` |
+| A shape that admits `null` or absence at its top level | `COMPILER_INVALID_JSON_SHAPE`: `field "Post.meta": a field's shape cannot admit null or absence at its top level; whether the field may be null comes from its nullability` |
 | A validator that does not fit the field (`AvZ.maxLength` on an `int`) | `COMPILER_INVALID_VALIDATOR` at `root.resources.Project.fields.budget.pipelines.validators[0]` |
 
 A compiler diagnostic's path starts with the layer it is about: `root.`, `application.` or `client.`.
