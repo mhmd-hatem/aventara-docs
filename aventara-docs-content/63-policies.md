@@ -463,7 +463,9 @@ await framework.client.Post.update.unique({ where: { id: 12 }, data: { title: "x
 // A2003: Bob's draft. The answer does not reveal that it exists.
 ```
 
-A single-row update or delete (`update.unique`, `update.first`, `delete.unique`, `delete.first`) first asks whether its row is within the caller's scopes, before any interceptor or hook runs. When it is not, the write answers its miss right there, with the same answer as in the table (`A1001` for a first-style write), and none of your interceptors, hooks or filters run. A hook that fails with its own error, or calls a webhook, can't reveal that the row exists or act on a row the caller may not touch. The question is one `exists` on the write's scoped `where`, inside the write's transaction when it has one. It's skipped when the caller's scopes don't narrow the write (`scopeOf` answers `true`) and for an update `afterChecks` lists, whose read of the row before the update answers it. The write still applies the scopes itself, so a row that changes between the question and the write is caught as before.
+A single-row update or delete (`update.unique`, `update.first`, `delete.unique`, `delete.first`) checks that its row is within the caller's scopes right after the guards, pipes and the caller's validators, before write compute. If the row is outside them, the write answers its miss right there with the same answer as in the table (`A1001` for a first-style write). Your guards run and keep their answers, but no write compute, interceptor, hook or filter runs. So a hook that fails with its own error, or calls a webhook, can't reveal that the row exists or act on a row the caller may not touch.
+
+The check is one `exists` on the write's scoped `where`, inside the write's transaction when it has one. It's only asked when write compute, an interceptor or a `before` hook would run for that operation; guards, field validators and `after` hooks don't count. It's also skipped when the caller's scopes don't narrow the write (`scopeOf` answers `true`), and for an update `afterChecks` lists, because the read of the row before the update answers it. The write still applies the scopes itself, so a row that changes between the check and the write is caught as before.
 
 The many-row operations act on the caller's rows only, like row-level security in a database. `update.many` returns the changed rows and `update.count` and `delete.count` return how many rows changed. (`delete.many` is not offered with the Prisma adapter; use `delete.count`, see [Operations reference](/docs/operations-reference#deletemany).) An `update.many` with an empty `where` by Ada changes her own posts and leaves everyone else's alone, with no error.
 
@@ -532,13 +534,13 @@ On PostgreSQL, the round trips of a checked write:
 | Operation | Round trips |
 |---|---|
 | `create.one` | 1 (2 when its rule asks one `exists`) |
-| `delete.unique` | 2 (its `exists`, then the delete) |
-| `update.unique` | 4 (5 when it writes a field the read scope reads) |
+| `delete.unique` | 1 |
+| `update.unique` | 3 (4 when it writes a field the read scope reads) |
 | `update.many`, `update.count` | 3 |
 
-A single-row write by a caller whose scopes are `true` asks no `exists`: one round trip fewer. An update `afterChecks` lists reads its rows as they were first. For `update.unique` that read takes the place of the `exists`, so it stays 4 (5); `update.many` and `update.count` take one round trip more, 4. With `grantsOf`, add the `exists` lookups its rules ask.
+An update `afterChecks` lists reads its rows as they were first, one round trip more: `update.unique` 4 (5), `update.many` and `update.count` 4. With `grantsOf`, add the `exists` lookups its rules ask.
 
-Reads and a Framework without a policy are unchanged.
+A single-row update or delete with write compute, an interceptor or a `before` hook adds one round trip: the row check above (none for an update `afterChecks` lists). Reads and a Framework without a policy are unchanged.
 
 ## What a refusal looks like
 

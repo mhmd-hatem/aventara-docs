@@ -97,7 +97,7 @@ The stage kinds are norms. The framework does not check what a callback does: an
 Every operation runs its stages in one order:
 
 ```text
-framework validation (with required fields) -> policy admission (when a policy is configured) -> guards -> pipes -> validators (the caller's values) -> write compute -> re-check (validators of what compute set or changed) -> policy write check (when a policy is configured) -> interceptors (before) -> hooks.before -> the policy write check again (only when a before hook's values changed the write) -> operation -> hooks.after -> interceptors (after) -> filters
+framework validation (with required fields) -> policy admission (when a policy is configured) -> guards -> pipes -> validators (the caller's values) -> the row check (a single-row update or delete, with a policy) -> write compute -> re-check (validators of what compute set or changed) -> policy write check (when a policy is configured) -> interceptors (before) -> hooks.before -> the policy write check again (only when a before hook's values changed the write) -> operation -> hooks.after -> interceptors (after) -> filters
 ```
 
 In full, with every level listed root first, then the operation's overlay:
@@ -113,6 +113,10 @@ validate the arguments against the contract: types, unknown fields, structure, a
                           (root then overlay), then nested targets'
 -> validators             every value the caller sent, as the pipes left them (A2004), top level
                           then nested targets'; a field with a compute stage included
+-> row check              only with a policy, on update.unique/first and delete.unique/first,
+                          when write compute, an interceptor or a before hook follows: is the
+                          row within the caller's scopes? If not, the write answers its miss
+                          here (see Policies), and none of the stages below runs
 -> compute (write)        create, update, or an upsert's two branches; then nested targets'
                           (a compute.create that leaves its required field missing answers A3000)
 -> re-check               Aventara's own checks on what the pipes and compute produced, top level
@@ -121,10 +125,8 @@ validate the arguments against the contract: types, unknown fields, structure, a
                           level then nested targets'; then the root's validators on a value
                           compute or a pipe set in a field the caller's layer hides (A3000)
 -> policy write check     only when a policy is configured: the checks on what compute left
-   (pass 1)               (see Policies), reading the row as it is before any hook; a
-                          single-row update or delete aimed at a row outside the caller's
-                          scopes answers its miss here
-   (a refusal or a miss so far runs no interceptor and no hook)
+   (pass 1)               (see Policies), reading the row as it is before any hook
+   (a refusal so far runs no interceptor and no hook)
 -> interceptors enter     every level, outer to inner (each told ctx.$write as it then stands)
 -> hooks.before           every level, outer to inner; a { data } one returns is merged into
                           ctx.$write and judged as compute's output is (A2004, A3000, A3004)
