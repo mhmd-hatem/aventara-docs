@@ -364,7 +364,7 @@ Publishing a post moves its `status` from `"draft"` to `"published"`, stamps `pu
 - `forceTransaction` makes the update one transaction, with its hooks and interceptors inside it.
 - A `before` hook re-reads the post inside that transaction and refuses anything but a draft. A guard runs before `BEGIN`, so it could only pre-check ([Check, then act](/docs/pipelines#check-then-act)).
 - An `after` hook writes the side effects through `ctx`, in the same transaction.
-- The update's answer is read before the `after` hook runs, so an interceptor puts the value the hook wrote into it.
+- The update's answer is read before the `after` hook runs, so the hook returns the value it wrote as `{ result }`, merged into the answer ([Answering what an after hook changed](/docs/pipelines#answering-what-an-after-hook-changed)).
 
 ```ts
 // src/resources/post.resource.ts
@@ -393,21 +393,14 @@ export const post = defineResource<Model>()("Post", {
                 if (ctx.$args.data.status !== "published") return;
                 // The updated row's id, whatever the caller's `where` named it by.
                 const { id } = ctx.$written;
-                await ctx.Post.update.unique({ where: { id }, data: { publishedAt: new Date() } });
+                const publishedAt = new Date();
+                await ctx.Post.update.unique({ where: { id }, data: { publishedAt } });
                 await ctx.OutboxEvent.create.one({ data: { topic: "post.published", payload: { postId: id } } });
+                // Merged into the answer; dropped when the caller did not select it.
+                return { result: { publishedAt } };
               },
             ],
           },
-          interceptors: [
-            async (ctx, next) => {
-              const result = await next();
-              // Only when the caller's projection holds the field.
-              if (typeof result !== "object" || result === null || !("publishedAt" in result)) return result;
-              // Inside the same transaction: this read sees what the after hook wrote.
-              const { publishedAt } = await ctx.Post.find.unique({ where: ctx.$args.where, select: ["publishedAt"] });
-              return { ...result, publishedAt };
-            },
-          ],
         },
       },
     },
@@ -415,9 +408,9 @@ export const post = defineResource<Model>()("Post", {
 });
 ```
 
-- The `before` hook, the `after` hook and the interceptor's read all run inside the transaction, so a refusal or a failed event write rolls the status change back.
-- Patch the result `next()` resolved; do not replace it with a fresh read. The answer is checked against the caller's own projection (its `select` or `include`, or the default fields of the caller's layer), and a `ctx` call is application-origin: a read with the application's default fields would carry fields the `client` layer hides, and a remote caller would get `500` `A3000`.
-- The hooks' and the interceptor's `ctx` calls are raw: they run none of your stages, so the `after` hook's own update does not run these hooks again.
+- The `before` and `after` hooks run inside the transaction, so a refusal or a failed event write rolls the status change back.
+- The hook's `{ result }` is projected to the caller's own `select` or `include` and the layer's exposure, so a field the caller did not ask for, or the `client` layer hides, never reaches it. Do not replace the answer with a fresh `ctx` read in an interceptor: a `ctx` call is application-origin, and a read with the application's default fields would carry fields the `client` layer hides, so a remote caller would get `500` `A3000`.
+- The hooks' `ctx` calls are raw: they run none of your stages, so the `after` hook's own update does not run these hooks again.
 - A value that depends only on the row being written is simpler as [write compute](/docs/computed-fields) (`compute.update` on `publishedAt`). The `after` hook is for values that need other rows: a number taken from a counter row, an event.
 
 The re-check reads under the database's isolation level. On PostgreSQL's default, two requests that publish the same draft at the same moment can both read `"draft"`. When that matters, make the write itself the check (compare-and-set): `update.first` with the expected status in its `where`.

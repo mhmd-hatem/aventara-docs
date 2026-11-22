@@ -67,7 +67,7 @@ filters, on a failure
 | `ctx.$args` | the call: the arguments as the caller sent them and the pipes shaped them. Never compute's output, never a before hook's values. | every operation stage, compute included |
 | `ctx.$write` | what the write writes: `ctx.$args` after write compute and the values `before` hooks returned, exactly what the adapter is handed, in the same shape as `ctx.$args` | a create's, an update's or an upsert's interceptors (as they entered), `before` hooks (with the earlier hooks' values), `after` hooks, and filters reached after write compute |
 | `ctx.$written` | the written row's identifiers (`{ id }`), whatever the caller selected; `undefined` when a `first` write matched no row | the `after` hooks of `create.one`, `update.first`, `update.unique`, `upsert.unique`, `delete.first` and `delete.unique` |
-| `result` | the answer: the caller's `select`, read compute applied | an `after` hook's first parameter, and what an interceptor's `next()` resolves |
+| `result` | the answer: the caller's `select`, read compute applied, with an earlier `after` hook's `{ result }` merged in | an `after` hook's first parameter, and what an interceptor's `next()` resolves |
 
 Write compute's `data` parameter is one record of `ctx.$write`, built so far: the caller's values after the pipes, plus what earlier compute stages set. Read the caller's own value from `ctx.$args`.
 

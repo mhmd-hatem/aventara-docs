@@ -247,8 +247,8 @@ Every code below has its own entry on this page, at `#` and the code in lower ca
 
 **Pipe output invalid.** HTTP 500, thrown as `AvInternalError`.
 
-- Cause: A server pipe, field pipe or transaction pipe (or write compute) returned arguments the server's own contract refuses: a field the Resource does not have, a wrong type, a dropped required field, a reference written together with its relation (V1012), or a changed plan. cause.message is always "A server pipeline produced invalid arguments."
-- Fix: Read the server log line, which names the pipe, the operation and the path, and fix the pipe. A pipe returns a new object of the same shape, or undefined to keep the arguments.
+- Cause: A server pipe, field pipe or transaction pipe (or write compute) returned arguments the server's own contract refuses: a field the Resource does not have, a wrong type, a dropped required field, a reference written together with its relation (V1012), or a changed plan. Or a hook returned what the server refuses: a before hook anything but undefined or { data } (or values on another operation), an after hook anything but undefined or { result } (or a result on a delete, a bulk write or a read), a result value its field does not take, a to-many element without its identifier, or a result on a write that matched no row. cause.message is always "A server pipeline produced invalid arguments."
+- Fix: Read the server log line, which names the pipe, the operation and the path, and fix the pipe or hook. A pipe returns a new object of the same shape, or undefined to keep the arguments; an after hook returns undefined or { result: { … } }.
 
 ### Authentication and authorization (A4xxx)
 

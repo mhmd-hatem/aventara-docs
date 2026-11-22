@@ -26,7 +26,7 @@ An operation has five kinds of stage, and a field has four of its own (registere
 | Interceptor | `interceptors` | operation | `(ctx, next)` | the call | as it was when the interceptor entered | – | the result of `next()` | yes | no |
 | `before` hook | `hooks.before` | operation | `(ctx)` | the call | after compute, with the earlier before hooks' values | – | nothing; on `create.one`, `update.first` and `update.unique`, `{ data: { … } }` to set fields of the row | yes | no |
 | Compute (read) | `fields.<f>.pipelines.compute.read` | returned row | `({ field, value, record, ctx })` | the call | – | – | the field's value, or `undefined` to keep it | yes | yes, for an included row |
-| `after` hook | `hooks.after` | operation | `(result, ctx)` | the call | what was written | on a single-row write | nothing | yes | no |
+| `after` hook | `hooks.after` | operation | `(result, ctx)` | the call | what was written | on a single-row write | nothing; on `create.one`, `update.first`, `update.unique` and `upsert.unique`, `{ result: { … } }` to answer the values it changed | yes | no |
 | Filter | `filters` | failure | `(error, ctx)` | the call | when the failure came after write compute | – | an `AvError` to answer with, or `undefined` | where the failure was | no |
 
 A stage registered at the root runs for every origin; one in an overlay only for its own (`ctx.$origin`). A relation field takes write guards only. Guards authenticate and authorize ([Authentication and guards](/docs/authentication-and-guards)), validators are the [field validators](/docs/field-validators), compute is [Computed fields](/docs/computed-fields). The Resource transaction stages, which see a whole plan, are [below](#resource-transaction-stages).
@@ -499,7 +499,61 @@ An issue keeps its `path` inside a transaction. In a transaction step you can wr
 
 Outside a transaction, the write is already committed when an `after` hook runs, so an unwrapped operation's after hooks should observe (audit, metrics, notifications), not undo. To make a hook's writes commit with the operation, set [`forceTransaction`](#forcetransaction) on it. Inside a transaction plan, a step's interceptors and hooks run inside the database transaction, so an error thrown in one (a `before` hook refusing step 2, say: `A4002` with `operation: 1`) rolls the whole plan back ([Transactions with $ref](/docs/transactions-with-ref)). A step that a guard or a pipe refuses is refused before the transaction opens.
 
-An `after` hook cannot change the result: it gets a frozen copy. To return something else, use an interceptor. On a single-row write it gets the written row's identifiers as `ctx.$written` (`ctx.$written.id`), whatever the caller selected.
+An `after` hook gets a frozen copy of the result. On a single-row write it gets the written row's identifiers as `ctx.$written` (`ctx.$written.id`), whatever the caller selected.
+
+### Answering what an after hook changed
+
+The answer is read with the write, before the `after` hooks run. A hook that changes the row (a total recomputed from its lines, a number taken from a counter, a timestamp) returns the new values as `{ result: { … } }`, and they are merged into the caller's answer, with no second read. It works on `create.one`, `update.first`, `update.unique` and `upsert.unique`.
+
+```ts
+// src/resources/post.resource.ts
+import { defineResource } from "@aventara/core";
+import { discovery } from "../generated/aventara/discovery.artifact.js";
+
+type Model = typeof discovery.model;
+
+export const post = defineResource<Model>()("Post", {
+  operations: {
+    update: {
+      unique: {
+        forceTransaction: true,
+        pipelines: {
+          hooks: {
+            after: [
+              async (_result, ctx) => {
+                const { id } = ctx.$written;
+                const publishedAt = new Date();
+                await ctx.Post.update.unique({ where: { id }, data: { publishedAt }, select: ["id"] });
+                // Merged into the caller's answer; dropped when the caller did not select it.
+                return { result: { publishedAt } };
+              },
+            ],
+          },
+        },
+      },
+    },
+  },
+});
+```
+
+How the values are merged:
+
+- **Relations recurse, values replace.** A to-one relation is merged field by field. A to-many relation is a list, each element naming the related row's identifier, and each element is merged into the answer's element with that identifier; an element the answer does not hold is dropped. Every other value replaces the old one whole: a Json value, a `Date`, bytes and a decimal are never merged into. `null` sets null, and a key you leave out keeps its value.
+- **The identifier is read for you.** The to-many rows are read with their identifier whatever the caller selected, and it is left out of the answer when the caller did not ask for it. In a `$count` relation (`{ data, count }`) the elements are matched in `data` and `count` stays as read. Return a plain list there too, never the `{ data, count }` envelope.
+- **The answer keeps the caller's shape.** After the merge the answer is projected to the caller's `select` or `include` and to the layer's exposure, as every answer is, and read compute runs on it. A key the caller did not select, or a field the layer hides, never reaches the caller, so a hook can return more than one caller asked for.
+- **Several hooks add up.** `after` hooks run inner to outer; a later hook's result is merged over an earlier one's, and each hook is told the answer as merged so far.
+
+The result is typed from the Resource's fields and relations at the variant: a value of the wrong type, a field the Resource does not have, a to-many element without its identifier, or a `data` key beside `result` does not compile. The server refuses with `A3004`:
+
+- anything else a hook returns (a value that is neither `undefined` nor `{ result: { … } }`, or a key beside `result`);
+- a value its field does not take;
+- a to-many element without its identifier;
+- a result on a write that matched no row (an `update.first` that answers `null`);
+- a result on another operation: a delete (its answer is the removed row), a bulk write or a read.
+
+Without a transaction the write has committed when the hook runs, so a refused result leaves the write in place. Put the operation under [`forceTransaction`](#forcetransaction) to roll it back with the hook.
+
+Use an interceptor only to answer something else entirely. Do not replace the answer with a fresh `ctx` read: a `ctx` call is application-origin, so a read with the default fields carries fields the `client` layer hides, and a remote caller gets `500` `A3000`.
 
 An interceptor's `next()` runs everything below it once. A second call is refused and the operation answers `A3000`.
 

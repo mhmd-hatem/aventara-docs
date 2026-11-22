@@ -855,7 +855,7 @@ A wrong configuration throws one `AvConstructionError` before the server listens
 |---|---|---|---|---|
 | Guard | `guards` | `(ctx)` | `$args`: the call as sent | `true`/`undefined` to allow, `false` to deny (`A4001`); or throw an `AvError` |
 | Pipe | `pipes` | `(args, ctx)` | `args` = `$args`: the call as the pipes so far left it | new arguments, or `undefined` to keep them; the only stage that changes arguments |
-| Hook | `hooks.before`, `hooks.after` | before `(ctx)`; after `(result, ctx)` | `$args`: the call; `$write` (create, update, upsert): what is written; after hooks of a single-row write also `$written`, the row's identifiers | before: nothing, or on `create.one`, `update.first`, `update.unique` `{ data: { … } }` to set fields of the row; after: nothing |
+| Hook | `hooks.before`, `hooks.after` | before `(ctx)`; after `(result, ctx)` | `$args`: the call; `$write` (create, update, upsert): what is written; after hooks of a single-row write also `$written`, the row's identifiers | before: nothing, or on `create.one`, `update.first`, `update.unique` `{ data: { … } }` to set fields of the row; after: nothing, or on `create.one`, `update.first`, `update.unique`, `upsert.unique` `{ result: { … } }` to answer the values the hook changed |
 | Interceptor | `interceptors` | `(ctx, next)` | `$args`; `$write` as it was when it entered | the result of `next()`, called exactly once |
 | Filter | `filters` | `(error, ctx)` | `$args`; `$write` when the failure came after write compute | an `AvError` to answer with, or `undefined` to pass it on |
 | Validators (field) | `fields.<f>.pipelines.validators` | `AvZ` checks | the value | data, part of the contract |
@@ -915,7 +915,7 @@ With `forceTransaction` (or as a step of a transaction plan), framework validati
 | `ctx.$write` | what the write writes: `$args` after write compute and the values `before` hooks returned, exactly what the adapter is handed, shaped as `$args` | create, update, upsert: interceptors (as they entered), `hooks.before` (with earlier hooks' values), `hooks.after`, filters after compute |
 | compute's `data` | this record of `$write`, built so far | write compute |
 | `ctx.$written` | the written row's identifiers (`{ id }`), whatever the caller selected; `undefined` when a `first` write matched nothing | `hooks.after` of `create.one`, `update.first`/`unique`, `upsert.unique`, `delete.first`/`unique` |
-| `result` | the answer: the caller's `select`, read compute applied | `hooks.after`'s first parameter, what `next()` resolves |
+| `result` | the answer: the caller's `select`, read compute applied, with earlier after hooks' `{ result }` merged in | `hooks.after`'s first parameter, what `next()` resolves |
 | `ctx.$plan` | the transaction plan | Resource transaction stages |
 
 ```ts
@@ -941,6 +941,8 @@ export const post = defineResource<Model>()("Post", {
               async (_result, ctx) => {
                 // The created row's id, even when the caller did not select it.
                 await ctx.Post.update.unique({ where: { id: ctx.$written.id }, data: { views: 0 }, select: ["id"] });
+                // What the hook changed, merged into the caller's answer: no second read.
+                return { result: { views: 0 } };
               },
             ],
           },
@@ -968,6 +970,7 @@ export const post = defineResource<Model>()("Post", {
 ```
 
 - A before hook's `{ data }` holds the row's own scalar fields only, no relation or nested write. Hooks run in stage order (layer, Resource, family, variant; root, then overlay at each): a later hook's value replaces an earlier one's, and every hook's replaces write compute's. The values are judged as compute's are: the field validators (`A2004`), the root's on a hidden field (`A3000`), Aventara's own checks (`A3004`), then the policy write check's pass 2: the policy's rules, not the caller's field write grants, as for compute. They may set any writable scalar, identifiers included, as pipes and compute may (setting the primary key moves the row). Any other return, or a value on another operation, answers `A3004`.
+- An after hook's `{ result }` is merged into the answer, so a hook that changed the row hands back the new values. The merge goes through relations only: a to-one relation recurses, and a to-many relation is a list whose elements each name the related row's identifier and are merged into the answer's element with that identifier (an element without it answers `A3004`; one the answer does not hold is dropped). The identifier is read with the write whatever the caller selected. In a `$count` relation (`{ data, count }`) the elements are matched in `data` and `count` stays as read; return a plain list, never the envelope. Every other value replaces whole (a Json, a `Date`, bytes, a decimal), `null` sets null and a key left out keeps its value. The merged answer is then projected to the caller's `select`/`include` and the layer's exposure, and read compute runs on it: a field the caller did not select, or the layer hides, never reaches the caller. Hooks run inner to outer (variant, family, Resource, layer); a later hook's result is merged over an earlier one's, and each hook is told the answer as merged so far. A value its field does not take, a result on a write that matched no row (`update.first` answering `null`), anything else a hook returns, or a result on another operation (a delete, a bulk write, a read) answers `A3004`. Without a transaction the write has committed by then: put the hook under `forceTransaction` so a refusal rolls it back.
 
 ## Request rules versus row rules
 
@@ -1027,7 +1030,7 @@ export const onePostDeletePerPlan: AvTransactionGuard = (ctx) =>
 - In a transaction plan, a step's guards, pipes and filters run before its `$ref` values are resolved: in their `ctx.$args` a field that can take a reference is the value or an `AvTransactionReference` (`string | AvTransactionReference<string>`), so narrow it (`typeof title === "string"`) first. Hooks and interceptors run after the references are resolved, in a plan and in a plain call alike: their `ctx.$args` and `ctx.$write` hold values (`ctx.$args.data.tenderedMinor` is a `bigint` there).
 - `ctx.$args` is the call, never compute output: a field `compute.create` fills is `T | undefined` in it, at every stage. Read what is written, compute's values and the before hooks' included, from `ctx.$write` (`ctx.$write.data.slug`). In compute, `data` is the record as built so far; read the caller's own value from `ctx.$args`.
 - `ctx.$written` is in `after` hooks of single-row writes only. Its fields are read with the write and left out of the answer, so the caller's `select` is answered as sent.
-- `ctx.$args` is frozen. A pipe returns new arguments; an `after` hook gets a frozen result. To answer with a different result, use an interceptor. A `Date` or bytes value cannot be frozen, so each stage gets its own copy: changing one in place changes nothing another stage sees, what is written or what the caller receives.
+- `ctx.$args` is frozen. A pipe returns new arguments; an `after` hook gets a frozen result and returns `{ result }` to change it. To answer with an entirely different result, use an interceptor. A `Date` or bytes value cannot be frozen, so each stage gets its own copy: changing one in place changes nothing another stage sees, what is written or what the caller receives.
 - ``await ctx.$sql<Row>`select id from "Post" where "authorId" = ${userId}` `` is a tagged template: each `${…}` is bound as a parameter, never spliced into the text. It resolves the rows as `Row[]` and runs in the current transaction (outside one, as a plain statement).
 - `await ctx.$transaction(async (tx) => { … })` runs the work in a transaction, `tx` being this `ctx` bound to it, and resolves what the work resolves; a throw rolls it back. Inside an open transaction it joins it.
 - `ctx.$transport` is set only for a remote call over HTTP: `method` and `headers`, with lower-cased header names (`ctx.$transport?.headers["x-request-source"]`). Server code's calls have none. Who the caller is belongs in `ctx.$state`, seeded once by the host's `state`.
@@ -1428,7 +1431,7 @@ if (closed === null) {
 }
 ```
 
-`update.first` runs two statements in one transaction, a read and then a write with the same `where` asserted again: the second of two racing calls resolves `null` (no match) or throws `AvConflictError` `A2014` (the row changed between the read and the write); nothing is written either way. `A2013` and `A2014` may succeed if sent again. An `after` hook that must write the side effect (an event, a number from a counter) goes on `update.first` with `forceTransaction: true`. The update's answer is read before that hook runs. To answer with what the hook wrote, patch the result in an interceptor, which runs inside the same transaction: `const result = await next();`, read only the written field with `ctx` (`select: ["number"]`), and return `{ ...result, number }` when `result` holds that field. Never replace the result with a fresh `ctx` read: the answer is checked against the caller's own projection, and a `ctx` call is application-origin, so a read with the default fields carries fields the `client` layer hides and a remote caller gets `500 A3000`.
+`update.first` runs two statements in one transaction, a read and then a write with the same `where` asserted again: the second of two racing calls resolves `null` (no match) or throws `AvConflictError` `A2014` (the row changed between the read and the write); nothing is written either way. `A2013` and `A2014` may succeed if sent again. An `after` hook that must write the side effect (an event, a number from a counter) goes on `update.first` with `forceTransaction: true`. The update's answer is read before that hook runs. To answer with what the hook wrote, return it from the hook: `return { result: { number } }` is merged into the answer and projected to the caller's `select`, so a field the caller did not ask for, or the layer hides, is dropped. Never replace the result with a fresh `ctx` read in an interceptor: a `ctx` call is application-origin, so a read with the default fields carries fields the `client` layer hides and a remote caller gets `500 A3000`.
 
 ## Testing
 
