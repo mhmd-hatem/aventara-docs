@@ -313,8 +313,8 @@ validate the whole plan
 -> BEGIN
 -> guards, then pipes, of each touched Resource (they see the whole plan, $refs unresolved)
 -> with a policy, when a touched Resource has transaction interceptors or hooks.before: the row
-   check of the steps up to the first write step, where no $ref is in their where (a row out of
-   scope answers that step's miss here, see Policies)
+   check of every step whose where has no $ref (a row out of scope answers that step's miss
+   here; after a write step, only a row that exists; see Policies)
 -> every touched Resource's interceptors enter, then every touched Resource's hooks.before
      -> the steps, in order, each: resolve $refs -> field pipes and validators of the resolved values -> the row check (with a policy) -> write compute -> validators of what compute set or changed
         -> policy write check (with a policy) -> interceptors -> hooks.before -> its pass 2 (a hook's values) -> the adapter call -> hooks.after -> interceptors -> output validation
