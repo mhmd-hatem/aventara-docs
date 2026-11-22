@@ -538,9 +538,10 @@ export const post = defineResource<Model>()("Post", {
 
 How the values are merged:
 
-- **Relations recurse, values replace.** A to-one relation is merged field by field. A to-many relation is a list, each element naming the related row's identifier, and each element is merged into the answer's element with that identifier; an element the answer does not hold is dropped. Every other value replaces the old one whole: a Json value, a `Date`, bytes and a decimal are never merged into. `null` sets null, and a key you leave out keeps its value.
-- **The identifier is read for you.** The to-many rows are read with their identifier whatever the caller selected, and it is left out of the answer when the caller did not ask for it. In a `$count` relation (`{ data, count }`) the elements are matched in `data` and `count` stays as read. Return a plain list there too, never the `{ data, count }` envelope.
+- **Relations recurse, values replace.** A to-one relation is merged field by field into the one row the answer holds. It cannot bring in a row: a value for a relation the answer read as `null`, or did not read, answers `A3004`, and so does a value whose identifier names another row than the answered one. A to-many relation is a list, each element naming the related row's identifier, and each element is merged into the answer's element with that identifier; an element the answer does not hold is dropped. Every other value replaces the old one whole: a Json value, a `Date`, bytes and a decimal are never merged into. `null` sets null, and a key you leave out keeps its value.
+- **The identifier is read for you.** The related rows are read with their identifier whatever the caller selected, and it is left out of the answer when the caller did not ask for it. In a `$count` relation (`{ data, count }`) the elements are matched in `data` and `count` stays as read. Return a plain list there too, never the `{ data, count }` envelope.
 - **The answer keeps the caller's shape.** After the merge the answer is projected to the caller's `select` or `include` and to the layer's exposure, as every answer is, and read compute runs on it. A key the caller did not select, or a field the layer hides, never reaches the caller, so a hook can return more than one caller asked for.
+- **The policy is not checked again.** With a policy, its per-row read checks ran on the rows as read; they are not run again on the merged values. Return only values the caller may read: values of the rows the answer already holds, for fields the caller selected.
 - **Several hooks add up.** `after` hooks run inner to outer; a later hook's result is merged over an earlier one's, and each hook is told the answer as merged so far.
 
 The result is typed from the Resource's fields and relations at the variant: a value of the wrong type, a field the Resource does not have, a to-many element without its identifier, or a `data` key beside `result` does not compile. The server refuses with `A3004`:
@@ -548,6 +549,8 @@ The result is typed from the Resource's fields and relations at the variant: a v
 - anything else a hook returns (a value that is neither `undefined` nor `{ result: { … } }`, or a key beside `result`);
 - a value its field does not take;
 - a to-many element without its identifier;
+- a to-one value for a relation the answer holds no row for (`null`, or not read), or one naming another row's identifier;
+- a result that refers to itself through its relations;
 - a result on a write that matched no row (an `update.first` that answers `null`);
 - a result on another operation: a delete (its answer is the removed row), a bulk write or a read.
 
