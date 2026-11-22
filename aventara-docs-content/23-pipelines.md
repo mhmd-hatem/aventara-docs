@@ -97,7 +97,7 @@ The stage kinds are norms. The framework does not check what a callback does: an
 Every operation runs its stages in one order:
 
 ```text
-framework validation (with required fields) -> policy admission (when a policy is configured) -> guards -> pipes -> validators (the caller's values) -> the row check (a single-row update or delete, with a policy) -> write compute -> re-check (validators of what compute set or changed) -> policy write check (when a policy is configured) -> interceptors (before) -> hooks.before -> the policy write check again (only when a before hook's values changed the write) -> operation -> hooks.after -> interceptors (after) -> filters
+framework validation (with required fields) -> policy admission (when a policy is configured) -> guards -> pipes -> validators (the caller's values) -> the row check (a single-row update, delete or upsert, with a policy) -> write compute -> re-check (validators of what compute set or changed) -> policy write check (when a policy is configured) -> interceptors (before) -> hooks.before -> the policy write check again (only when a before hook's values changed the write) -> operation -> hooks.after -> interceptors (after) -> filters
 ```
 
 In full, with every level listed root first, then the operation's overlay:
@@ -113,10 +113,10 @@ validate the arguments against the contract: types, unknown fields, structure, a
                           (root then overlay), then nested targets'
 -> validators             every value the caller sent, as the pipes left them (A2004), top level
                           then nested targets'; a field with a compute stage included
--> row check              only with a policy, on update.unique/first and delete.unique/first,
-                          when write compute, an interceptor or a before hook follows: is the
-                          row within the caller's scopes? If not, the write answers its miss
-                          here (see Policies), and none of the stages below runs
+-> row check              only with a policy, on update.unique/first, delete.unique/first and
+                          upsert.unique, when write compute, an interceptor or a before hook
+                          follows: is the row within the caller's scopes? If not, the write
+                          answers its miss here (see Policies), and none of the stages below runs
 -> compute (write)        create, update, or an upsert's two branches; then nested targets'
                           (a compute.create that leaves its required field missing answers A3000)
 -> re-check               Aventara's own checks on what the pipes and compute produced, top level
@@ -312,8 +312,11 @@ validate the whole plan
 -> every step, in order: policy admission (with a policy) -> guards -> pipes -> validators (every literal value it sent; $refs unresolved)
 -> BEGIN
 -> guards, then pipes, of each touched Resource (they see the whole plan, $refs unresolved)
+-> with a policy, when a touched Resource has transaction interceptors or hooks.before: the row
+   check of the steps up to the first write step, where no $ref is in their where (a row out of
+   scope answers that step's miss here, see Policies)
 -> every touched Resource's interceptors enter, then every touched Resource's hooks.before
-     -> the steps, in order, each: resolve $refs -> field pipes and validators of the resolved values -> write compute -> validators of what compute set or changed
+     -> the steps, in order, each: resolve $refs -> field pipes and validators of the resolved values -> the row check (with a policy) -> write compute -> validators of what compute set or changed
         -> policy write check (with a policy) -> interceptors -> hooks.before -> its pass 2 (a hook's values) -> the adapter call -> hooks.after -> interceptors -> output validation
    every touched Resource's hooks.after, the last touched Resource's first (they see every step's result), then the interceptors unwind
 -> COMMIT
