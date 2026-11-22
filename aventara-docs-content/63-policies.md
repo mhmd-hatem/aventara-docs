@@ -473,9 +473,11 @@ In a [transaction](/docs/transactions), the transaction's own interceptors and `
 
 This check runs once, ahead of every step, so a step that names a row an earlier step creates is left to its own check. Which steps those are is decided from the plan alone, never by asking the database. A step is left to its own check when an earlier step:
 
-- states, in its data for the same Resource, the step's identifier, or a value not known until the plan runs (a `$ref`). That covers a create, an upsert's create branch, a nested `$create`, `$connectOrCreate` or `$upsert`, and an update that sets the identifier;
-- creates a row of that Resource without stating the identifier, when the identifier's default could match: a static default, an autoincrement or a sequence. A generated uuid or cuid never counts;
+- states, in its data for the same Resource, the step's identifier, or a value not known until the plan runs: a `$ref`, or an operation such as `$increment`. That covers a create, an upsert's create branch, a nested `$create`, `$connectOrCreate` or `$upsert`, and an update that sets the identifier;
+- creates a row of that Resource without stating a field the step's selector names, when that field could still match: its default is static, an autoincrement or a sequence (a generated uuid or cuid never counts), write compute fills it, or it is a reference filled through a relation (`campaign: { $connect: … }`, or a parent's nested `$create`);
 - is a SQL step: every later step is left to its own check.
+
+On a Resource whose identifier is an autoincrement or has a static default, any create the caller is allowed leaves the later literal steps on that Resource to their own check. A transaction interceptor or `before` hook then runs and can see an out-of-scope selector in `$plan`. A transaction stage must not act on the selectors in `$plan`.
 
 A step whose `where` uses a `$ref`, and a first-style step, are also checked at their own step, after the transaction's interceptors and hooks.
 
@@ -484,6 +486,7 @@ These requests answer a miss:
 - **A plan that moves a row into the caller's scopes, then edits it**, such as a step that adds the caller to a campaign followed by a step that updates a note in it, when a transaction interceptor or `before` hook is configured. The edit is checked ahead of the transaction's stages, while the row is outside the scopes. Split the plan: commit the first change, then send the edit.
 - **A `before` hook or interceptor, of the operation or of a transaction, that creates the row the write then updates or deletes.** The write is checked ahead of that stage, finds no row, and answers its miss. Write the row with an `upsert` instead.
 - **A plan that creates a row with a database-generated string identifier and then names that identifier.** It is read as a generated string, which is never taken to match. Split the plan.
+- **A plan that creates a row and then names it in a different letter case** (creating `"N1"`, then updating `"n1"`), on a database whose collation compares case-insensitively. The check compares the values as written, so the step answers its miss. Name the row exactly as it was created, or split the plan.
 
 Still not covered: guards and pipes (the operation's and the transaction's) see the call or the plan whatever its row; a transaction's interceptors and hooks run ahead of a step whose `where` uses a `$ref`, a first-style step, and a step left to its own check; and a nested `$update` aimed at a child row outside the caller's scopes reaches its Resource's write compute ahead of the policy's check of that row.
 
