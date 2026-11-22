@@ -80,6 +80,8 @@ Rich-text documents fit well under 64. In a TipTap or ProseMirror document each 
 
 `maxRequestBytes` counts decoded bytes: a compressed body (`gzip`, `deflate`, `br`) is measured after inflation, so compression does not get around it. A [cached read](/docs/caching-reads)'s compressed `q` is measured the same way, once inflated. See [HTTP protocol](/docs/http-protocol) and [NestJS host](/docs/nestjs-host#requests).
 
+A `Bytes` value travels as base64 text inside the JSON body, so it takes 4 bytes on the wire for every 3 it holds, and the whole body, not the value alone, must fit in `maxRequestBytes`. At the default 1 MiB, a request can carry under 768 KiB of `Bytes` in total; raise `maxRequestBytes` to take more. A value past the limit answers `413` `A2010`, and a value within it that breaks a `maxSize` validator answers `422` `A2004` (`V1004`). Size is not a reason for a failure: a `Bytes` value of several MiB reaches its validators and is answered by one of these two. Do not store large files in a `Bytes` column ([Enums and scalars](/docs/enums-and-scalars#bytes)).
+
 ## Operation Sets
 
 Two limits bound `POST /_all`, the request that carries [several operations at once](/docs/operation-sets):
