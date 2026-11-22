@@ -73,7 +73,7 @@ Runs `create-next-app@16 <name> --ts --app --src-dir --import-alias "@/*" --use-
 
 ### aventara init
 
-Runs inside an existing NestJS 12 or Next.js 16 project. It tells them apart by `package.json`: `@nestjs/core` is NestJS, `next` is Next.js. A project that depends on both, or on neither, is refused in one sentence, with nothing written. See [Add to an existing project](/docs/existing-project) for NestJS. A Next.js app must use the App Router under `src/app/`, map `@/*` to `./src/*` in `tsconfig.json` (create-next-app writes both) and have no ORM yet; see [Next.js host](/docs/nextjs-host#add-it-to-an-existing-app).
+Runs inside an existing NestJS 12 or Next.js 16 project. It tells them apart by `package.json`: `@nestjs/core` is NestJS, `next` is Next.js. A project that depends on both, or on neither, is refused in one sentence, with nothing written. See [Add to an existing project](/docs/existing-project) for NestJS. A Next.js app must use `next` 16.4.5 or later, the App Router under `src/app/`, map `@/*` to `./src/*` in `tsconfig.json` (create-next-app writes both) and have no ORM yet; see [Next.js host](/docs/nextjs-host#add-it-to-an-existing-app). On a `next` below 16.4.5, `init` refuses before writing anything, names the version it found and prints the upgrade command (for example `npm install next@^16.4.5`); nothing is written.
 
 ### aventara skill
 
@@ -283,7 +283,7 @@ A stack trace means a defect in the tool; please report it.
 |---|---|
 | Node.js | `^22.23.4 \|\| >=24.22.1`. On any other version the bin refuses in one sentence naming this range. On Node 22 use npm 11 or newer. |
 | Package managers | npm, pnpm. Yarn is not supported. |
-| Projects | NestJS 12 (a fresh one is ESM), ESM or CommonJS. Next.js `>=16.4 <17`, App Router under `src/app/`. `avclient`: any TypeScript project (a `tsconfig.json`); plain JavaScript is not supported yet. |
+| Projects | NestJS 12 (a fresh one is ESM), ESM or CommonJS. Next.js 16.4.5 or later (below 17: `>=16.4.5 <17`), App Router under `src/app/`. `avclient`: any TypeScript project (a `tsconfig.json`); plain JavaScript is not supported yet. |
 | ORM | Prisma 7 (`^7.10.1`): SQLite and PostgreSQL. |
 | TypeScript | `avclient`: `>=5.7.0`, including 7 (under 7, or below 5.7, the post-generate check degrades to a syntax and shape check with a warning). `aventara` and the Prisma adapter: `>=5.7.0 <7` (the scaffolded server uses 6). |
 
