@@ -469,14 +469,23 @@ The check is one `exists` on the write's scoped `where`, inside the write's tran
 
 An upsert whose row exists outside its update and read scopes is refused with `A4002` at the same point, before write compute. This costs no query: the policy asks those questions anyway.
 
-In a [transaction](/docs/transactions), the transaction's own interceptors and `before` hooks are told the whole plan. So after the transaction's guards and pipes, and before its interceptors and hooks, the steps are checked in order. A unique update, a unique delete or an upsert whose `where` has no `$ref` and whose row is outside the caller's scopes answers that step's miss right there, with the same code and `operation` index. The same goes for a call of an operation with `forceTransaction`. Reads are passed over. A row that doesn't exist yet is answered there too, unless an earlier step can create a row of that step's Resource: a create or upsert on it, a nested `$create`, `$connectOrCreate` or `$upsert` into it, or a SQL step. Then only a row that exists outside the caller's scopes is answered early, and a missing one is left to the step itself, which may find it. A step whose `where` uses a `$ref`, and a first-style step, are checked at their own step, after the transaction's interceptors and hooks.
+In a [transaction](/docs/transactions), the transaction's own interceptors and `before` hooks are told the whole plan. So after the transaction's guards and pipes, and ahead of its interceptors and hooks, the steps are checked in order. A unique update, a unique delete or an upsert whose `where` has no `$ref` and whose row is not within the caller's scopes answers that step's miss right there, with the same code and `operation` index. A missing row and a row outside the scopes answer alike. The same goes for a call of an operation with `forceTransaction`. Reads are passed over.
 
-Two cases now answer a miss that used to succeed:
+This check runs once, ahead of every step, so a step that names a row an earlier step creates is left to its own check. Which steps those are is decided from the plan alone, never by asking the database. A step is left to its own check when an earlier step:
 
-- **A plan that moves a row into the caller's scopes, then edits it**, such as a step that adds the caller to a campaign followed by a step that updates a note in it, when a transaction interceptor or `before` hook is configured. The edit is checked before the transaction's stages, when the row is still outside the scopes, and answers its miss. Split the plan: commit the first change, then send the edit.
-- **A `before` hook or interceptor, of the operation or of a transaction, that creates the row the write then updates or deletes.** The write is checked before that stage runs, finds no row, and answers its miss. Write the row with an `upsert` instead.
+- states, in its data for the same Resource, the step's identifier, or a value not known until the plan runs (a `$ref`). That covers a create, an upsert's create branch, a nested `$create`, `$connectOrCreate` or `$upsert`, and an update that sets the identifier;
+- creates a row of that Resource without stating the identifier, when the identifier's default could match: a static default, an autoincrement or a sequence. A generated uuid or cuid never counts;
+- is a SQL step: every later step is left to its own check.
 
-Still not covered: guards and pipes (the operation's and the transaction's) see the call or the plan whatever its row; a transaction's interceptors and hooks run before a step whose `where` uses a `$ref`, a first-style step, and a step whose row doesn't exist yet when an earlier step can create a row of its Resource; and a nested `$update` aimed at a child row outside the caller's scopes reaches its Resource's write compute before the policy checks that row.
+A step whose `where` uses a `$ref`, and a first-style step, are also checked at their own step, after the transaction's interceptors and hooks.
+
+These requests answer a miss:
+
+- **A plan that moves a row into the caller's scopes, then edits it**, such as a step that adds the caller to a campaign followed by a step that updates a note in it, when a transaction interceptor or `before` hook is configured. The edit is checked ahead of the transaction's stages, while the row is outside the scopes. Split the plan: commit the first change, then send the edit.
+- **A `before` hook or interceptor, of the operation or of a transaction, that creates the row the write then updates or deletes.** The write is checked ahead of that stage, finds no row, and answers its miss. Write the row with an `upsert` instead.
+- **A plan that creates a row with a database-generated string identifier and then names that identifier.** It is read as a generated string, which is never taken to match. Split the plan.
+
+Still not covered: guards and pipes (the operation's and the transaction's) see the call or the plan whatever its row; a transaction's interceptors and hooks run ahead of a step whose `where` uses a `$ref`, a first-style step, and a step left to its own check; and a nested `$update` aimed at a child row outside the caller's scopes reaches its Resource's write compute ahead of the policy's check of that row.
 
 The many-row operations act on the caller's rows only, like row-level security in a database. `update.many` returns the changed rows and `update.count` and `delete.count` return how many rows changed. (`delete.many` is not offered with the Prisma adapter; use `delete.count`, see [Operations reference](/docs/operations-reference#deletemany).) An `update.many` with an empty `where` by Ada changes her own posts and leaves everyone else's alone, with no error.
 
