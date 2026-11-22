@@ -45,7 +45,7 @@ export const aventaraConfig = {
 } as const;
 ```
 
-`definition` is the same key that adds [computed fields](/docs/computed-fields); a `json` entry on a `Json` field the adapter discovered is how you type it. Like every `definition` it sits at the root only, so the shape applies to your server code and to remote callers alike ([Configuration reference](/docs/config-reference#fields)).
+`definition` is the same key that adds [computed fields](/docs/computed-fields); a `json` entry on a `Json` field the adapter discovered, or on a `VIRTUAL` field of scalar `json` you add, is how you type it. Like every `definition` it sits at the root only, so the shape applies to your server code and to remote callers alike ([Configuration reference](/docs/config-reference#fields)).
 
 `AvZ.infer<typeof shape>` gives the TypeScript type of the shape, for your own code. Export a shape or a configuration that holds one from a project that emits declarations and the types `AvZShape`, `AvZObject`, `AvZOptional` and `AvZNullable`, exported from `@aventara/core/avz`, are there to name it. A function that returns a call's result without a return type is fine too: a result that holds a shaped field is named with `AvZShapedSchema`, from the same entry.
 
@@ -282,20 +282,60 @@ A caller gets `422 A2004` with that message and the write does not happen. A mes
 
 ## Where a shape applies
 
-- Only a `Json` field the adapter discovered. A shape on a string, an int, a relation or a field that does not exist is a startup error.
+- Only a `Json` field: one the adapter discovered, or a `VIRTUAL` field of scalar `json` you add ([below](#a-virtual-input-with-a-shape)). A shape on a string, an int, a relation, or an added field of any other type is a startup error.
 - A field, not a position. The shape applies wherever the field is written: the top level of a `create`, a nested `$create` through a relation, an `upsert`'s `create` and `update`, a transaction step.
 - At the root, for both origins. A field's `definition` is root-only, so the shape covers your server code and remote callers alike. A `definition` in `application` or `client` is refused (`CONFIG_FORBIDDEN_IN_OVERLAY`).
 - No `validators` key. A Json field's checks live in its shape; `pipelines.validators` on a Json field is refused (`COMPILER_INVALID_VALIDATOR`).
+
+## A VIRTUAL input with a shape
+
+A field you add with `lifecycle: ["VIRTUAL"]` and `type: { scalar: "json" }` takes a `json` shape the same way. Use it for a structured input that is not stored, such as the parts of a payment a stage splits into rows:
+
+```ts
+import { AvZ } from "@aventara/core/avz";
+
+const paymentParts = AvZ.array(
+  AvZ.discriminatedUnion("method", [
+    AvZ.object({ method: AvZ.literal("cash"), amountMinor: AvZ.int() }),
+    AvZ.object({ method: AvZ.literal("card"), amountMinor: AvZ.int(), card: AvZ.object({ last4: AvZ.string() }) }),
+  ]),
+);
+
+export const aventaraConfig = {
+  api: "/api",
+  resources: {
+    Order: {
+      fields: {
+        paymentParts: {
+          definition: {
+            type: { scalar: "json" },
+            nullable: false,
+            list: false,
+            lifecycle: ["VIRTUAL"],
+            capabilities: { select: false, create: [] },
+            json: paymentParts,
+          },
+        },
+      },
+    },
+  },
+} as const;
+```
+
+- The value a caller sends is checked against the shape with the other field validators, after field pipes. A value off the shape answers `422 A2004` with each problem at its path (`["arguments", "data", "paymentParts", 0, "amountMinor"]`), and no compute stage, interceptor or hook runs.
+- `ctx.$args.data.paymentParts` in a stage, a compute stage's return, `framework.application`, `framework.client` and the generated client all take the shape's type, so a stage reads `part.card.last4` with no type guard of its own. A stage's types read it from `config-facts.generated.ts`: run `aventara:prepare` after you add or change the shape ([Pipeline context](/docs/pipeline-context#the-configurations-definitions)).
+- The contract carries the shape's JSON Schema in the field's `json`, as for a discovered Json field.
+- `nullable` decides whether `null` is accepted; the shape's top level cannot admit `null`.
 
 ## What fails at startup
 
 A shape that cannot work stops the server before it listens, as an `AvConstructionError` with `stage: "contract-compilation"` and diagnostics with the code `COMPILER_INVALID_JSON_SHAPE` ([Startup safety checks](/docs/config-reference#startup-safety-checks)). Real messages:
 
 ```text
-field "Post.title" is a string field; only a Json field the adapter discovered may declare a "json" shape
-field "Post.views" is an int field; only a Json field the adapter discovered may declare a "json" shape
+field "Post.title" is a string field; only a Json field may declare a "json" shape
+field "Post.views" is an int field; only a Json field may declare a "json" shape
 field "Post.meta": "json" must be a shape built with AvZ from "@aventara/core/avz"; a Zod schema or any other value is not accepted
-field "Post.meta": a field's shape cannot admit null or absence at its top level; whether the field may be null comes from the adapter model
+field "Post.meta": a field's shape cannot admit null or absence at its top level; whether the field may be null comes from its nullability
 ```
 
 ## See also

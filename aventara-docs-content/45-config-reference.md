@@ -476,7 +476,7 @@ A value other than a boolean is `CONFIG_INVALID_TYPE`. `ctx.$sql`, or a stage ca
 
 ### Fields
 
-`resources.<Resource>.fields.<field>.definition` describes a field. On a field the adapter discovered you may restate its own `type`, `nullable` and `list`, and give a Json field its `json` shape; anything else is refused. A field the adapter did not discover is added, as a virtual scalar field: it must state `type`, `nullable` and `list`, and its `lifecycle` is `["VIRTUAL"]`. Only scalar fields can be added.
+`resources.<Resource>.fields.<field>.definition` describes a field. On a field the adapter discovered you may restate its own `type`, `nullable` and `list`, and give a Json field its `json` shape; anything else is refused. A field the adapter did not discover is added, as a virtual scalar field: it must state `type`, `nullable` and `list`, and its `lifecycle` is `["VIRTUAL"]`. Only scalar fields can be added. An added field of scalar `json` may take a `json` shape, as a discovered Json field does.
 
 | Property | Type | Meaning |
 |---|---|---|
@@ -486,7 +486,7 @@ A value other than a boolean is `CONFIG_INVALID_TYPE`. `ctx.$sql`, or a stage ca
 | `lifecycle` | `["VIRTUAL"]` | The field is not stored. Added fields only. |
 | `capabilities` | `Partial<AvScalarFieldCapabilities>` | What callers may do with it. Added fields only. |
 | `format` | one of zod's named string formats (`"email"`, `"url"`, `"uuid"`, ...) | A fact the contract carries; the server checks computed output against it. Added fields only; any other name is a type error and `CONFIG_INVALID_VALUE`. |
-| `json` | an `AvZ` shape | The shape of a `Json` field the adapter discovered ([JSON fields](/docs/json-fields)). |
+| `json` | an `AvZ` shape | The shape of a `Json` field: one the adapter discovered, or an added field of scalar `json` ([JSON fields](/docs/json-fields#a-virtual-input-with-a-shape)). |
 
 ```ts
 import { AvZ } from "@aventara/core/avz";
@@ -687,7 +687,7 @@ A stale `prebuilt` file is not an error. It prints one warning, `AVENTARA_PREBUI
 | A Resource that does not exist | `COMPILER_UNKNOWN_RESOURCE`: `resource "Nope" is not present in the canonical adapter model` |
 | A field that does not exist | `COMPILER_UNKNOWN_FIELD`: `field "nope" is neither discovered by the adapter nor defined at the root` |
 | A capability or token the adapter does not offer | `COMPILER_UNAVAILABLE_CAPABILITY` |
-| A `json` shape on a field that is not `Json` (here `Post.title`, a string) | `COMPILER_INVALID_JSON_SHAPE`: `field "Post.title" is a string field; only a Json field the adapter discovered may declare a "json" shape` |
+| A `json` shape on a field that is not `Json` (here `Post.title`, a string) | `COMPILER_INVALID_JSON_SHAPE`: `field "Post.title" is a string field; only a Json field may declare a "json" shape` |
 | A `json` that is not an `AvZ` shape (a Zod schema, say) | `COMPILER_INVALID_JSON_SHAPE`: `field "Post.meta": "json" must be a shape built with AvZ from "@aventara/core/avz"; a Zod schema or any other value is not accepted` |
 | A shape that admits `null` or absence at its top level | `COMPILER_INVALID_JSON_SHAPE`: `field "Post.meta": a field's shape cannot admit null or absence at its top level; whether the field may be null comes from the adapter model` |
 | A validator that does not fit the field (`AvZ.maxLength` on an `int`) | `COMPILER_INVALID_VALIDATOR` at `root.resources.Project.fields.budget.pipelines.validators[0]` |
