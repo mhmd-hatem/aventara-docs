@@ -26,6 +26,7 @@ policy admission                                  (before BEGIN)
 guards, pipes                                     (before BEGIN)
 validators (the caller's values)                  (before BEGIN, for literal values)
                                                   BEGIN
+row check                          a single-row update, delete or upsert, with a policy: a row out of scope stops here
 write compute, re-check            ctx.$write exists from here
 policy write check                 on compute's output; a refusal runs no hook
 interceptors enter

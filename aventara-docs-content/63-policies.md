@@ -463,6 +463,33 @@ await framework.client.Post.update.unique({ where: { id: 12 }, data: { title: "x
 // A2003: Bob's draft. The answer does not reveal that it exists.
 ```
 
+A single-row update or delete (`update.unique`, `update.first`, `delete.unique`, `delete.first`) checks that its row is within the caller's scopes right after the guards, pipes and the caller's validators, before write compute. If the row is outside them, the write answers its miss right there with the same answer as in the table (`A1001` for a first-style write). Your guards run and keep their answers, but no write compute, interceptor, hook or filter runs. So a hook that fails with its own error, or calls a webhook, can't reveal that the row exists or act on a row the caller may not touch.
+
+The check is one `exists` on the write's scoped `where`, inside the write's transaction when it has one. It's only asked when write compute, an interceptor or a `before` hook would run for that operation; guards, field validators and `after` hooks don't count. It's also skipped when the caller's scopes don't narrow the write (`scopeOf` answers `true` and, for a first-style write, no relation its `where` filters through has a read scope), and for an update `afterChecks` lists, because the read of the row before the update answers it. The write still applies the scopes itself, so a row that changes between the check and the write is caught as before.
+
+An upsert whose row exists outside its update and read scopes is refused with `A4002` at the same point, before write compute. This costs no query: the policy asks those questions anyway.
+
+In a [transaction](/docs/transactions), the transaction's own interceptors and `before` hooks are told the whole plan. So after the transaction's guards and pipes, and ahead of its interceptors and hooks, the steps are checked in order. A unique update, a unique delete or an upsert whose `where` has no `$ref` and whose row is not within the caller's scopes answers that step's miss right there, with the same code and `operation` index. A missing row and a row outside the scopes answer alike. The same goes for a call of an operation with `forceTransaction`. Reads are passed over.
+
+This check runs once, ahead of every step, so a step that names a row an earlier step creates is left to its own check. Which steps those are is decided from the plan alone, never by asking the database. A step is left to its own check when an earlier step:
+
+- states, in its data for the same Resource, the step's identifier, or a value not known until the plan runs: a `$ref`, or an operation such as `$increment`. That covers a create, an upsert's create branch, a nested `$create`, `$connectOrCreate` or `$upsert`, and an update that sets the identifier;
+- creates a row of that Resource without stating a field the step's selector names, when that field could still match: its default is static, an autoincrement or a sequence (a generated uuid or cuid never counts), write compute fills it, or it is a reference filled through a relation (`campaign: { $connect: … }`, or a parent's nested `$create`);
+- is a SQL step: every later step is left to its own check.
+
+On a Resource whose identifier is an autoincrement or has a static default, any create the caller is allowed leaves the later literal steps on that Resource to their own check. A transaction interceptor or `before` hook then runs and can see an out-of-scope selector in `$plan`. A transaction stage must not act on the selectors in `$plan`.
+
+A step whose `where` uses a `$ref`, and a first-style step, are also checked at their own step, after the transaction's interceptors and hooks.
+
+These requests answer a miss:
+
+- **A plan that moves a row into the caller's scopes, then edits it**, such as a step that adds the caller to a campaign followed by a step that updates a note in it, when a transaction interceptor or `before` hook is configured. The edit is checked ahead of the transaction's stages, while the row is outside the scopes. Split the plan: commit the first change, then send the edit.
+- **A `before` hook or interceptor, of the operation or of a transaction, that creates the row the write then updates or deletes.** The write is checked ahead of that stage, finds no row, and answers its miss. Write the row with an `upsert` instead.
+- **A plan that creates a row with a database-generated string identifier and then names that identifier.** It is read as a generated string, which is never taken to match. Split the plan.
+- **A plan that creates a row and then names it in a different letter case** (creating `"N1"`, then updating `"n1"`), on a database whose collation compares case-insensitively. The check compares the values as written, so the step answers its miss. Name the row exactly as it was created, or split the plan.
+
+Still not covered: guards and pipes (the operation's and the transaction's) see the call or the plan whatever its row; a transaction's interceptors and hooks run ahead of a step whose `where` uses a `$ref`, a first-style step, and a step left to its own check; and a nested `$update` aimed at a child row outside the caller's scopes reaches its Resource's write compute ahead of the policy's check of that row.
+
 The many-row operations act on the caller's rows only, like row-level security in a database. `update.many` returns the changed rows and `update.count` and `delete.count` return how many rows changed. (`delete.many` is not offered with the Prisma adapter; use `delete.count`, see [Operations reference](/docs/operations-reference#deletemany).) An `update.many` with an empty `where` by Ada changes her own posts and leaves everyone else's alone, with no error.
 
 An upsert is checked as an update when its row exists within the update and read scopes. When the row exists outside them it answers `A4002`, which reveals that the row exists, as a unique conflict would. Otherwise its create branch is checked as a create.
@@ -536,7 +563,7 @@ On PostgreSQL, the round trips of a checked write:
 
 An update `afterChecks` lists reads its rows as they were first, one round trip more: `update.unique` 4 (5), `update.many` and `update.count` 4. With `grantsOf`, add the `exists` lookups its rules ask.
 
-Reads and a Framework without a policy are unchanged.
+A single-row update or delete with write compute, an interceptor or a `before` hook adds one round trip: the row check above (none for an update `afterChecks` lists). Reads and a Framework without a policy are unchanged.
 
 ## What a refusal looks like
 
