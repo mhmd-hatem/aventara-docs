@@ -9,7 +9,7 @@ section: hosting
 
 `@aventara/next` hosts a framework inside a Next.js App Router app. One catch-all route file serves the API, and your Server Components, Server Actions and Client Components call it through typed clients. There is no separate server to deploy and no frontend to point at it.
 
-It needs Next.js `>=16.4 <17` on the Node.js runtime, and React 19. The protocol's rules (routes, statuses, envelopes, headers) are the same as on any host: see [HTTP protocol](/docs/http-protocol).
+It needs Next.js 16.4.5 or later (below 17, `>=16.4.5 <17`) on the Node.js runtime, and React 19. The protocol's rules (routes, statuses, envelopes, headers) are the same as on any host: see [HTTP protocol](/docs/http-protocol).
 
 The App Router only: the Pages Router is not supported.
 
@@ -44,6 +44,8 @@ npx @aventara/cli@rc init
 ```
 
 `init` tells NestJS and Next.js apart by `package.json`: a project that depends on `next` is a Next.js app. A project that depends on both `next` and `@nestjs/core`, or on neither, is refused in one sentence and nothing is written. The app must use the App Router under `src/app/`, map `@/*` to `./src/*` in `tsconfig.json` (create-next-app writes both), and have no ORM yet.
+
+`init` refuses a Next.js project whose `next` is below 16.4.5, before writing anything. It names the version it found and prints the upgrade command (for example `npm install next@^16.4.5`); nothing is written.
 
 ## What it writes
 

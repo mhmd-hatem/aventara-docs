@@ -14,7 +14,7 @@ The reference for [`@aventara/next`](/docs/nextjs-host) and the two entries `ave
 | | |
 |---|---|
 | Install | `npm install --save-exact @aventara/next@<your @aventara/core version>` (`aventara new --host next` and `init` add it) |
-| Peers | `next` `>=16.4 <17`, `react` `^19`; `@aventara/mcp` optional, loaded only when `mcp` is configured |
+| Peers | `next` `>=16.4.5 <17` (16.4.5 or later, below 17), `react` `^19`; `@aventara/mcp` optional, loaded only when `mcp` is configured |
 | Runtime | Next.js App Router, Node.js runtime |
 | Entry | `@aventara/next`, server-only: a Client Component that imports it fails `next build` |
 | Exports | `Aventara`, `avDehydrate`; types `AvDehydrated`, `AvNextHandlers`, `AvNextClientTransaction`, `AvNextAppTransaction`, `AvNextStateContext` |
