@@ -730,8 +730,8 @@ When the configuration cannot be built into contracts, `createFramework` (and `A
 
 **A Json shape cannot apply.**
 
-- Cause: A json shape on a field that is not a discovered Json field, a shape not built with AvZ, or one that admits null or absence at its top level.
-- Fix: Put the shape on a Json field, build it with AvZ, and keep its top level non-null (the column's nullability decides null).
+- Cause: A json shape on a field that is not Json (a Json field the adapter discovered, or a VIRTUAL field of scalar json), a shape not built with AvZ, or one that admits null or absence at its top level.
+- Fix: Put the shape on a Json field, build it with AvZ, and keep its top level non-null (the field's nullability decides null).
 
 #### `COMPILER_INVALID_CLIENT_CONTRACT`
 

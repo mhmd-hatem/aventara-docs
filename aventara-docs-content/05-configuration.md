@@ -378,7 +378,7 @@ Under `"server"` the layer has no `POST /_transactions` route (a plan sent there
 
 ## Fields: definitions and compute
 
-`resources.<Resource>.fields.<field>.definition` describes a field, at the root only. It adds a scalar field your database does not have (a virtual field, with `type`, `nullable`, `list`, `lifecycle: ["VIRTUAL"]`, `capabilities` and optionally a `format`), or gives a `Json` field the adapter discovered its shape (`json`). On a field the adapter discovered you may restate its own `type`, `nullable` and `list`, nothing else.
+`resources.<Resource>.fields.<field>.definition` describes a field, at the root only. It adds a scalar field your database does not have (a virtual field, with `type`, `nullable`, `list`, `lifecycle: ["VIRTUAL"]`, `capabilities` and optionally a `format`; one of scalar `json` may take a `json` shape too), or gives a `Json` field the adapter discovered its shape (`json`). On a field the adapter discovered you may restate its own `type`, `nullable` and `list`, nothing else.
 
 `pipelines.compute` attaches server-side code that computes a field's value on create, update or read: a hashed password, a slug, a display name. See [Computed fields](/docs/computed-fields), [Field validators](/docs/field-validators) and [JSON fields](/docs/json-fields).
 

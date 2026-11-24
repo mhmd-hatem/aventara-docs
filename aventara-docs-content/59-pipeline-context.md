@@ -163,6 +163,7 @@ A stage's types cannot read the configuration they are written in, so `aventara-
 
 - A Json field the root shapes reads as its shape in `ctx` calls, in a transaction's `tx` and in compute's read-only `ctx`: `ctx.Product.find.many({ select: ["name"] })` types `name` as `{ ar: string; en: string }`. A read gives the shape's own type, as `framework.application` does; a write, on every surface, takes the shape read-only, so a value from a stage's frozen arguments fits where the shape is written.
 - A field the root adds (`lifecycle: ["VIRTUAL"]`) is in a variant's typed `ctx.$args` (`ctx.$args.data.tenderedMinor` in an `update.unique` guard, when it takes `update`), and a `ctx` create must write a non-null added input it can create, as every caller must.
+- An added field of scalar `json` with a `json` shape is typed by its shape in `ctx.$args` and in what its compute stage returns.
 - A compute stage on a shaped Json field returns the shape's type, and one on an added field the type its definition states.
 
 When the configuration's definitions differ from the ones the generated types were written with, the server warns at startup (`generated types are stale: run aventara:prepare`), naming each field; the server itself serves the configuration it is given. `aventara-build --check` fails on a stale file. Without the generated file (a model you typed by hand), these types are the model's own: Json fields any JSON value, no added field.
