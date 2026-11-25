@@ -106,7 +106,7 @@ export const aventaraConfig = {
 } as const;
 ```
 
-An added field must spell out `type`, `nullable` and `list`. `lifecycle: ["VIRTUAL"]` says it has no database column. The `type` is `{ scalar: "string" }` or another scalar, or `{ enum: "Role" }`. A field `definition` is root-only: an overlay can add compute stages to a field but never define it.
+An added field must spell out `type`, `nullable` and `list`. `lifecycle: ["VIRTUAL"]` says it has no database column. The `type` is any built-in scalar (`{ scalar: "string" }`, `"boolean"`, `"int"`, `"float"`, `"bigint"`, `"decimal"`, `"datetime"`, `"bytes"` or `"json"`), whatever your schema stores, or `{ enum: "Role" }`. The field never reaches the database, so it needs no column of its type: a `decimal` field on a schema with no `Decimal` column works, and so does a `json` one with no `Json` column. Its value is checked, sent and returned like any field of that scalar. A field `definition` is root-only: an overlay can add compute stages to a field but never define it.
 
 `nullable` decides whether a create must send a write-only input. With `nullable: true` (the `password` above) it is optional. With `nullable: false` it is required on create, as a database column with no default is: in every layer that lets a caller write it at create, and where no `compute.create` stage (the root's or that layer's) fills it, the contract lists it in `createRequirements`. A create without it answers `A2004` with `V1000` at the field before any guard runs, and `framework.application`, `framework.client` and the generated client type it as required. A layer that hides the field creates without it, and an update never asks for it:
 

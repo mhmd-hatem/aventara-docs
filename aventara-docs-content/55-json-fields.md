@@ -289,7 +289,7 @@ A caller gets `422 A2004` with that message and the write does not happen. A mes
 
 ## A VIRTUAL input with a shape
 
-A field you add with `lifecycle: ["VIRTUAL"]` and `type: { scalar: "json" }` takes a `json` shape the same way. Use it for a structured input that is not stored, such as the parts of a payment a stage splits into rows:
+A field you add with `lifecycle: ["VIRTUAL"]` and `type: { scalar: "json" }` takes a `json` shape the same way. Your schema needs no `Json` column for this: the field is not stored, so its scalar does not depend on what the database holds. Use it for a structured input that is not stored, such as the parts of a payment a stage splits into rows:
 
 ```ts
 import { AvZ } from "@aventara/core/avz";

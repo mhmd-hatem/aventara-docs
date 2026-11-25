@@ -480,7 +480,7 @@ A value other than a boolean is `CONFIG_INVALID_TYPE`. `ctx.$sql`, or a stage ca
 
 | Property | Type | Meaning |
 |---|---|---|
-| `type` | `{ scalar: string } \| { enum: string }` | A built-in scalar (`string`, `int`, `boolean`, `datetime`, `decimal`, `json`, ...) or an enum of the model. Required for an added field. |
+| `type` | `{ scalar: string } \| { enum: string }` | A built-in scalar (`string`, `boolean`, `int`, `float`, `bigint`, `decimal`, `datetime`, `bytes`, `json`) or an enum of the model. An added field may use any built-in scalar, whether or not the schema has a column of it. Required for an added field. |
 | `nullable` | `boolean` | Required for an added field. |
 | `list` | `boolean` | Required for an added field. |
 | `lifecycle` | `["VIRTUAL"]` | The field is not stored. Added fields only. |
