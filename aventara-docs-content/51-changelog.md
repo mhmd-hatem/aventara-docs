@@ -7,11 +7,31 @@ section: about
 
 # Changelog
 
-`1.0.0-rc.0` was the first release candidate, `1.0.0-rc.1` the second, `1.0.0-rc.2` the third, `1.0.0-rc.3` the fourth, `1.0.0-rc.4` the fifth, `1.0.0-rc.8` the sixth, `1.0.0-rc.9` the seventh, `1.0.0-rc.10` the eighth, `1.0.0-rc.11` the ninth, `1.0.0-rc.12` the tenth, `1.0.0-rc.13` the eleventh, `1.0.0-rc.14` the twelfth, `1.0.0-rc.15` the thirteenth and `1.0.0-rc.16` is the fourteenth (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published); the releases before them are pilots, and a pilot's API could change. A release candidate changes the API only to fix what testing finds. Pin exact versions. All `@aventara/*` packages are released together at one version. Each package also ships this history for itself as a `CHANGELOG.md` beside its README.
+`1.0.0-rc.0` was the first release candidate, `1.0.0-rc.1` the second, `1.0.0-rc.2` the third, `1.0.0-rc.3` the fourth, `1.0.0-rc.4` the fifth, `1.0.0-rc.8` the sixth, `1.0.0-rc.9` the seventh, `1.0.0-rc.10` the eighth, `1.0.0-rc.11` the ninth, `1.0.0-rc.12` the tenth, `1.0.0-rc.13` the eleventh, `1.0.0-rc.14` the twelfth, `1.0.0-rc.15` the thirteenth, `1.0.0-rc.16` the fourteenth and `1.0.0-rc.17` is the fifteenth (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published); the releases before them are pilots, and a pilot's API could change. A release candidate changes the API only to fix what testing finds. Pin exact versions. All `@aventara/*` packages are released together at one version. Each package also ships this history for itself as a `CHANGELOG.md` beside its README.
+
+## 1.0.0-rc.17
+
+The current release, published under the `rc` dist-tag (install with `@rc`). An `after` hook can answer the values it changed, a write aimed at a row outside the caller's scopes answers its miss before any hook runs, and `@aventara/next` needs a Next.js with the security fixes. Upgrading from rc.16: see [Upgrading](/docs/upgrading#from-100-rc16-to-100-rc17).
+
+**Pipeline and policies**
+
+- An `after` hook on `create.one`, `update.first`, `update.unique` or `upsert.unique` may return `{ result: { ... } }`: the values it changed, merged into the caller's answer through relations, projected to the caller's `select` or `include` and the layer's exposure, with read compute run on the merged row. Anything else an `after` hook returns now answers `A3004`.
+- The rows inside a `$count` relation (`{ data, count }`) go through read compute and the projection, as a plain list's rows do.
+- With a policy, an `update.unique`, `update.first`, `delete.unique` or `delete.first` aimed at a row outside the caller's scopes answers its miss (`A2003`, `A4002` or `A1001`) right after the guards, before write compute, interceptors and hooks; an `upsert.unique` whose row exists outside the scopes answers `A4002`. A transaction's steps are checked the same way ahead of its interceptors and `before` hooks. A plan that moves a row into the scopes and then edits it, a hook that creates the row the write then changes, and a plan that names a database-generated string identifier in a later step answer a miss: send two plans, or use an `upsert`.
+
+**Fields and types**
+
+- A `VIRTUAL` field of scalar `json` takes a `json` shape built with `AvZ`, checked with the field validators and typed in the application, the client, a stage's `ctx.$args`, a compute stage's return and the generated client. Any other `VIRTUAL` type takes none (`COMPILER_INVALID_JSON_SHAPE`).
+- A `VIRTUAL` field takes any built-in scalar whatever the schema stores; a name that is not a built-in scalar is refused. Fields named after inherited object members (`toString`, `constructor`, `hasOwnProperty`) are supported, and their values shadow the row's methods.
+
+**Next.js**
+
+- `@aventara/next` requires `next` `>=16.4.5 <17`, which fixes seven security advisories in Next.js 16.0 through 16.4.4. `aventara init` refuses a Next.js project below 16.4.5, names the version and prints the upgrade command; nothing is written.
+- `avApp` and `avClient` hold exactly the keys their layer's Contract has once the framework is built: a Resource, family or variant the layer hides is absent.
 
 ## 1.0.0-rc.16
 
-The current release, published under the `rc` dist-tag (install with `@rc`). A stage's `ctx` names the pipeline's values apart, an operation a layer removes is absent from its objects, and several calls that answered `500` now answer a precise code. Upgrading from rc.15: see [Upgrading](/docs/upgrading#from-100-rc15-to-100-rc16).
+A stage's `ctx` names the pipeline's values apart, an operation a layer removes is absent from its objects, and several calls that answered `500` now answer a precise code. Upgrading from rc.15: see [Upgrading](/docs/upgrading#from-100-rc15-to-100-rc16).
 
 **Pipeline**
 
