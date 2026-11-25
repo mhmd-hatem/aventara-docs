@@ -488,6 +488,10 @@ A value other than a boolean is `CONFIG_INVALID_TYPE`. `ctx.$sql`, or a stage ca
 | `format` | one of zod's named string formats (`"email"`, `"url"`, `"uuid"`, ...) | A fact the contract carries; the server checks computed output against it. Added fields only; any other name is a type error and `CONFIG_INVALID_VALUE`. |
 | `json` | an `AvZ` shape | The shape of a `Json` field: one the adapter discovered, or an added field of scalar `json` ([JSON fields](/docs/json-fields#a-virtual-input-with-a-shape)). |
 
+A field may be named after a member every JavaScript object has, such as `toString`, `valueOf` or `constructor`. Prisma accepts such a column, and an added `VIRTUAL` field may take the name too. It is a field like any other: it is in the contracts, checked and revived by its scalar, and typed in the generated client. Only `__proto__` is refused for an added field (`COMPILER_UNKNOWN_FIELD`).
+
+> On a returned row, such a field's value hides the method of the same name. A row with a `toString` or `valueOf` field cannot be turned into a string: `String(row)` and `` `${row}` `` throw. Read the field, or choose another name if your code stringifies rows.
+
 ```ts
 import { AvZ } from "@aventara/core/avz";
 
