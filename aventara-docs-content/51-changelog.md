@@ -22,6 +22,7 @@ The current release, published under the `rc` dist-tag (install with `@rc`). An 
 **Fields and types**
 
 - A `VIRTUAL` field of scalar `json` takes a `json` shape built with `AvZ`, checked with the field validators and typed in the application, the client, a stage's `ctx.$args`, a compute stage's return and the generated client. Any other `VIRTUAL` type takes none (`COMPILER_INVALID_JSON_SHAPE`).
+- A `VIRTUAL` field takes any built-in scalar whatever the schema stores; a name that is not a built-in scalar is refused. Fields named after inherited object members (`toString`, `constructor`, `hasOwnProperty`) are supported, and their values shadow the row's methods.
 
 **Next.js**
 
