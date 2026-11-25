@@ -484,7 +484,7 @@ A value other than a boolean is `CONFIG_INVALID_TYPE`. `ctx.$sql`, or a stage ca
 | `nullable` | `boolean` | Required for an added field. |
 | `list` | `boolean` | Required for an added field. |
 | `lifecycle` | `["VIRTUAL"]` | The field is not stored. Added fields only. |
-| `capabilities` | `Partial<AvScalarFieldCapabilities>` | What callers may do with it. Added fields only. |
+| `capabilities` | `AvScalarFieldCapabilities`'s `select`, with `create` and `update` as `[]` | What callers may do with it: read it (`select`), and send it on a create or an update (`[]`, the plain value, no directive). The database never holds it, so it takes no `filter`, `order` or `orderNulls` (a type error and `COMPILER_INVALID_LIFECYCLE`). Added fields only. |
 | `format` | one of zod's named string formats (`"email"`, `"url"`, `"uuid"`, ...) | A fact the contract carries; the server checks computed output against it. Added fields only; any other name is a type error and `CONFIG_INVALID_VALUE`. |
 | `json` | an `AvZ` shape | The shape of a `Json` field: one the adapter discovered, or an added field of scalar `json` ([JSON fields](/docs/json-fields#a-virtual-input-with-a-shape)). |
 
