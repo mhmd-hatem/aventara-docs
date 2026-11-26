@@ -143,7 +143,8 @@ All reject while Nest builds the application, before it listens:
 | neither given | AventaraModule: the options carry neither `framework` nor `config`; pass exactly one. |
 | `framework` is not a Framework | AventaraModule: `framework` is not an Aventara Framework (it has no string `api` and no `contracts.client`); pass what `createFramework` resolved to. |
 | mounted twice in one application | refused |
-| platform other than Express or Fastify (or none, as with `createApplicationContext`) | AventaraModule mounts the protocol on Nest's Express or Fastify platform; this application's platform is `none`. |
+| an HTTP platform other than Express or Fastify | AventaraModule mounts the protocol on Nest's Express or Fastify platform; this application's platform is `<type>`. |
+| no platform (`createApplicationContext`, a microservice, a worker) | not refused: the Framework is built and provided as `AVENTARA_FRAMEWORK`, no routes are mounted, and one log line says so: Aventara has not mounted the protocol: this application has no HTTP platform. |
 | `state` given for a framework built with `access` | AventaraModule: the Framework is built with `access`, whose `state` seeds each request's state; remove the module's `state` option. |
 | invalid configuration | the `AvConstructionError` propagates unchanged; see [Startup diagnostics](/docs/config-reference#startup-diagnostics) |
 

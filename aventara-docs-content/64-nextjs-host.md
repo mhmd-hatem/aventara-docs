@@ -45,7 +45,7 @@ npx @aventara/cli@rc init
 
 `init` tells NestJS and Next.js apart by `package.json`: a project that depends on `next` is a Next.js app. A project that depends on both `next` and `@nestjs/core`, or on neither, is refused in one sentence and nothing is written. The app must use the App Router under `src/app/`, map `@/*` to `./src/*` in `tsconfig.json` (create-next-app writes both), and have no ORM yet.
 
-`init` refuses a Next.js project whose `next` is below 16.4.5, before writing anything. It names the version it found and prints the upgrade command (for example `npm install next@^16.4.5`); nothing is written.
+`init` refuses a Next.js project whose `next` is below 16.4.5, before writing anything. It names the version it found and prints the upgrade command in your package manager (for example `npm install next@^16.4.5`, or `pnpm add next@^16.4.5` with `--package-manager pnpm`, when `pnpm` launched the command, or when the project has a `pnpm` lockfile); nothing is written.
 
 ## What it writes
 
