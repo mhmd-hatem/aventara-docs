@@ -1,13 +1,53 @@
 ---
 title: Upgrading
-description: Move from 1.0.0-rc.16 to 1.0.0-rc.17 (the Next.js floor 16.4.5, key-exact avApp and avClient, the after hook's { result }, the policy's row check ahead of hooks, VIRTUAL Json shapes), from 1.0.0-rc.15 to 1.0.0-rc.16 (the stage ctx's $args, $write, $written and $plan, removed operations absent from in-process objects, V1022 and A2013 answers), from 1.0.0-rc.14 to 1.0.0-rc.15 (typed compute returns, stage types from the configuration's definitions, regenerate once), from 1.0.0-rc.13 to 1.0.0-rc.14 (typed avDehydrate and avHydrate), from 1.0.0-rc.12 to 1.0.0-rc.13 (the transaction write limit, validators before compute, 401 and 403 from state), from 1.0.0-rc.11 to 1.0.0-rc.12 (lookup keys need filter, the scaffold's String ids), from 1.0.0-rc.8 to 1.0.0-rc.11 (Node and Prisma floors, stricter policy checks, grouped client calls, regenerate clients), from 1.0.0-rc.4 to 1.0.0-rc.8 (rebuild after a discovery change, policy additions, request type names), from 1.0.0-rc.3 to 1.0.0-rc.4 (build-time Contracts, the policy seam), from 1.0.0-rc.2 to 1.0.0-rc.3, from 1.0.0-rc.1 to 1.0.0-rc.2, from 1.0.0-rc.0 to 1.0.0-rc.1 (the new configuration shape, Av names, the $ ctx members) and from earlier pilots step by step, and the general flow for upgrading Aventara packages.
+description: Move from 1.0.0-rc.17 to 1.0.0-rc.18 (AventaraModule in a Nest application context, VIRTUAL fields under a policy, the CLI's quieter output), from 1.0.0-rc.16 to 1.0.0-rc.17 (the Next.js floor 16.4.5, key-exact avApp and avClient, the after hook's { result }, the policy's row check ahead of hooks, VIRTUAL Json shapes), from 1.0.0-rc.15 to 1.0.0-rc.16 (the stage ctx's $args, $write, $written and $plan, removed operations absent from in-process objects, V1022 and A2013 answers), from 1.0.0-rc.14 to 1.0.0-rc.15 (typed compute returns, stage types from the configuration's definitions, regenerate once), from 1.0.0-rc.13 to 1.0.0-rc.14 (typed avDehydrate and avHydrate), from 1.0.0-rc.12 to 1.0.0-rc.13 (the transaction write limit, validators before compute, 401 and 403 from state), from 1.0.0-rc.11 to 1.0.0-rc.12 (lookup keys need filter, the scaffold's String ids), from 1.0.0-rc.8 to 1.0.0-rc.11 (Node and Prisma floors, stricter policy checks, grouped client calls, regenerate clients), from 1.0.0-rc.4 to 1.0.0-rc.8 (rebuild after a discovery change, policy additions, request type names), from 1.0.0-rc.3 to 1.0.0-rc.4 (build-time Contracts, the policy seam), from 1.0.0-rc.2 to 1.0.0-rc.3, from 1.0.0-rc.1 to 1.0.0-rc.2, from 1.0.0-rc.0 to 1.0.0-rc.1 (the new configuration shape, Av names, the $ ctx members) and from earlier pilots step by step, and the general flow for upgrading Aventara packages.
 order: 34
 section: guides
 ---
 
 # Upgrading
 
-Aventara `1.0.0-rc.17` is the fifteenth published release candidate (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were tagged but never published, and rc.9 and rc.10 sit between rc.8 and rc.11), and the next release follows it; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.17` from `1.0.0-rc.16`, the move to `1.0.0-rc.16` from `1.0.0-rc.15`, the move to `1.0.0-rc.15` from `1.0.0-rc.14`, the move to `1.0.0-rc.14` from `1.0.0-rc.13`, the move to `1.0.0-rc.13` from `1.0.0-rc.12`, the move to `1.0.0-rc.12` from `1.0.0-rc.11`, the move to `1.0.0-rc.11` from `1.0.0-rc.8`, the move to `1.0.0-rc.8` from `1.0.0-rc.4`, the move to `1.0.0-rc.4` from `1.0.0-rc.3`, the move to `1.0.0-rc.3` from `1.0.0-rc.2`, to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
+Aventara `1.0.0-rc.18` is the sixteenth published release candidate (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were tagged but never published, and rc.9 and rc.10 sit between rc.8 and rc.11), and the next release follows it; releases before `1.0.0-rc.0` are pilots. This page covers the move to `1.0.0-rc.18` from `1.0.0-rc.17`, the move to `1.0.0-rc.17` from `1.0.0-rc.16`, the move to `1.0.0-rc.16` from `1.0.0-rc.15`, the move to `1.0.0-rc.15` from `1.0.0-rc.14`, the move to `1.0.0-rc.14` from `1.0.0-rc.13`, the move to `1.0.0-rc.13` from `1.0.0-rc.12`, the move to `1.0.0-rc.12` from `1.0.0-rc.11`, the move to `1.0.0-rc.11` from `1.0.0-rc.8`, the move to `1.0.0-rc.8` from `1.0.0-rc.4`, the move to `1.0.0-rc.4` from `1.0.0-rc.3`, the move to `1.0.0-rc.3` from `1.0.0-rc.2`, to `1.0.0-rc.2` from `1.0.0-rc.1`, to `1.0.0-rc.1` from `1.0.0-rc.0`, then to `1.0.0-rc.0` from `0.1.0-pilot.4`, to `0.1.0-pilot.4` from `0.1.0-pilot.3`, to `0.1.0-pilot.3` from `0.1.0-pilot.1` (or `0.1.0-pilot.2`), and from `0.1.0-pilot.0`, followed by the general flow that applies to every release.
+
+## From 1.0.0-rc.17 to 1.0.0-rc.18
+
+Nothing you wrote has to change. One failure goes away (a `500 A3001` on writes to a Resource with a `VIRTUAL` field under a policy), `AventaraModule` starts in a Nest application context, and the CLI prints less. Change the version numbers, run the generate steps and refresh the agent skill.
+
+### 1. Install the new versions
+
+```bash
+npm install --save-exact @aventara/core@1.0.0-rc.18 @aventara/nest@1.0.0-rc.18 @aventara/prisma7-adapter@1.0.0-rc.18 @aventara/build@1.0.0-rc.18
+# add @aventara/mcp@1.0.0-rc.18 and @aventara/testing@1.0.0-rc.18 to the command if you use them
+```
+
+With pnpm, name `@aventara/build` in a second command with the dev flag, so it stays in `devDependencies`:
+
+```bash
+# pnpm (in a workspace, add --filter <your server package> after pnpm)
+pnpm add --save-exact @aventara/core@1.0.0-rc.18 @aventara/nest@1.0.0-rc.18 @aventara/prisma7-adapter@1.0.0-rc.18
+pnpm add --save-dev --save-exact @aventara/build@1.0.0-rc.18
+```
+
+In a Next.js app, move `@aventara/next` with `@aventara/core` and the rest. In each frontend, move `@aventara/client`, a dev dependency, to the same version:
+
+```bash
+npm install --save-dev --save-exact @aventara/client@1.0.0-rc.18
+# pnpm (in a workspace, add --filter <your frontend package> after pnpm)
+pnpm add --save-dev --save-exact @aventara/client@1.0.0-rc.18
+```
+
+Next, run the generate step on the server, `npm run aventara:prepare` (`pnpm run aventara:prepare`), and in each frontend `npm run avclient:generate` (`pnpm run avclient:generate`).
+
+Last, refresh both agent skills: run `npx @aventara/cli@1.0.0-rc.18 skill` (`pnpm dlx @aventara/cli@1.0.0-rc.18 skill`) on the server, and `npx avclient skill` (`pnpm exec avclient skill`) in each frontend.
+
+### 2. What changed
+
+| Change | What to do |
+| --- | --- |
+| `AventaraModule` works in a Nest application context (`NestFactory.createApplicationContext`, a microservice, a CLI or a worker). With no HTTP platform it builds the Framework, provides it as `AVENTARA_FRAMEWORK`, mounts no protocol or MCP routes and logs one line saying so. Before, startup failed with "this application's platform is `none`". | Nothing. A script or worker can import `AventaraModule` and take the Framework from the context ([NestJS host](/docs/nestjs-host#in-an-application-context-no-http)). Express and Fastify behave as before; any other HTTP platform is still refused. |
+| With a `policy` or `access` configured, an update, and a create with a nested `$create`, on a Resource that has a `VIRTUAL` field no longer answer `500 A3001`. The policy's read of the written rows now asks only for stored fields; a `VIRTUAL` field's value in the answer still comes from its `compute.read` stage. | Nothing. |
+| `aventara new` and `aventara init` hide Prisma's "major update available" banner (they set `PRISMA_HIDE_UPDATE_MESSAGE=1` for the install and `prisma generate`, unless you set it). `aventara init` names your package manager in the Next.js upgrade hint. `aventara-prisma7-generate` no longer prints an `exempt (json-null-is-a-value)` line per run. | Nothing: your own scripts and `prisma` commands are unchanged. Output you parsed from these commands has fewer lines. |
+| The agent skill and the error catalog name the new version. | Refresh the skills (step 1). |
 
 ## From 1.0.0-rc.16 to 1.0.0-rc.17
 

@@ -50,13 +50,13 @@ A project made by `aventara new` has this in `package.json`. The Aventara versio
 ```json
 {
   "dependencies": {
-    "@aventara/core": "1.0.0-rc.17",
-    "@aventara/nest": "1.0.0-rc.17",
-    "@aventara/prisma7-adapter": "1.0.0-rc.17",
+    "@aventara/core": "1.0.0-rc.18",
+    "@aventara/nest": "1.0.0-rc.18",
+    "@aventara/prisma7-adapter": "1.0.0-rc.18",
     "@prisma/adapter-better-sqlite3": "^7.10.1",
     "@prisma/client": "^7.10.1"
   },
-  "devDependencies": { "@aventara/build": "1.0.0-rc.17", "prisma": "^7.10.1" },
+  "devDependencies": { "@aventara/build": "1.0.0-rc.18", "prisma": "^7.10.1" },
   "scripts": {
     "aventara:prepare": "aventara-prisma7-generate --schema prisma/schema.prisma --client src/generated/prisma --provider sqlite --driver @prisma/adapter-better-sqlite3 --out src/generated/aventara/discovery.artifact.ts --config src/aventara.config.ts && aventara-build",
     "postinstall": "npm run aventara:prepare",
@@ -86,7 +86,7 @@ npx @aventara/cli@rc new my-api        # npm
 pnpm dlx @aventara/cli@rc new my-api   # pnpm
 ```
 
-Use the `@rc` tag: it points to the newest release candidate (`1.0.0-rc.17`). The CLI runs a pinned `nest new`, adds Aventara, installs, and commits the result (`Initial Aventara Scaffold`, unless git is missing or unconfigured, the directory is already inside a repository, or you pass `--skip-git`). It picks the package manager from the lockfile, else the one that launched it, else npm, and never touches a database. `aventara --version` prints the CLI's version; `--orm` takes `prisma7`. See [Getting started](/docs/getting-started), or [Add to an existing project](/docs/existing-project).
+Use the `@rc` tag: it points to the newest release candidate (`1.0.0-rc.18`). The CLI runs a pinned `nest new`, adds Aventara, installs, and commits the result (`Initial Aventara Scaffold`, unless git is missing or unconfigured, the directory is already inside a repository, or you pass `--skip-git`). It picks the package manager from the lockfile, else the one that launched it, else npm, and never touches a database. `aventara --version` prints the CLI's version; `--orm` takes `prisma7`. See [Getting started](/docs/getting-started), or [Add to an existing project](/docs/existing-project).
 
 ## Package manager and Node notes
 

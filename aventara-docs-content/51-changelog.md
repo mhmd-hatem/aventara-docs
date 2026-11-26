@@ -7,11 +7,29 @@ section: about
 
 # Changelog
 
-`1.0.0-rc.0` was the first release candidate, `1.0.0-rc.1` the second, `1.0.0-rc.2` the third, `1.0.0-rc.3` the fourth, `1.0.0-rc.4` the fifth, `1.0.0-rc.8` the sixth, `1.0.0-rc.9` the seventh, `1.0.0-rc.10` the eighth, `1.0.0-rc.11` the ninth, `1.0.0-rc.12` the tenth, `1.0.0-rc.13` the eleventh, `1.0.0-rc.14` the twelfth, `1.0.0-rc.15` the thirteenth, `1.0.0-rc.16` the fourteenth and `1.0.0-rc.17` is the fifteenth (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published); the releases before them are pilots, and a pilot's API could change. A release candidate changes the API only to fix what testing finds. Pin exact versions. All `@aventara/*` packages are released together at one version. Each package also ships this history for itself as a `CHANGELOG.md` beside its README.
+`1.0.0-rc.0` was the first release candidate, `1.0.0-rc.1` the second, `1.0.0-rc.2` the third, `1.0.0-rc.3` the fourth, `1.0.0-rc.4` the fifth, `1.0.0-rc.8` the sixth, `1.0.0-rc.9` the seventh, `1.0.0-rc.10` the eighth, `1.0.0-rc.11` the ninth, `1.0.0-rc.12` the tenth, `1.0.0-rc.13` the eleventh, `1.0.0-rc.14` the twelfth, `1.0.0-rc.15` the thirteenth, `1.0.0-rc.16` the fourteenth, `1.0.0-rc.17` the fifteenth and `1.0.0-rc.18` is the sixteenth (`1.0.0-rc.5`, `1.0.0-rc.6` and `1.0.0-rc.7` were never published); the releases before them are pilots, and a pilot's API could change. A release candidate changes the API only to fix what testing finds. Pin exact versions. All `@aventara/*` packages are released together at one version. Each package also ships this history for itself as a `CHANGELOG.md` beside its README.
+
+## 1.0.0-rc.18
+
+The current release, published under the `rc` dist-tag (install with `@rc`). `AventaraModule` works in a Nest application context, and writes to a Resource with a `VIRTUAL` field no longer fail under a policy. Upgrading from rc.17: see [Upgrading](/docs/upgrading#from-100-rc17-to-100-rc18).
+
+**NestJS**
+
+- `AventaraModule` works in a Nest application context (`NestFactory.createApplicationContext`, a microservice, a CLI or a worker). With no HTTP platform it builds the Framework, provides it as `AVENTARA_FRAMEWORK`, mounts no protocol or MCP routes and logs one line through Nest's `Logger` saying so. Before, startup failed with "this application's platform is `none`". Express and Fastify behave as before, and any other HTTP platform is still refused.
+
+**Policies and fields**
+
+- With a `policy` or `access` configured, writes to a Resource that has a `VIRTUAL` field no longer fail with `500 A3001`. The policy reads an update's rows, and the rows a create with a nested `$create` made, back from the database, and that read asked for every selectable field, `VIRTUAL` ones included; a `VIRTUAL` field has no column, so the ORM refused the query. The read now asks only for stored fields, and a `VIRTUAL` field's value in the answer still comes from its `compute.read` stage.
+
+**CLI and tooling**
+
+- `aventara new` and `aventara init` no longer print Prisma's "major update available" banner while they install and run `prisma generate`: the CLI sets `PRISMA_HIDE_UPDATE_MESSAGE=1` for them unless you set it yourself. Your own scripts and `prisma` commands are unchanged.
+- `aventara init` in a project with no lockfile names the package manager you chose in the command it prints: when Next.js is below the supported release, the upgrade hint reads `pnpm add next@^16.4.5` after `--package-manager pnpm` (or when `pnpm` launched the command) instead of always `npm install next@^16.4.5`. A project with a lockfile still gets that lockfile's package manager.
+- `aventara-prisma7-generate` no longer prints an `exempt (json-null-is-a-value) ...` line on every run when the schema has a required `Json` field; a successful run prints the artifact, its resources and any excluded entities, and nothing else.
 
 ## 1.0.0-rc.17
 
-The current release, published under the `rc` dist-tag (install with `@rc`). An `after` hook can answer the values it changed, a write aimed at a row outside the caller's scopes answers its miss before any hook runs, and `@aventara/next` needs a Next.js with the security fixes. Upgrading from rc.16: see [Upgrading](/docs/upgrading#from-100-rc16-to-100-rc17).
+An `after` hook can answer the values it changed, a write aimed at a row outside the caller's scopes answers its miss before any hook runs, and `@aventara/next` needs a Next.js with the security fixes. Upgrading from rc.16: see [Upgrading](/docs/upgrading#from-100-rc16-to-100-rc17).
 
 **Pipeline and policies**
 
