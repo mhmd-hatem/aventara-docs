@@ -73,7 +73,7 @@ Runs `create-next-app@16 <name> --ts --app --src-dir --import-alias "@/*" --use-
 
 ### aventara init
 
-Runs inside an existing NestJS 12 or Next.js 16 project. It tells them apart by `package.json`: `@nestjs/core` is NestJS, `next` is Next.js. A project that depends on both, or on neither, is refused in one sentence, with nothing written. See [Add to an existing project](/docs/existing-project) for NestJS. A Next.js app must use `next` 16.4.5 or later, the App Router under `src/app/`, map `@/*` to `./src/*` in `tsconfig.json` (create-next-app writes both) and have no ORM yet; see [Next.js host](/docs/nextjs-host#add-it-to-an-existing-app). On a `next` below 16.4.5, `init` refuses before writing anything, names the version it found and prints the upgrade command (for example `npm install next@^16.4.5`); nothing is written.
+Runs inside an existing NestJS 12 or Next.js 16 project. It tells them apart by `package.json`: `@nestjs/core` is NestJS, `next` is Next.js. A project that depends on both, or on neither, is refused in one sentence, with nothing written. See [Add to an existing project](/docs/existing-project) for NestJS. A Next.js app must use `next` 16.4.5 or later, the App Router under `src/app/`, map `@/*` to `./src/*` in `tsconfig.json` (create-next-app writes both) and have no ORM yet; see [Next.js host](/docs/nextjs-host#add-it-to-an-existing-app). On a `next` below 16.4.5, `init` refuses before writing anything, names the version it found and prints the upgrade command in your package manager (for example `npm install next@^16.4.5`, or `pnpm add next@^16.4.5` under pnpm); nothing is written.
 
 ### aventara skill
 
@@ -167,7 +167,7 @@ Next:
 
 With `--skip-install` there is one more step, `Install, which also runs aventara:prepare: npm install`, after entering the project. Under pnpm the commands read `pnpm exec prisma db push` and `pnpm dlx @aventara/client@<version> init`, where `<version>` is the CLI's own (the frontend gets the same release).
 
-The runner (`npx` or `pnpm dlx`) matches your package manager. The server answers `GET http://localhost:3000/api/_contract` once it runs. With PostgreSQL, set `DATABASE_URL` in `.env` first. `init` writes Prisma's placeholder and never asks for a secret.
+The runner (`npx` or `pnpm dlx`) matches your package manager. `aventara new` and `aventara init` hide Prisma's "major update available" banner while they install and run `prisma generate`: the CLI sets `PRISMA_HIDE_UPDATE_MESSAGE=1` for those commands unless you have set it yourself, and your own scripts and `prisma` commands are unchanged. The server answers `GET http://localhost:3000/api/_contract` once it runs. With PostgreSQL, set `DATABASE_URL` in `.env` first. `init` writes Prisma's placeholder and never asks for a secret.
 
 ## avclient
 

@@ -92,9 +92,31 @@ export class StatsService {
 
 `@Inject(AVENTARA_FRAMEWORK)` is the same thing. See [Querying](/docs/querying#running-operations-on-the-server) for `framework.application.*` and `framework.client.*`, and [Admin vs public](/docs/example-admin-vs-public) for a worked example.
 
+### In an application context (no HTTP)
+
+`AventaraModule` also works where Nest has no HTTP platform: `NestFactory.createApplicationContext`, a microservice, a CLI command or a worker. It builds the framework and provides it as `AVENTARA_FRAMEWORK` (and through `@InjectFramework()`), mounts no protocol routes and no MCP endpoint, and logs one line through Nest's `Logger` instead of the mount lines:
+
+```text
+Aventara has not mounted the protocol: this application has no HTTP platform.
+```
+
+With `mcp` configured the line reads `Aventara has not mounted the protocol or the MCP endpoint: this application has no HTTP platform.` Use it for scripts and jobs that call `framework.application.*` directly:
+
+```ts
+// src/report.ts
+import { NestFactory } from "@nestjs/core";
+import { AVENTARA_FRAMEWORK } from "@aventara/nest";
+import { AppModule } from "./app.module.js";
+
+const context = await NestFactory.createApplicationContext(AppModule);
+const framework = context.get(AVENTARA_FRAMEWORK); // type it as your AppFramework alias, as above
+const users = await framework.application.User.find.many({});
+await context.close();
+```
+
 ### Fails before listen
 
-These errors happen while Nest builds the application, before it listens: both or neither of `framework` and `config` given; a `framework` that is not an `AvFramework`; the module mounted twice; a platform other than Express or Fastify; and any `AvConstructionError` (for example an invalid exemption). Nest's default `abortOnError: true` exits the process on a bootstrap error; pass `abortOnError: false` to `NestFactory.create` to catch it instead.
+These errors happen while Nest builds the application, before it listens: both or neither of `framework` and `config` given; a `framework` that is not an `AvFramework`; the module mounted twice; an HTTP platform other than Express or Fastify (no platform at all is an application context, above); and any `AvConstructionError` (for example an invalid exemption). Nest's default `abortOnError: true` exits the process on a bootstrap error; pass `abortOnError: false` to `NestFactory.create` to catch it instead.
 
 The module owns no resource to shut down. Your Prisma service closes its own client in `onModuleDestroy`; call `app.enableShutdownHooks()` to handle signals.
 
@@ -139,6 +161,7 @@ The fallback is `app.use` middleware, and on Express that runs before every rout
 ```ts
 // src/main.ts (Express)
 import { extname, join } from "node:path";
+// src/report.ts
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import type { NextFunction, Request, Response } from "express";

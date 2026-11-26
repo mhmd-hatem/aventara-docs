@@ -27,7 +27,7 @@ const app = await NestFactory.create<NestFastifyApplication>(AppModule, new Fast
 await app.listen(process.env.PORT ?? 3000, "127.0.0.1");
 ```
 
-Nothing in `AventaraModule` or your configuration changes. Any other platform fails at startup, before listening.
+Nothing in `AventaraModule` or your configuration changes. Any other HTTP platform fails at startup, before listening. An application with no HTTP platform at all (`createApplicationContext`) is not refused: it gets the framework and no routes ([NestJS host](/docs/nestjs-host#in-an-application-context-no-http)).
 
 ## What is the same
 
